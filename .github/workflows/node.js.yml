@@ -18,10 +18,10 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
         node: [20.x]
 
-    env:
+    # env:
       # 让 electron-builder 更快（缓存）
-      ELECTRON_CACHE: ${{ runner.temp }}/electron
-      ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder
+      # ELECTRON_CACHE: ${{ runner.temp }}/electron
+      # ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder
       # 如果需要代码签名/公证，解开并在仓库 Secrets 设置（见下方说明）
       # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 发布到 GitHub Release 需要
       # CSC_LINK: ${{ secrets.CSC_LINK }}       # 证书(p12/cer)的 Base64 或 URL

@@ -6,7 +6,9 @@
         "start": "electron .",
         "build": "electron-builder"
     },
-    "keywords": ["bilibili"],
+    "keywords": [
+        "bilibili"
+    ],
     "author": "Ran",
     "license": "AGPL",
     "description": "帮助你下载bilibili的视频",
@@ -34,6 +36,20 @@
         "nsis": {
             "oneClick": false,
             "perMachine": false
+        },
+        "linux": {
+            "category": "Utility",
+            "target": [
+                "AppImage",
+                "deb"
+            ]
+        },
+        "mac": {
+            "category": "public.app-category.utilities",
+            "target": [
+                "dmg",
+                "zip"
+            ]
         }
     }
 }

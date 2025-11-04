@@ -1,0 +1,61 @@
+<!-- <div class="task">
+                    <div>
+                        <div class="title">演示视频2 <span class="pill" style="margin-left:4px">720p_mp4</span></div>
+                        <div class="meta">https://example.com/video2</div>
+                        <div class="progress" aria-label="下载进度" aria-valuemin="0" aria-valuemax="100"
+                            aria-valuenow="100">
+                            <i style="width:100%"></i>
+                        </div>
+                        <div class="meta">状态：done · 速度：0.00 MB/s</div>
+                    </div>
+                    <div style="display:grid; gap:8px; align-content:start">
+                        <button class="btn" data-action="pause" data-id="demo2">继续</button>
+                        <button class="btn" data-action="remove" data-id="demo2">移除</button>
+                    </div>
+                </div> -->
+
+
+                    <div class="modal-backdrop" id="qualityBackdrop"></div>
+    <div class="modal" id="qualityModal" hidden>
+        <header>
+            <h3>选择清晰度</h3><button class="btn" id="closeQuality">关闭</button>
+        </header>
+        <div class="content">
+            <div class="quality-grid" id="qualityGrid"></div>
+        </div>
+        <footer><button class="btn" id="cancelQuality">取消</button><button class="btn brand"
+                id="startDownload">开始下载</button></footer>
+    </div>
+
+
+    // 轮询当前任务列表并前端展示
+// setInterval(() => {
+//     window.electronAPI.invoke('getAllTasks').then((taskList) => {
+//         console.log('当前任务列表:', taskList);
+//         $tasksContainer.innerHTML = '';   // 清空之前的任务列表
+//         if (!taskList.length) {
+//             $tasksContainer.innerHTML = '<p>当前无下载任务</p>';
+//             return;
+//         }
+//         taskList.forEach((task) => {
+//             const $taskItem = document.createElement('div');
+//             $taskItem.className = 'task';
+//             $taskItem.innerHTML = `
+//                 <div>
+//                     <div class="title title-vc p-10 pl-0">
+//                         <span>清朝老片</span>
+//                         <span class="pill ft-small" style="margin-left:4px">8K 超高清</span>
+//                     </div>
+//                     <div class="progress">
+//                         <i style="width:72%"></i>
+//                     </div>
+//                     <div class="meta mt-5">速度：3.20 MB/s</div>
+//                 </div>
+//                 <div style="display:grid; gap:8px; align-content:center">
+//                     <button class="btn" data-action="remove" data-id="demo1">取消</button>
+//                 </div>
+//             `;
+//             $tasksContainer.appendChild($taskItem);
+//         });
+//     });
+// }, 2000); // 每2秒刷新一次任务列表

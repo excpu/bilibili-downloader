@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>当前下载任务 · 视频下载器</title>
+  <style>
+    :root{
+      --bg:#f9fafc;
+      --panel:#ffffff;
+      --muted:#555;
+      --text:#222;
+      --brand:#0078ff;
+      --brand-2:#40a0ff;
+      --stroke:#ddd;
+      --shadow:0 5px 20px rgba(0,0,0,.08);
+      --radius:10px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Microsoft YaHei,sans-serif; background:var(--bg); color:var(--text)}
+
+    .topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--stroke); background:rgba(255,255,255,.92); backdrop-filter:blur(8px)}
+    .brand{display:flex; align-items:center; gap:10px; font-weight:700}
+    .brand-badge{width:28px; height:28px; border-radius:8px; display:grid; place-items:center; color:#fff; background:linear-gradient(135deg,var(--brand),var(--brand-2))}
+    .pill{padding:5px 10px; border:1px solid var(--stroke); border-radius:999px; color:var(--muted)}
+
+    .container{max-width:940px; margin:28px auto; padding:0 16px}
+
+    .card{background:var(--panel); border:1px solid var(--stroke); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px}
+
+    .toolbar{display:flex; gap:8px; align-items:center}
+    .btn{cursor:pointer; border:1px solid var(--stroke); background:#f0f0f0; color:var(--text); padding:10px 14px; border-radius:8px; transition:.15s ease; font-weight:600}
+    .btn:hover{background:#e9e9e9}
+    .btn.brand{border:none; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff}
+    .btn.ghost{background:white}
+
+    .task{display:grid; grid-template-columns:1fr auto; gap:12px; padding:12px; border:1px solid var(--stroke); border-radius:10px; background:white}
+    .task + .task{margin-top:12px}
+    .task .title{display:flex; align-items:center; gap:8px; font-weight:700}
+    .task .meta{color:var(--muted); font-size:.85rem}
+    .progress{height:8px; border-radius:999px; background:#eee; overflow:hidden}
+    .progress>i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--brand),var(--brand-2))}
+
+    .empty{color:var(--muted); text-align:center; padding:40px 10px}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><div class="brand-badge">VD</div><div>当前下载任务</div></div>
+    <div class="toolbar">
+      <a class="btn ghost" id="backBtn" href="./" title="返回首页">← 返回</a>
+      <button class="btn" id="clearFinished">清除已完成</button>
+      <span class="pill">共 <b id="taskCount">0</b> 个</span>
+      <span class="pill">总速度 <b id="speed">0</b> MB/s</span>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="card">
+      <div id="tasksContainer" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    // 读取共享任务：优先从 localStorage("vd_tasks")，否则使用演示数据
+    function loadTasks(){
+      try{
+        const raw = localStorage.getItem('vd_tasks');
+        if(raw){ return JSON.parse(raw); }
+      }catch(e){ console.warn('读取本地任务失败:', e); }
+      // fallback 演示数据
+      return [
+        {id:'demo1', url:'https://example.com/video1', title:'演示视频1', quality:'1080p_mp4', progress:72, status:'downloading', speed:3.2},
+        {id:'demo2', url:'https://example.com/video2', title:'演示视频2', quality:'720p_mp4', progress:100, status:'done', speed:0}
+      ];
+    }
+
+    function saveTasks(tasks){
+      try{ localStorage.setItem('vd_tasks', JSON.stringify(tasks)); }catch{}
+    }
+
+    const state = { tasks: loadTasks() };
+
+    const el = s=>document.querySelector(s);
+    const tasksContainer = el('#tasksContainer');
+    const taskCount = el('#taskCount');
+    const speedText = el('#speed');
+
+    function renderTasks(){
+      tasksContainer.innerHTML = '';
+      if(state.tasks.length===0){
+        tasksContainer.innerHTML = '<div class="empty">暂无任务</div>';
+      }
+      let total = 0;
+      state.tasks.forEach(t=>{
+        if(t.status==='downloading') total += (t.speed||0);
+        const item = document.createElement('div');
+        item.className = 'task';
+        item.innerHTML = `
+          <div>
+            <div class="title">${t.title||'视频'} <span class="pill" style="margin-left:4px">${t.quality||''}</span></div>
+            <div class="meta">${t.url||''}</div>
+            <div class="progress" aria-label="下载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${t.progress||0}">
+              <i style="width:${t.progress||0}%"></i>
+            </div>
+            <div class="meta">状态：${t.status} · 速度：${(t.speed||0).toFixed(2)} MB/s</div>
+          </div>
+          <div style="display:grid; gap:8px; align-content:start">
+            <button class="btn" data-action="pause" data-id="${t.id}">${t.status==='downloading'?'暂停':'继续'}</button>
+            <button class="btn" data-action="remove" data-id="${t.id}">移除</button>
+          </div>`;
+        tasksContainer.appendChild(item);
+      });
+      taskCount.textContent = String(state.tasks.length);
+      speedText.textContent = total.toFixed(2);
+      saveTasks(state.tasks);
+    }
+
+    tasksContainer.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-action]');
+      if(!btn) return;
+      const id = btn.dataset.id;
+      const task = state.tasks.find(x=>x.id===id);
+      if(!task) return;
+      const act = btn.dataset.action;
+      if(act==='pause'){
+        if(task.status==='downloading'){ task.status='queued'; task.speed=0; btn.textContent='继续'; }
+        else if(task.status==='queued'){ task.status='downloading'; task.speed=1.2+Math.random()*3.5; btn.textContent='暂停'; }
+      }else if(act==='remove'){
+        state.tasks = state.tasks.filter(x=>x.id!==id);
+      }
+      renderTasks();
+    });
+
+    el('#clearFinished').addEventListener('click', ()=>{
+      state.tasks = state.tasks.filter(t=>t.status!=='done');
+      renderTasks();
+    });
+
+    renderTasks();
+  </script>
+</body>
+</html>

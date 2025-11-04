@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <script src="./lib/qrcode.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bilibili视频下载器</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-badge">BD</div>
+            <!-- <div>bilibili下载器</div> -->
+        </div>
+        <div class="status">
+            <!-- <span class="pill" id="statePill">空闲</span> -->
+            <span class="pill"><span id="taskCount">0</span>个任务</span>
+            <!-- <span class="pill">速度 <span id="speed">0</span> MB/s</span> -->
+        </div>
+        <!-- <div class="toolbar"><button class="btn" id="viewTasksBtn">查看下载任务</button> -->
+        <div class="avatar" id="avatar">登录</div>
+    </div>
+    </div>
+
+    <main class="container">
+        <!-- 链接输入 -->
+        <section class="card">
+            <h2 class="card-title">输入视频链接或BV号</h2>
+            <div class="input-row">
+                <div class="field"><input id="urlInput" type="url" placeholder="输入视频链接..." />
+                    <span class="suffix" id="suffix">URL</span>
+                </div>
+                <button class="btn brand" id="confirmBtn">确认</button>
+            </div>
+            <!-- <div class="actions"><span class="hint">点击确认后选择清晰度开始下载（演示）。</span></div> -->
+        </section>
+        <!-- 扫码登录 -->
+        <section class="card m-card hidden" id="loginSection">
+            <h2 class="card-title">登录</h2>
+            <div class="loginQr" id="loginQr">
+                <img id="loginQrS" src="./assets/compressed-loading-placeholder.jpg" /><br />
+            </div>
+            <div class="loginBtn">
+                <button class="btn brand" id="refreshLoginQr">刷新二维码</button>
+                <button class="btn" id="cancelLogin">取消登录</button>
+            </div>
+        </section>
+        <!-- 视频详情展示与分辨率选择 -->
+        <section class="card m-card hidden" id="videoInfoSection">
+            <h2 class="card-title">视频信息</h2>
+            <div class="video-info" id="videoInfo">
+                <div class="thumbnail">
+                    <img id="videoThumbnail" src="./assets/compressed-loading-placeholder.jpg" />
+                </div>
+                <div class="details">
+                    <div class="title" id="videoTitle">视频标题</div>
+                    <div class="meta" id="videoMeta">UP主 · 播放量 · 弹幕数 · 发布时间</div>
+                    <div class="quality-selection">
+                        <label for="qualitySelect">选择清晰度：</label>
+                        <select id="qualitySelect"></select>
+                    </div>
+                    <div class="quality-selection">
+                        <label for="qualitySelect">选择音频质量：</label>
+                        <select id="qualitySelectAudio"></select>
+                    </div>
+                    <div class="actions">
+                        <button class="btn brand" id="downloadBtn">确认下载</button>
+                        <button class="btn" id="cancelVideoInfo">取消</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- 下载任务展示 -->
+        <section class="card m-card">
+            <h2 class="card-title">下载任务</h2>
+            <div id="tasksContainer" aria-live="polite">
+                <!-- <div class="task">
+                    <div>
+                        <div class="title title-vc p-10 pl-0">
+                            <span>清朝老片</span>
+                            <span class="pill ft-small" style="margin-left:4px">8K 超高清</span>
+                        </div>
+                        <div class="progress">
+                            <i style="width:72%"></i>
+                        </div>
+                        <div class="meta mt-5">速度：3.20 MB/s</div>
+                    </div>
+                    <div style="display:grid; gap:8px; align-content:center">
+                        <button class="btn" data-action="remove" data-id="demo1">取消</button>
+                    </div>
+                </div> -->
+            </div>
+        </section>
+    </main>
+    <div class="spacer"></div>
+    <script src="index.js"></script>
+    <script src="download_task.js"></script>
+    <script src="ui_detail.js"></script>
+</body>
+
+</html>

@@ -1,7 +1,7 @@
 name: Electron Build (minimal)
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 on:
   push:

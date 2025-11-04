@@ -39,6 +39,7 @@
         },
         "linux": {
             "category": "Utility",
+            "icon": "build/icon.png",
             "target": [
                 "AppImage",
                 "deb"
@@ -46,6 +47,7 @@
         },
         "mac": {
             "category": "public.app-category.utilities",
+            "icon": "build/icon.icns",
             "target": [
                 "dmg",
                 "zip"

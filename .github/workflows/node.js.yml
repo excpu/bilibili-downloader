@@ -1,8 +1,11 @@
 name: Electron Build (minimal)
 
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -20,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install deps
         run: npm ci
@@ -31,15 +34,15 @@ jobs:
 
       - name: Build on Windows
         if: runner.os == 'Windows'
-        run: npx electron-builder --win nsis --publish never
+        run: npx electron-builder --win nsis
 
       - name: Build on macOS
         if: runner.os == 'macOS'
-        run: npx electron-builder --mac dmg --publish never
+        run: npx electron-builder --mac dmg
 
       - name: Build on Linux
         if: runner.os == 'Linux'
-        run: npx electron-builder --linux AppImage --publish never
+        run: npx electron-builder --linux AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

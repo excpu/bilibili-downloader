@@ -9,7 +9,11 @@
     "keywords": [
         "bilibili"
     ],
-    "author": "Ran",
+    "author": {
+        "name": "Ran",
+        "email": "contact@5share.site",
+        "url": "https://github.com/excpu"
+    },
     "license": "AGPL",
     "description": "帮助你下载bilibili的视频",
     "devDependencies": {

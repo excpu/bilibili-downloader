@@ -12,6 +12,9 @@ let globalLoginStatus = false;
 
 let globalName = '';
 
+// 用户防止在没有正常更新数据时下载旧视频
+let downloadLock = false;
+
 // 回车开始下载
 $urlInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -21,6 +24,7 @@ $urlInput.addEventListener('keydown', (event) => {
 
 // 点击按钮开始下载
 $confirmBtn.addEventListener('click', () => {
+    downloadLock = true;
     getVideoInfo();
 });
 
@@ -118,13 +122,17 @@ function getVideoStreams(bvid, cid, title) {
             console.log('默认最高音质选择错误');
         }
 
+        downloadLock = false;
+
     });
 }
 
 
 // 用户点击确认开始下载
 downloadBtn.addEventListener('click', async () => {
-    manageDownloadStart();
+    if (!downloadLock) {
+        manageDownloadStart();
+    }
 });
 
 

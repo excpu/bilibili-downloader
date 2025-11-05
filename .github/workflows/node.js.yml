@@ -28,7 +28,7 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      # 如果你没有前端打包步骤，这一段可以删除
+      # 前端打包步骤
       - name: Build renderer (optional)
         run: npm run build --if-present
 

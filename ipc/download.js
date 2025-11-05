@@ -51,7 +51,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 const downloadPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
                 const download = new EasyDl(videoStream.videoUrl, downloadPath, {
                     reportInterval: 1000,
-                    connections: 3,
+                    connections: 1,
                     existBehavior: 'overwrite',
                     chunkSize: 16 * 1024 * 1024,
                     httpOptions: {

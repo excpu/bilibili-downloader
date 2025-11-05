@@ -51,8 +51,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 const downloadPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
                 const download = new EasyDl(videoStream.videoUrl, downloadPath, {
                     reportInterval: 1000,
-                    connections: 1,
+                    connections: 2,
                     existBehavior: 'overwrite',
+                    chunkSize: 16 * 1024 * 1024,
                     httpOptions: {
                         method: 'GET',
                         headers: {
@@ -62,7 +63,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
                             'Accept': '*/*',
                             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
                             'Connection': 'keep-alive',
-                        }
+                        },
+                        timeout: 30000,                        // 单段超时
+                        maxRedirects: 5                        // B站直链常有 302
                     },
                 });
                 await download.on("progress", ({ details, total }) => {

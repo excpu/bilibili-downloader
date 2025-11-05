@@ -44,6 +44,7 @@
         "linux": {
             "category": "Utility",
             "icon": "build/icon.png",
+            "maintainer": "Ran <contact@5share.site>",
             "target": [
                 "AppImage",
                 "deb"

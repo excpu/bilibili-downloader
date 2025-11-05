@@ -79,7 +79,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const videoPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
         const audioPath = path.join(app.getPath('downloads'), `${title}_audio.m4s`);
         const outputPath = path.join(app.getPath('downloads'), `${title}.mp4`);
-        let ffmpegCmd = `"${ffmpeg}" -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a copy "${outputPath}"`;
+        let ffmpegCmd = `"${ffmpeg}" -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a copy "${outputPath}"`;
         try {
             const { stdout, stderr } = await execAsync(ffmpegCmd);
             console.log('✅ 转换完成');

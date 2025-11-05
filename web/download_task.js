@@ -1,5 +1,45 @@
 const $taskCount = document.getElementById('taskCount');
 
+// 平滑下载速度
+class SpeedSmoother {
+    constructor(alpha = 0.2, digits = 2) {
+        this.alpha = alpha;
+        this.digits = digits;
+        this.smoothedValue = null;
+    }
+
+    /**
+     * 输入: 速度字符串（如 "1.25", "800", "0.00"）
+     * 输出: 平滑后的速度字符串（保留 this.digits 位小数）
+     */
+    update(speedStr) {
+        const current = parseFloat(speedStr);
+
+        // 如果解析失败，直接返回原字符串
+        if (isNaN(current)) return speedStr;
+
+        if (this.smoothedValue === null) {
+            this.smoothedValue = current;
+        } else {
+            // 指数平滑
+            this.smoothedValue =
+                this.alpha * current +
+                (1 - this.alpha) * this.smoothedValue;
+        }
+
+        // 返回字符串，保留指定小数
+        return this.smoothedValue.toFixed(this.digits);
+    }
+
+    /**
+     * 重置平滑状态
+     */
+    reset() {
+        this.smoothedValue = null;
+    }
+}
+const speedSm = new SpeedSmoother(0.25);
+
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     console.log('进度来了：', data);
     // { percent: 30, speed: 123456, name: 'xxx' }
@@ -11,7 +51,7 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
         document.getElementById(`status-${data.currentUid}`).innerText = "下载视频中";
     }
 
-    document.getElementById(`speed-${data.currentUid}`).innerText = data.speed;
+    document.getElementById(`speed-${data.currentUid}`).innerText = speedSm.update(data.speed);
 });
 
 window.electronAPI.on('download-finished', (data) => {

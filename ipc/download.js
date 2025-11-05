@@ -32,7 +32,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             if (i === 0) {
                 const downloadPath = path.join(app.getPath('downloads'), `${title}_audio.m4s`);
                 const download = new EasyDl(videoStream.audioUrl, downloadPath, {
-                    reportInterval: 1000,
+                    reportInterval: 400,
                     connections: 1,
                     existBehavior: 'overwrite',
                     httpOptions: {
@@ -50,7 +50,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             } else {
                 const downloadPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
                 const download = new EasyDl(videoStream.videoUrl, downloadPath, {
-                    reportInterval: 1000,
+                    reportInterval: 400,
                     connections: 1,
                     existBehavior: 'overwrite',
                     chunkSize: 16 * 1024 * 1024,

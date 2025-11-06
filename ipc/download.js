@@ -137,11 +137,19 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 return { success: false, message: '网络请求失败' };
             }
             const json = await response.json();
+            let audioUrl = "";
+            let videoUrl = "";
+            for (let i of json.data.dash.audio) {
+                if (parseInt(i.id) === parseInt(audioIndex)) {
+                    audioUrl = i.baseUrl;
+                    break;
+                }
+            }
             if (json.code === 0) {
                 return {
                     success: true,
                     videoUrl: json.data.dash.video[parseInt(videoIndex)].baseUrl,
-                    audioUrl: json.data.dash.audio[parseInt(audioIndex)].baseUrl
+                    audioUrl
                 };
             } else {
                 return { success: false, message: json.message || '获取视频流信息失败' };

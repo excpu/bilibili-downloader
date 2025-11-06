@@ -100,7 +100,6 @@ function getVideoStreams(bvid, cid, title) {
             av01: "AV1 编码"
         };
         let bestAudio = 0;
-        let bestAudioIndex = null;
         const $qualitySelect = document.getElementById('qualitySelect');
         $qualitySelect.innerHTML = ''; // 清空之前的选项
         for (let i = 0; i < streamInfo.data.dash.video.length; i++) {
@@ -109,15 +108,14 @@ function getVideoStreams(bvid, cid, title) {
         const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
         $qualitySelectAudio.innerHTML = ''; // 清空之前的选项
         for (let i = 0; i < streamInfo.data.dash.audio.length; i++) {
-            $qualitySelectAudio.innerHTML += `<option value="${i}">${audioIndex[streamInfo.data.dash.audio[i].id] || streamInfo.data.dash.audio[i].id} - ${streamInfo.data.dash.audio[i].codecs.split('.')[0].toUpperCase()}</option>`;
+            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.audio[i].id}">${audioIndex[streamInfo.data.dash.audio[i].id] || streamInfo.data.dash.audio[i].id} - ${streamInfo.data.dash.audio[i].codecs.split('.')[0].toUpperCase()}</option>`;
             if (bestAudio < streamInfo.data.dash.audio[i].id) {
                 bestAudio = streamInfo.data.dash.audio[i].id;
-                bestAudioIndex = i;
             }
         }
         // 默认选择最高质量音频
         try {
-            $qualitySelectAudio.value = String(bestAudioIndex);
+            $qualitySelectAudio.value = String(bestAudio);
         } catch (e) {
             console.log('默认最高音质选择错误');
         }

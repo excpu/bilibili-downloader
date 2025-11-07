@@ -48,6 +48,10 @@
             "target": [
                 "AppImage",
                 "deb"
+            ],
+            "arch": [
+                "x64",
+                "arm64"
             ]
         },
         "mac": {
@@ -56,6 +60,10 @@
             "target": [
                 "dmg",
                 "zip"
+            ],
+            "arch": [
+                "x64",
+                "arm64"
             ]
         }
     }

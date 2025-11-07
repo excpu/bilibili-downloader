@@ -46,24 +46,40 @@
             "icon": "build/icon.png",
             "maintainer": "Ran <contact@5share.site>",
             "target": [
-                "AppImage",
-                "deb"
-            ],
-            "arch": [
-                "x64",
-                "arm64"
+                {
+                    "target": "AppImage",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                },
+                {
+                    "target": "deb",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
             ]
         },
         "mac": {
             "category": "public.app-category.utilities",
             "icon": "build/icon.icns",
             "target": [
-                "dmg",
-                "zip"
-            ],
-            "arch": [
-                "x64",
-                "arm64"
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                },
+                {
+                    "target": "zip",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
             ]
         }
     }

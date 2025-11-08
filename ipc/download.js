@@ -25,8 +25,9 @@ let currentUid = '';
 module.exports = function registerDownloadIpc(mainWindow) {
     // 添加下载任务
     ipcMain.handle('downloadTarget', async (event, payload) => {
-        const { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
+        let { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
         currentUid = uid;
+        title = sanitizePath(title);
         const videoStream = await getUpToDateUrl(bvid, cid, audioIndex, videoIndex);
         for (let i = 0; i < 2; i++) {
             if (i === 0) {
@@ -157,6 +158,27 @@ module.exports = function registerDownloadIpc(mainWindow) {
         } catch (error) {
             return { success: false, message: '发生错误: ' + error.message };
         }
+    }
+
+    function sanitizePath(input, replacement = '_') {
+        // Windows 禁止: <>:"/\|?* 及控制字符 \x00-\x1F
+        // POSIX 禁止: /
+        // macOS HFS+ 禁止: :
+        const illegalRegex = /[<>:"/\\|?*\x00-\x1F]/g;
+
+        // 先替换所有非法字符
+        let output = input.replace(illegalRegex, replacement);
+
+        // macOS HFS+ 特殊：禁止 ":" 
+        output = output.replace(/:/g, replacement);
+
+        // 移除多余重复替代符号
+        output = output.replace(new RegExp(`${replacement}+`, 'g'), replacement);
+
+        // 去掉开头或结尾的替换符号
+        output = output.replace(new RegExp(`^${replacement}+|${replacement}+$`, 'g'), '');
+
+        return output;
     }
 }
 

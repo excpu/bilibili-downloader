@@ -118,7 +118,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             const params = {
                 bvid: bvid,
                 cid: cid,
-                fnval: 16,
+                fnval: 4048,
                 fourk: 1,
                 gaia_source: 'view-card'
             };

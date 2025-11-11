@@ -117,7 +117,18 @@ function getVideoStreams(bvid, cid, title) {
                 bestAudio = streamInfo.data.dash.audio[i].id;
             }
         }
-        // 默认选择最高质量音频
+
+        // 处理FLAC无损
+        if (streamInfo.data.dash.flac !== null) {
+            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.flac.audio.id}">FLAC  无损</option>`;
+        }
+
+        // 处理杜比全景声
+        if (streamInfo.data.dash.dolby.audio !== null) {
+            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.dolby.audio[0].id}">杜比全景声</option>`;
+        }
+
+        // 默认选择最高质量音频 (有损)
         try {
             $qualitySelectAudio.value = String(bestAudio);
         } catch (e) {

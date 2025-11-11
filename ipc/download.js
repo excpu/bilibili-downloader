@@ -139,11 +139,18 @@ module.exports = function registerDownloadIpc(mainWindow) {
             }
             const json = await response.json();
             let audioUrl = "";
-            let videoUrl = "";
-            for (let i of json.data.dash.audio) {
-                if (parseInt(i.id) === parseInt(audioIndex)) {
-                    audioUrl = i.baseUrl;
-                    break;
+            if (parseInt(audioIndex) === 30251) {
+                // flac 无损
+                audioUrl = json.data.dash.flac.audio.baseUrl;
+            } else if (parseInt(audioIndex) === 30250) {
+                // 杜比全景声
+                audioUrl = json.data.dash.dolby.audio[0].baseUrl;
+            } else {
+                for (let i of json.data.dash.audio) {
+                    if (parseInt(i.id) === parseInt(audioIndex)) {
+                        audioUrl = i.baseUrl;
+                        break;
+                    }
                 }
             }
             if (json.code === 0) {

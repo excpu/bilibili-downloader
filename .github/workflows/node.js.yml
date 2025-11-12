@@ -65,7 +65,7 @@ jobs:
             dist/**/*.zip
             dist/**/*.dmg
             dist/**/*.pkg
-            dist/**/*.exe
+            dist/**/*Setup*.exe
             dist/**/*.msi
             dist/**/*.AppImage
             dist/**/*.deb

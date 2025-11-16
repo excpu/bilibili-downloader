@@ -1,3 +1,4 @@
+// DOM
 const $urlInput = document.getElementById('urlInput');
 const $confirmBtn = document.getElementById('confirmBtn');
 const $tasksContainer = document.getElementById('tasksContainer');

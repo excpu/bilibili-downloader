@@ -59,12 +59,25 @@
                     <div class="title" id="videoTitle">视频标题</div>
                     <div class="meta" id="videoMeta">UP主 · 播放量 · 弹幕数 · 发布时间</div>
                     <div class="quality-selection">
-                        <label for="qualitySelect">选择清晰度：</label>
+                        <label for="qualitySelect">首选清晰度：</label>
                         <select id="qualitySelect"></select>
                     </div>
                     <div class="quality-selection">
-                        <label for="qualitySelect">选择音频质量：</label>
+                        <label for="qualitySelect">首选音频质量：</label>
                         <select id="qualitySelectAudio"></select>
+                    </div>
+                    <!-- 分P视频选择框 -->
+                    <div class="multi-part-selector hidden" id="multiPartSelector">
+                        <div class="quick-slector">
+                            <button class="btn small" onclick="selectAllPart()">全选</button>
+                            <button class="btn small" onclick="ignoreAllPart()">全不选</button>
+                        </div>
+                        <div class="single-selector">
+                            <!-- <label><input class="p-item" type="checkbox" name="part[]" value="1">P1 - 示例分P选择</label>
+                            <label><input class="p-item" type="checkbox" name="part[]" value="2">P2 - 示例分P选择</label>
+                            <label><input class="p-item" type="checkbox" name="part[]" value="3">P3 - 示例分P选择</label>
+                            <label><input class="p-item" type="checkbox" name="part[]" value="4">P2 - 示例分P选择-长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长</label> -->
+                        </div>
                     </div>
                     <div class="actions">
                         <button class="btn brand" id="downloadBtn">确认下载</button>
@@ -99,6 +112,8 @@
     <script src="index.js"></script>
     <script src="download_task.js"></script>
     <script src="ui_detail.js"></script>
+    <!-- 开发专用 -->
+    <script src="dev.js"></script>
 </body>
 
 </html>

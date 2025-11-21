@@ -19,3 +19,13 @@ function input_identifier(input) {
 document.getElementById('urlInput').addEventListener('input', (event) => {
     input_identifier(event.target.value);
 });
+
+
+const $pItems = document.querySelectorAll(".p-item");
+// 分P视频全选与取消全选
+function selectAllPart(){
+    $pItems.forEach(box => box.checked = true);
+}
+function ignoreAllPart(){
+    $pItems.forEach(box => box.checked = false);
+}

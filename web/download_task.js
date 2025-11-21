@@ -2,7 +2,7 @@ const $taskCount = document.getElementById('taskCount');
 
 // 平滑下载速度
 class SpeedSmoother {
-    constructor(alpha = 0.2, digits = 2) {
+    constructor(alpha = 0.4, digits = 2) {
         this.alpha = alpha;
         this.digits = digits;
         this.smoothedValue = null;

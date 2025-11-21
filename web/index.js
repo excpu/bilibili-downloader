@@ -7,7 +7,8 @@ const $loginSection = document.getElementById('loginSection');
 const $cancelLoginBtn = document.getElementById('cancelLogin');
 const $videoInfoSection = document.getElementById('videoInfoSection');
 const $cancelVideoInfo = document.getElementById('cancelVideoInfo');
-const downloadBtn = document.getElementById('downloadBtn');
+const $downloadBtn = document.getElementById('downloadBtn');
+const $multiPartSelector = document.getElementById('multiPartSelector');
 
 let globalLoginStatus = false;
 
@@ -48,7 +49,8 @@ function getVideoInfo() {
         console.log('获取到视频信息:', videoInfo);
         // 检查是否分P视频
         if (videoInfo.data.videos > 1) {
-            $videoInfoSection.classList.add('hidden');
+            //$videoInfoSection.classList.add('hidden');
+            $multiPartSelector.classList.remove('hidden');
             alert('当前版本仅支持单P视频下载，敬请期待后续更新！');
             return;
         }
@@ -143,7 +145,7 @@ function getVideoStreams(bvid, cid, title) {
 
 
 // 用户点击确认开始下载
-downloadBtn.addEventListener('click', async () => {
+$downloadBtn.addEventListener('click', async () => {
     if (!downloadLock) {
         manageDownloadStart();
     }

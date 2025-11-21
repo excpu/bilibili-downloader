@@ -129,6 +129,12 @@ body {
     color: white;
 }
 
+.btn.small {
+    padding: 5px 7px;
+    font-weight: normal;
+    font-size: 12px;
+}
+
 .container {
     max-width: 960px;
     margin: 40px auto;
@@ -390,4 +396,26 @@ body {
     align-items: center;
     gap: 15px;
     margin-top: 10px;
+}
+
+/* 分P视频选择器 */
+.multi-part-selector {
+    border-radius: 8px;
+    border: #a3a3a3dc dashed 1px;
+    padding: 10px;
+}
+
+.quick-slector {
+    display: flex;
+    justify-content: space-evenly;
+}
+
+.multi-part-selector label {
+    display: block;
+}
+
+.single-selector {
+    margin-top: 9px;
+    max-height: 100px;
+    overflow-y: scroll;
 }

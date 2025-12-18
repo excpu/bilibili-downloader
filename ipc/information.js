@@ -42,6 +42,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 }
             }
         } else {
+            auth.updateTicket(); // 尝试更新票据
             return {
                 status: false,
                 message: '用户未登录',

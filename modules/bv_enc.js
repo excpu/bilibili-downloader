@@ -12,7 +12,7 @@ const s = [11, 10, 3, 8, 4, 6];
 const xor = 177451812;
 const add = 8728348608;
 
-function dec(x) {
+function bvdec(x) {
     let r = 0;
     for (let i = 0; i < 6; i++) {
         r += tr[x[s[i]]] * 58 ** i;
@@ -21,7 +21,7 @@ function dec(x) {
     return (r - add) ^ xor;
 }
 
-function enc(x) {
+function bvenc(x) {
     x = (x ^ xor) + add;
     const r = Array.from('BV1  4 1 7  ');
     for (let i = 0; i < 6; i++) {

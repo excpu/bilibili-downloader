@@ -1,6 +1,7 @@
 const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { getBiliTicket } = require('./bilibili_ticket');
 
 class Auth {
     constructor() {
@@ -19,6 +20,8 @@ class Auth {
                     loginStatus: false,
                     SESSDATA: '',
                     bili_jct: '',
+                    ticket: '',
+                    ticketExpiry: Date.now()
                 };
                 this.save(emptyData);
                 return emptyData;
@@ -58,5 +61,27 @@ class Auth {
         data.loginStatus = true;
         this.save(data);
     }
+
+    // 使用 Ticket 防止API被风控
+    updateTicket() {
+        const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+        let data = this.load() || {};
+        const currentTime = Date.now();
+        if (!data.ticket || data.ticketExpiry < currentTime) {
+            return getBiliTicket(data.bili_jct).then(response => {
+                if (response) {
+                    data.ticket = response;
+                    data.ticketExpiry = Date.now() + THREE_DAYS_MS - 5 * 60 * 1000; // 提前5分钟过期
+                    this.save(data);
+                    return data.ticket;
+                } else {
+                    throw new Error('Failed to obtain BiliTicket: ' + (response.message || 'Unknown error'));
+                }
+            });
+        } else {
+            return Promise.resolve(data.ticket);
+        }
+    }
 }
+
 module.exports = Auth;

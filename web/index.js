@@ -9,10 +9,12 @@ const $videoInfoSection = document.getElementById('videoInfoSection');
 const $cancelVideoInfo = document.getElementById('cancelVideoInfo');
 const $downloadBtn = document.getElementById('downloadBtn');
 const $multiPartSelector = document.getElementById('multiPartSelector');
+const $singleSelector = document.getElementById("singleSelector");
 
 let globalLoginStatus = false;
 
 let globalName = '';
+let multiPartVideo = false;
 
 // 用户防止在没有正常更新数据时下载旧视频
 let downloadLock = false;
@@ -44,16 +46,11 @@ function getVideoInfo() {
         return;
     }
     $videoInfoSection.classList.remove('hidden');
+    // 自动清空URL
+    $urlInput.value = "";
     // 获取视频基本信息
     window.electronAPI.invoke('getVideoInfo', bv).then((videoInfo) => {
         console.log('获取到视频信息:', videoInfo);
-        // 检查是否分P视频
-        if (videoInfo.data.videos > 1) {
-            //$videoInfoSection.classList.add('hidden');
-            $multiPartSelector.classList.remove('hidden');
-            alert('当前版本仅支持单P视频下载，敬请期待后续更新！');
-            return;
-        }
         // 有些视频会需要跳转
         if (videoInfo.data.need_jump_bv) {
             $videoInfoSection.classList.add('hidden');
@@ -67,18 +64,30 @@ function getVideoInfo() {
         $videoMeta.textContent = `UP主: ${videoInfo.data.owner.name}`;
         const $videoThumbnail = document.getElementById('videoThumbnail');
         $videoThumbnail.src = videoInfo.data.pic;
+        // 检查是否分P视频
+        if (videoInfo.data.videos > 1) {
+            //$videoInfoSection.classList.add('hidden');
+            $multiPartSelector.classList.remove('hidden');
+            // 列出分P
+            for (let i of videoInfo.data.pages) {
+                $singleSelector.innerHTML += `<label><input class="p-item" type="checkbox" name="part[]" value="${i.page}">P${i.page} - ${i.part}</label>`;
+            }
 
-        getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title);
-
+            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages);
+            multiPartVideo = true;
+        } else {
+            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title);
+            multiPartVideo = false;
+        }
     });
 }
 
 let currentVideoIdentity = null;
-function getVideoStreams(bvid, cid, title) {
+function getVideoStreams(bvid, cid, title, p = []) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title };
+        currentVideoIdentity = { bvid, cid, title, p };
         const qualityIndex = {
             6: "240P 极速",
             16: "360P 流畅",

@@ -125,12 +125,16 @@ module.exports = function registerDownloadIpc(mainWindow) {
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
             const data = auth.load();
-            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || '';
+            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
             const response = await fetch(url, {
                 headers: {
-                    'Referer': 'https://www.bilibili.com/',
+                    'Referer': `https://www.bilibili.com/video/${bvid}/`,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
                     'Accept': 'application/json',
+                    "Connection": "keep-alive",
+                    'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+                    'Cache-Control': 'no-cache',
+                    'Origin': 'https://www.bilibili.com',
                     'Cookie': credentialCookie // 登录验证
                 }
             });

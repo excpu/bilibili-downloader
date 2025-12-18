@@ -1,12 +1,7 @@
 // 感谢Bilibili-API-Collect项目提供的wbi签名算法参考
 // 地址：https://github.com/SocialSisterYi/bilibili-API-collect
 // import md5 from 'md5'
-let md5Fn = null;
-(async () => {
-    const { default: md5 } = await import('md5');
-    md5Fn = md5;
-    // console.log('md5 loaded');
-})();
+const md5 = require('md5');
 
 const Auth = require('./auth');
 const auth = new Auth();
@@ -41,7 +36,7 @@ function encWbi(params, img_key, sub_key) {
         })
         .join('&')
 
-    const wbi_sign = md5Fn(query + mixin_key) // 计算 w_rid
+    const wbi_sign = md5(query + mixin_key) // 计算 w_rid
 
     return query + '&w_rid=' + wbi_sign
 }
@@ -49,7 +44,10 @@ function encWbi(params, img_key, sub_key) {
 // 获取最新的 img_key 和 sub_key
 async function getWbiKeys() {
     const data = auth.load();
-    const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || '';
+    let credentialCookie = '';
+    if (data?.SESSDATA && data?.bili_jct) {
+        credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};`;
+    }
     const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
         headers: {
             'Referer': 'https://www.bilibili.com/',

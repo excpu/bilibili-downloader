@@ -40,6 +40,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
                             'Referer': 'https://www.bilibili.com/',
+                            'Origin': 'https://www.bilibili.com',
+                            'Accept': '*/*',
+                            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                            'Connection': 'keep-alive',
                         }
                     },
                 });
@@ -50,10 +54,11 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 }).wait();
             } else {
                 const downloadPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
+                // 下载函数，使用 EasyDl 进行下载，并监听进度事件
                 const download = new EasyDl(videoStream.videoUrl, downloadPath, {
                     reportInterval: 400,
                     connections: 1,
-                    existBehavior: 'overwrite',
+                    existBehavior: 'overwrite', // 如果文件已存在则覆盖，避免重复下载失败
                     chunkSize: 16 * 1024 * 1024,
                     httpOptions: {
                         method: 'GET',
@@ -124,8 +129,8 @@ module.exports = function registerDownloadIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            const data = auth.load();
-            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
+            //const data = auth.load();
+            const credentialCookie = auth.getConstructedCookie();
             const response = await fetch(url, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,

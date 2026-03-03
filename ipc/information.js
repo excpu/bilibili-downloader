@@ -1,5 +1,5 @@
 // 这里用于处理所有用户获取账号信息的API
-const { app, ipcMain } = require('electron');
+const { ipcMain } = require('electron');
 const Auth = require('../modules/auth');
 
 const { encWbi, getWbiKeys } = require('../modules/wbi');
@@ -16,9 +16,11 @@ module.exports = function registerInformationIpc(mainWindow) {
     ipcMain.handle('getUserInfo', async () => {
         if (auth.loadLoginStatus()) {
             const data = auth.load();
-            auth.updateTicket(); // 尝试更新票据
+            await auth.updateTicket(); // 尝试更新票据
             const url = `https://api.bilibili.com/x/web-interface/nav`;
-            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};`;
+            //const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || "";
+            // 更换为统一构造函数
+            const credentialCookie = auth.getConstructedCookie();
             const result = await fetch(url, {
                 method: 'GET',
                 headers: {
@@ -124,8 +126,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/web-interface/wbi/view?${wbiQuery}`;
-            const data = auth.load();
-            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || '';
+            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
             const response = await fetch(url, {
                 headers: {
                     'Referer': 'https://www.bilibili.com/',
@@ -164,8 +165,12 @@ module.exports = function registerInformationIpc(mainWindow) {
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             console.log(wbiQuery);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            const data = auth.load();
-            const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
+            //const data = auth.load();
+            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+            // const data = auth.load();
+            // const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
+            console.log(credentialCookie);
+            //const cre = credentialCookie.split(';').map(c => c.trim());
             const response = await fetch(url, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,
@@ -179,6 +184,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 }
             });
             if (!response.ok) {
+                console.error(`HTTP Error Code: ${response.status}, Cause: ${response.statusText}`);
                 return { success: false, message: '网络请求失败' };
             }
             const json = await response.json();

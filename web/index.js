@@ -66,9 +66,7 @@ function getVideoInfo() {
         $videoThumbnail.src = videoInfo.data.pic;
         // 检查是否分P视频
         if (videoInfo.data.videos > 1) {
-            alert('该视频分P，当前版本暂不支持此类视频的下载。');
-            return;
-            //$videoInfoSection.classList.add('hidden');
+            //现已支持分P视频下载
             $multiPartSelector.classList.remove('hidden');
             // 列出分P
             for (let i of videoInfo.data.pages) {
@@ -78,6 +76,7 @@ function getVideoInfo() {
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages);
             multiPartVideo = true;
         } else {
+            $multiPartSelector.classList.add('hidden');
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title);
             multiPartVideo = false;
         }

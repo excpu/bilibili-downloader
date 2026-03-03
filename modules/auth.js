@@ -21,6 +21,9 @@ class Auth {
                     SESSDATA: '',
                     bili_jct: '',
                     ticket: '',
+                    buvid3: '',
+                    buvid4: '',
+                    b_nut: '',
                     ticketExpiry: Date.now()
                 };
                 this.save(emptyData);
@@ -63,23 +66,53 @@ class Auth {
     }
 
     // 使用 Ticket 防止API被风控
-    updateTicket() {
+    async updateTicket() {
         const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-        let data = this.load() || {};
+        const data = this.load() || {};
         const currentTime = Date.now();
-        if (!data.ticket || data.ticketExpiry < currentTime) {
-            return getBiliTicket(data.bili_jct).then(response => {
-                if (response) {
-                    data.ticket = response;
-                    data.ticketExpiry = Date.now() + THREE_DAYS_MS - 5 * 60 * 1000; // 提前5分钟过期
-                    this.save(data);
-                    return data.ticket;
-                } else {
-                    throw new Error('Failed to obtain BiliTicket: ' + (response.message || 'Unknown error'));
-                }
-            });
+
+        // 1. 检查是否真的需要更新
+        if (data.ticket && data.ticketExpiry > currentTime) {
+            return data.ticket;
+        }
+
+        // 2. 检查必要的参数是否存在
+        if (!data.bili_jct) {
+            throw new Error('Missing bili_jct, cannot update ticket.');
+        }
+
+        try {
+            const response = await getBiliTicket(data.bili_jct);
+
+            // 3. 这里的逻辑取决于 getBiliTicket 的返回结构
+            // 假设成功时 response 为真，失败时可能返回 null 或带 message 的对象
+            if (response && !response.error) {
+                data.ticket = response;
+                // 提前5分钟过期
+                data.ticketExpiry = Date.now() + THREE_DAYS_MS - 5 * 60 * 1000;
+
+                this.save(data);
+                return data.ticket;
+            } else {
+                throw new Error(response?.message || 'Unknown error');
+            }
+        } catch (error) {
+            // 4. 在这里统一捕获网络错误和业务错误
+            console.error('Update Ticket Failed:', error.message);
+            throw error;
+        }
+    }
+
+    // 获取构造好的Cookie字符串
+    getConstructedCookie() {
+        const data = this.load();
+        // 构造Cookie字符串，优先包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+        if (data.buvid3 !== '' && data.buvid4 !== '' && data.b_nut !== '' && data.buvid3 !== undefined && data.buvid4 !== undefined && data.b_nut !== undefined && data.buvid3 !== "undefined" && data.buvid4 !== "undefined" && data.b_nut !== "undefined") {
+            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}; buvid3=${data.buvid3}; buvid4=${data.buvid4}; b_nut=${data.b_nut}` || '';
+        } else if (data.ticket !== '' && data.ticket !== undefined && data.ticket !== "undefined") {
+            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
         } else {
-            return Promise.resolve(data.ticket);
+            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}` || '';
         }
     }
 }

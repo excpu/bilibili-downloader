@@ -10,6 +10,8 @@ function input_identifier(input) {
         $suffix.textContent = 'AV';
     } else if (value.startsWith('http://') || value.startsWith('https://')) {
         $suffix.textContent = 'URL';
+    } else if (value.startsWith('ep') || value.startsWith('ss')) {
+        $suffix.textContent = 'ERR';
     } else {
         $suffix.textContent = '';
     }
@@ -28,3 +30,5 @@ function selectAllPart() {
 function ignoreAllPart() {
     document.querySelectorAll(".p-item").forEach(box => box.checked = false);
 }
+
+// 不支持的格式提示

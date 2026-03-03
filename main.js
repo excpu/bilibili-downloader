@@ -38,6 +38,7 @@ app.whenReady().then(createWindow);
 app.on('ready', () => {
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         details.requestHeaders['Referer'] = 'https://www.bilibili.com/';
+        details.requestHeaders['Origin'] = 'https://www.bilibili.com/';
         callback({ requestHeaders: details.requestHeaders });
     });
 });

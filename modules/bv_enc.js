@@ -16,7 +16,6 @@ function bvdec(x) {
     let r = 0;
     for (let i = 0; i < 6; i++) {
         r += tr[x[s[i]]] * 58 ** i;
-        // 如果你不想用 **，可以用 Math.pow(58, i)
     }
     return (r - add) ^ xor;
 }

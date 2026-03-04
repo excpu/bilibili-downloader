@@ -69,8 +69,10 @@ function getVideoInfo() {
             //现已支持分P视频下载
             $multiPartSelector.classList.remove('hidden');
             // 列出分P
+            let counter = 0;
             for (let i of videoInfo.data.pages) {
-                $singleSelector.innerHTML += `<label><input class="p-item" type="checkbox" name="part[]" value="${i.page}">P${i.page} - ${i.part}</label>`;
+                $singleSelector.innerHTML += `<label><input class="p-item" type="checkbox" name="part[]" value="${counter}">P${i.page} - ${i.part}</label>`;
+                counter++;
             }
 
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages);
@@ -157,6 +159,7 @@ function getVideoStreams(bvid, cid, title, p = []) {
 // 用户点击确认开始下载
 $downloadBtn.addEventListener('click', async () => {
     if (!downloadLock) {
+        // 见download_task.js
         manageDownloadStart();
     }
 });

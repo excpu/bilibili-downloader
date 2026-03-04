@@ -77,17 +77,49 @@ function manageDownloadStart() {
     const videoIndex = parseInt($qualitySelect.value);
     const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
     const audioIndex = parseInt($qualitySelectAudio.value);
-    const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
-    const videoEle = {
-        uid,
-        bvid: currentVideoIdentity.bvid,
-        cid: currentVideoIdentity.cid,
-        title: currentVideoIdentity.title,
-        videoIndex,
-        audioIndex
+    // 如果是多P视频，生成多个下载任务
+    if (currentVideoIdentity.p.length > 0) {
+        const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
+        for (let i = 0; i < currentVideoIdentity.p.length; i++) {
+            // 查看是否被用户选中 （$multiPartSelector）
+            const checked = document.querySelectorAll('input[name="part[]"]:checked');
+
+            // 查看是否和某个选中的value相同
+            let isChecked = false;
+            checked.forEach((item) => {
+                if (parseInt(item.value) === i) {
+                    isChecked = true;
+                }
+            });
+
+            if (!isChecked) {
+                continue;
+            }
+
+            const videoEle = {
+                uid,
+                bvid: currentVideoIdentity.bvid,
+                cid: currentVideoIdentity.p[i].cid,
+                title: `P${currentVideoIdentity.p[i].page} - ${currentVideoIdentity.title} - ${currentVideoIdentity.p[i].part}`,
+                videoIndex,
+                audioIndex
+            }
+            taskQuene.push(videoEle);
+            displayTasks(videoEle);
+        }
+    } else {
+        const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
+        const videoEle = {
+            uid,
+            bvid: currentVideoIdentity.bvid,
+            cid: currentVideoIdentity.cid,
+            title: currentVideoIdentity.title,
+            videoIndex,
+            audioIndex
+        }
+        taskQuene.push(videoEle);
+        displayTasks(videoEle);
     }
-    taskQuene.push(videoEle);
-    displayTasks(videoEle);
     taskManager();
 }
 

@@ -3,6 +3,16 @@
 本项目是一个基于 Node.js 和 Electron 构建的跨平台BiliBili下载工具，支持所有主流操作系统。
 ![主界面展示](images/image.png)
 
+## 🔧 功能
+### 已经实现功能
+* 视频下载
+
+### 开发中功能
+* 视频下载 （多P）
+* 弹幕下载
+* 字幕下载
+
+
 ## ⚡ 快速体验
 
 ### Windows
@@ -25,9 +35,11 @@ MAC 版本无签名，需要命令行处理或从本地开发环境运行
 #### 从Release下载并使用命令行处理
 下载ZIP软件包，方便后续处理  
 注意区分Intel版和AppleSilicon（ARM64）版本  
+![ARM版](images/image-2.png)  
+![Intel版](images/image-3.png)  
 解压ZIP获取.app包  
 使用命令行去除互联网下载标签  
-移入Application并且开始使用
+移入Application并且开始使用  
 #### 从本地开发环境运行
 见教程
 
@@ -49,5 +61,5 @@ MAC 版本无签名，需要命令行处理或从本地开发环境运行
 #
 **额外申明**  
 该项目仅供学习研究使用，请勿用于非法用途  
-项目仅用于可用BiliBili客户端下载的视频，不支持版权内容的下载  
+项目仅用于可用BiliBili客户端缓存的视频，不支持版权内容的下载  
 联系删除：contact@5share.site

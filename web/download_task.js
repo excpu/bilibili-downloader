@@ -1,4 +1,5 @@
 const $taskCount = document.getElementById('taskCount');
+const $downloadDanmuCheckbox = document.getElementById("downloadDanmuCheckbox");
 
 // 平滑下载速度
 class SpeedSmoother {
@@ -77,6 +78,7 @@ function manageDownloadStart() {
     const videoIndex = parseInt($qualitySelect.value);
     const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
     const audioIndex = parseInt($qualitySelectAudio.value);
+    currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
     if (currentVideoIdentity.p.length > 0) {
         const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
@@ -102,7 +104,8 @@ function manageDownloadStart() {
                 cid: currentVideoIdentity.p[i].cid,
                 title: `P${currentVideoIdentity.p[i].page} - ${currentVideoIdentity.title} - ${currentVideoIdentity.p[i].part}`,
                 videoIndex,
-                audioIndex
+                audioIndex,
+                danmu: currentVideoIdentity.danmu
             }
             taskQuene.push(videoEle);
             displayTasks(videoEle);
@@ -115,7 +118,8 @@ function manageDownloadStart() {
             cid: currentVideoIdentity.cid,
             title: currentVideoIdentity.title,
             videoIndex,
-            audioIndex
+            audioIndex,
+            danmu: currentVideoIdentity.danmu
         }
         taskQuene.push(videoEle);
         displayTasks(videoEle);
@@ -144,6 +148,19 @@ function displayTasks(newTask) {
     $tasksContainer.appendChild($taskItem);
 }
 
+
+// Call弹幕下载
+async function downloadDanmu(cid, title, danmu, uid) {
+    if (danmu) {
+        await window.electronAPI.invoke('downloadDanmu', { cid, title });
+        //document.getElementById(`status-${uid}`).innerText = "下载弹幕完成";
+        console.log('弹幕下载完成');
+    } else {
+        // 如果不下载弹幕，直接返回'
+        return;
+    }
+}
+
 async function taskManager() {
     $taskCount.innerText = taskQuene.length;
     if (taskQuene.length < 1) {
@@ -154,6 +171,7 @@ async function taskManager() {
     }
     globalTaskLock = true;
     await window.electronAPI.invoke('downloadTarget', taskQuene[0]);
+    await downloadDanmu(taskQuene[0].cid, taskQuene[0].title, taskQuene[0].danmu, taskQuene[0].uid);
 
     taskQuene.shift();
     globalTaskLock = false;

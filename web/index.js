@@ -90,7 +90,7 @@ function getVideoStreams(bvid, cid, title, p = []) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title, p };
+        currentVideoIdentity = { bvid, cid, title, p, danmu:false };
         const qualityIndex = {
             6: "240P 极速",
             16: "360P 流畅",

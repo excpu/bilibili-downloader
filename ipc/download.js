@@ -11,8 +11,8 @@ const fs = require('fs');
 const util = require('util');
 // ffmpeg 用于合并Dash 音视频
 let ffmpeg = require('ffmpeg-static');
-const { exec } = require('child_process');
-const execAsync = util.promisify(exec);
+const { execFile } = require('child_process');
+const execFileAsync = util.promisify(execFile);
 
 // asar 修正
 if (app.isPackaged && ffmpeg.includes('app.asar')) {
@@ -126,8 +126,32 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
             // 合并音视频
             console.log(`⏳ [${title}] 正在合并...`);
-            let ffmpegCmd = `"${ffmpeg}" -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a copy "${outputPath}"`;
-            await execAsync(ffmpegCmd);
+            // 1. 修复 macOS/Linux 下的执行权限问题
+            if (process.platform === 'darwin' || process.platform === 'linux') {
+                try {
+                    fs.chmodSync(ffmpeg, 0o755);
+                } catch (chmodErr) {
+                    console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
+                }
+            }
+
+            // 2. 使用 execFile 代替 exec，将参数写成数组，彻底避免路径转义问题
+            const ffmpegArgs = [
+                '-y',
+                '-i', videoPath,
+                '-i', audioPath,
+                '-c:v', 'copy',
+                '-c:a', 'copy',
+                outputPath
+            ];
+
+            try {
+                await execFileAsync(ffmpeg, ffmpegArgs);
+                console.log(`✅ [${title}] 转换完成`);
+            } catch (err) {
+                console.error(`❌ [${title}] 合并出错：`, err);
+                return { success: false, message: '音视频合并失败' };
+            }
             console.log(`✅ [${title}] 转换完成`);
 
         } catch (err) {

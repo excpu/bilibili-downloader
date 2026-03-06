@@ -1,15 +1,15 @@
 const { ipcMain, app } = require('electron');
 const path = require('path');
-const fs = require('fs'); // 修复 2：引入 fs 模块
+const fs = require('fs');
 const axios = require("axios");
 
 const Auth = require('../modules/auth');
-const auth = new Auth(); // 维持一个全局实例即可
+const auth = new Auth();
 
 module.exports = function registerDanmuIpc(mainWindow) {
     ipcMain.handle('downloadDanmu', async (event, payload) => {
         const { cid, title } = payload;
-        // 修复 3：删除了这里多余的 const auth = new Auth();
+        // 旧版弹幕接口
         const url = `https://comment.bilibili.com/${cid}.xml`;
 
         try {
@@ -23,7 +23,7 @@ module.exports = function registerDanmuIpc(mainWindow) {
 
     async function downloadFile(url, outputPath) {
         const credentialCookie = auth.getConstructedCookie();
-        let response; // 修复 1：将 response 声明在 try 块外部
+        let response; 
 
         try {
             response = await axios({
@@ -47,7 +47,7 @@ module.exports = function registerDanmuIpc(mainWindow) {
         return new Promise((resolve, reject) => {
             writer.on('finish', () => resolve());
             writer.on('error', (err) => {
-                writer.close(); // 修复 4：写入出错时安全关闭流
+                writer.close(); // 写入出错时安全关闭流
                 reject(err);
             });
         });

@@ -64,6 +64,7 @@ function getVideoInfo() {
         $videoMeta.textContent = `UP主: ${videoInfo.data.owner.name}`;
         const $videoThumbnail = document.getElementById('videoThumbnail');
         $videoThumbnail.src = videoInfo.data.pic;
+        $singleSelector.innerHTML = ''; // 清空之前的分P选项
         // 检查是否分P视频
         if (videoInfo.data.videos > 1) {
             //现已支持分P视频下载

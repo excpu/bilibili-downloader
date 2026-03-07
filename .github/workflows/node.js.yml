@@ -87,7 +87,6 @@ jobs:
         with:
           files: |
             dist/**/*.zip
-            dist/**/*.dmg
             dist/**/*.pkg
             dist/**/*Setup*.exe
             dist/**/*.msi

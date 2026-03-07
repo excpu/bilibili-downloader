@@ -25,12 +25,12 @@ jobs:
           - os: ubuntu-latest
             node: 22.x
             build_target: linux
-          - os: macos-13
-            node: 22.x
-            build_target: mac-x64
-          - os: macos-14
+          - os: macos-latest
             node: 22.x
             build_target: mac-arm64
+          - os: macos-15-intel
+            node: 22.x
+            build_target: mac-x64
 
     steps:
       - uses: actions/checkout@v4

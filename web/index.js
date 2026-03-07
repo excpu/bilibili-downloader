@@ -5,16 +5,15 @@ const $tasksContainer = document.getElementById('tasksContainer');
 const $avatar = document.getElementById('avatar');
 const $loginSection = document.getElementById('loginSection');
 const $cancelLoginBtn = document.getElementById('cancelLogin');
-const $videoInfoSection = document.getElementById('videoInfoSection');
 const $cancelVideoInfo = document.getElementById('cancelVideoInfo');
 const $downloadBtn = document.getElementById('downloadBtn');
-const $multiPartSelector = document.getElementById('multiPartSelector');
-const $singleSelector = document.getElementById("singleSelector");
 
 let globalLoginStatus = false;
 
-let globalName = '';
 let multiPartVideo = false;
+
+// 视频信息展示和用户选择器
+const infoSection = selectInfo();
 
 // 用户防止在没有正常更新数据时下载旧视频
 let downloadLock = false;
@@ -45,7 +44,7 @@ function getVideoInfo() {
         alert('请输入有效的B站视频链接或BV号');
         return;
     }
-    $videoInfoSection.classList.remove('hidden');
+    infoSection.show();
     // 自动清空URL
     $urlInput.value = "";
     // 获取视频基本信息
@@ -53,33 +52,31 @@ function getVideoInfo() {
         console.log('获取到视频信息:', videoInfo);
         // 有些视频会需要跳转
         if (videoInfo.data.need_jump_bv) {
-            $videoInfoSection.classList.add('hidden');
+            infoSection.hide();
             alert('该视频需要跳转，当前版本暂不支持此类视频的下载。');
             return;
         }
-        const $videoTitle = document.getElementById('videoTitle');
-        $videoTitle.textContent = videoInfo.data.title;
-        globalName = videoInfo.data.title;
-        const $videoMeta = document.getElementById('videoMeta');
-        $videoMeta.textContent = `UP主: ${videoInfo.data.owner.name}`;
-        const $videoThumbnail = document.getElementById('videoThumbnail');
-        $videoThumbnail.src = videoInfo.data.pic;
-        $singleSelector.innerHTML = ''; // 清空之前的分P选项
+        // 更新UI显示视频信息
+        infoSection.updateTitle(videoInfo.data.title);
+        // 更新UP主信息
+        infoSection.updateMeta(videoInfo.data.owner.name);
+        // 更新缩略图
+        infoSection.updateThumbnail(videoInfo.data.pic);
+        // 清空之前的分P选项
+        infoSection.clearMultipart();
         // 检查是否分P视频
         if (videoInfo.data.videos > 1) {
-            //现已支持分P视频下载
-            $multiPartSelector.classList.remove('hidden');
+            //现已支持分P视频下载,展示分P选择器
+            infoSection.showMultipartSelector();
             // 列出分P
-            let counter = 0;
-            for (let i of videoInfo.data.pages) {
-                $singleSelector.innerHTML += `<label><input class="p-item" type="checkbox" name="part[]" value="${counter}">P${i.page} - ${i.part}</label>`;
-                counter++;
-            }
+            infoSection.addMultipart(videoInfo.data.pages);
 
+            // 获取视频流信息时传入分P信息
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages);
             multiPartVideo = true;
         } else {
-            $multiPartSelector.classList.add('hidden');
+            // 非分P隐藏分P选择器，直接获取视频流信息
+            infoSection.hideMultipartSelector();
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title);
             multiPartVideo = false;
         }
@@ -91,66 +88,9 @@ function getVideoStreams(bvid, cid, title, p = []) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title, p, danmu:false };
-        const qualityIndex = {
-            6: "240P 极速",
-            16: "360P 流畅",
-            32: "480P 清晰",
-            64: "720P 标清",
-            74: "720P60 高帧率",
-            80: "1080P 高清",
-            112: "1080P+ 高码率",
-            116: "1080P60 高帧率",
-            120: "超清 4K",
-            125: "HDR 真彩色",
-            126: "杜比视界",
-            127: "8K 超高清",
-            129: "HDR Vivid",
-        };
-        const audioIndex = {
-            30216: "64K",
-            30232: "132K",
-            30280: "192K",
-            30250: "杜比全景声",
-            30251: "Hi-Res无损"
-        };
-        const codecIndex = {
-            avc1: "H.264 AVC 编码",
-            hev1: "H.265 HEVC 编码",
-            av01: "AV1 编码"
-        };
-        let bestAudio = 0;
-        const $qualitySelect = document.getElementById('qualitySelect');
-        $qualitySelect.innerHTML = ''; // 清空之前的选项
-        for (let i = 0; i < streamInfo.data.dash.video.length; i++) {
-            $qualitySelect.innerHTML += `<option value="${i}">${qualityIndex[streamInfo.data.dash.video[i].id] || streamInfo.data.dash.video[i].id} - ${codecIndex[streamInfo.data.dash.video[i].codecs.split('.')[0]] || streamInfo.data.dash.video[i].codecs}</option>`;
-        }
-        const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
-        $qualitySelectAudio.innerHTML = ''; // 清空之前的选项
-        for (let i = 0; i < streamInfo.data.dash.audio.length; i++) {
-            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.audio[i].id}">${audioIndex[streamInfo.data.dash.audio[i].id] || streamInfo.data.dash.audio[i].id} - ${streamInfo.data.dash.audio[i].codecs.split('.')[0].toUpperCase()}</option>`;
-            if (bestAudio < streamInfo.data.dash.audio[i].id) {
-                bestAudio = streamInfo.data.dash.audio[i].id;
-            }
-        }
-
-        // 处理FLAC无损
-        if (streamInfo.data.dash.flac !== null) {
-            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.flac.audio.id}">FLAC  无损</option>`;
-        }
-
-        // 处理杜比全景声
-        if (streamInfo.data.dash.dolby.audio !== null) {
-            $qualitySelectAudio.innerHTML += `<option value="${streamInfo.data.dash.dolby.audio[0].id}">杜比全景声</option>`;
-        }
-
-        // 默认选择最高质量音频 (有损)
-        try {
-            $qualitySelectAudio.value = String(bestAudio);
-        } catch (e) {
-            console.log('默认最高音质选择错误');
-        }
-
+        currentVideoIdentity = { bvid, cid, title, p, danmu: false };
+        // 渲染音频流和视频流
+        infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;
 
     });
@@ -175,7 +115,7 @@ function extractBV(url) {
 // 用户取消下载
 $cancelVideoInfo.addEventListener('click', () => {
     console.log('用户取消下载视频信息展示');
-    $videoInfoSection.classList.add('hidden');
+    infoSection.hide();
 });
 
 // 启动时获取登录状态

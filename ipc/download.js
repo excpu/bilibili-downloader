@@ -241,7 +241,6 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     message: err.stderr || err.message || '音视频合并失败'
                 };
             }
-            console.log(`✅ [${title}] 转换完成`);
 
         } catch (err) {
             console.error(`❌ [${title}] 出错：`, err);

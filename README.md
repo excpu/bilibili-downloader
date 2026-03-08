@@ -31,7 +31,7 @@ AppImage
 #### Linux支持多种架构
 amd64  
 arm64  
-armv7l（仅 AppImage）
+~~armv7l（仅 AppImage）~~
 
 ### Mac
 MAC 版本无签名，需要命令行处理或从本地开发环境运行

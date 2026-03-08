@@ -24,7 +24,10 @@ jobs:
             build_target: win
           - os: ubuntu-latest
             node: 22.x
-            build_target: linux
+            build_target: linux-x64
+          - os: ubuntu-24.04-arm
+            node: 22.x
+            build_target: linux-arm64
           - os: macos-latest
             node: 22.x
             build_target: mac-arm64
@@ -61,9 +64,13 @@ jobs:
         if: matrix.build_target == 'win'
         run: npx electron-builder --win
 
-      - name: Build on Linux
-        if: matrix.build_target == 'linux'
-        run: npx electron-builder --linux
+      - name: Build on Linux x64
+        if: matrix.build_target == 'linux-x64'
+        run: npx electron-builder --linux --x64
+
+      - name: Build on Linux arm64
+        if: matrix.build_target == 'linux-arm64'
+        run: npx electron-builder --linux --arm64
 
       - name: Build on macOS x64
         if: matrix.build_target == 'mac-x64'
@@ -72,14 +79,6 @@ jobs:
       - name: Build on macOS arm64
         if: matrix.build_target == 'mac-arm64'
         run: npx electron-builder --mac --arm64
-
-      # - name: Upload artifacts
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: dist-${{ matrix.build_target }}
-      #     path: dist/**
-      #     if-no-files-found: error
-      #     retention-days: 1
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2

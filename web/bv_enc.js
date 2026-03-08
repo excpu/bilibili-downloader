@@ -1,34 +1,4 @@
-// //https://www.zhihu.com/question/381784377/answer/1099438784
-// // 原表
-// const table = 'fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTKNPAwcF';
-
-// // 建立反查表
-// const tr = {};
-// for (let i = 0; i < 58; i++) {
-//     tr[table[i]] = i;
-// }
-
-// const s = [11, 10, 3, 8, 4, 6];
-// const xor = 177451812;
-// const add = 8728348608;
-
-// // function bvdec(x) {
-// //     let r = 0;
-// //     for (let i = 0; i < 6; i++) {
-// //         r += tr[x[s[i]]] * 58 ** i;
-// //     }
-// //     return (r - add) ^ xor;
-// // }
-
-// function bvenc(x) {
-//     x = (x ^ xor) + add;
-//     const r = Array.from('BV1  4 1 7  ');
-//     for (let i = 0; i < 6; i++) {
-//         r[s[i]] = table[Math.floor(x / 58 ** i) % 58];
-//     }
-//     return r.join('');
-// }
-
+// BV 编码函数
 function bvEnc() {
     const XOR_CODE = 23442827791579n;
     const MAX_AID = 1n << 51n;

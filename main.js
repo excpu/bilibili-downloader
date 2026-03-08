@@ -1,3 +1,4 @@
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true"; // 禁用安全警告，开发阶段使用
 // main.js
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');

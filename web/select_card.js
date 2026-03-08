@@ -16,7 +16,9 @@ function selectInfo() {
     // 展示缩略图
     function updateThumbnail(thumbnailUrl) {
         const $videoThumbnail = document.getElementById('videoThumbnail');
-        $videoThumbnail.src = thumbnailUrl;
+        if (thumbnailUrl.startsWith("https:") || thumbnailUrl.startsWith("http:")) {
+            $videoThumbnail.src = thumbnailUrl;
+        }
     }
     // 展示整个信息选择器
     function show() {
@@ -65,26 +67,68 @@ function selectInfo() {
         let bestAudio = 0;
         const $qualitySelect = document.getElementById('qualitySelect');
         $qualitySelect.innerHTML = ''; // 清空之前的选项
+
+        // 插入视频选项
+        let fragment = document.createDocumentFragment();
         for (let i = 0; i < dash.video.length; i++) {
-            $qualitySelect.innerHTML += `<option value="${i}">${qualityIndex[dash.video[i].id] || dash.video[i].id} - ${codecIndex[dash.video[i].codecs.split('.')[0]] || dash.video[i].codecs}</option>`;
+            const option = document.createElement("option");
+
+            option.value = i;
+
+            const id = qualityIndex[dash.video[i].id] || dash.video[i].id;
+            const codec =
+                codecIndex[dash.video[i].codecs.split(".")[0]] || dash.video[i].codecs;
+
+            option.textContent = `${id} - ${codec}`;
+
+            fragment.appendChild(option);
         }
+        $qualitySelect.appendChild(fragment);
+
         const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
         $qualitySelectAudio.innerHTML = ''; // 清空之前的选项
+
+        // 插入音频选项
+        fragment = document.createDocumentFragment();
         for (let i = 0; i < dash.audio.length; i++) {
-            $qualitySelectAudio.innerHTML += `<option value="${dash.audio[i].id}">${audioIndex[dash.audio[i].id] || dash.audio[i].id} - ${dash.audio[i].codecs.split('.')[0].toUpperCase()}</option>`;
-            if (bestAudio < dash.audio[i].id) {
-                bestAudio = dash.audio[i].id;
+            const audio = dash.audio[i];
+
+            const option = document.createElement("option");
+
+            option.value = audio.id;
+
+            const label = audioIndex[audio.id] || audio.id;
+            const codec = audio.codecs.split(".")[0].toUpperCase();
+
+            option.textContent = `${label} - ${codec}`;
+
+            fragment.appendChild(option);
+
+            if (bestAudio < audio.id) {
+                bestAudio = audio.id;
             }
         }
 
-        // 处理FLAC无损
+        $qualitySelectAudio.appendChild(fragment);
+
+        // 处理 FLAC 无损
         if (dash.flac !== null) {
-            $qualitySelectAudio.innerHTML += `<option value="${dash.flac.audio.id}">FLAC  无损</option>`;
+            const option = document.createElement("option");
+
+            option.value = dash.flac.audio.id;
+            option.textContent = "FLAC  无损";
+
+            $qualitySelectAudio.appendChild(option);
         }
 
         // 处理杜比全景声
         if (dash.dolby.audio !== null) {
-            $qualitySelectAudio.innerHTML += `<option value="${dash.dolby.audio[0].id}">杜比全景声</option>`;
+            const option = document.createElement("option");
+
+            option.value = dash.dolby.audio[0].id;
+            option.textContent = "杜比全景声";
+
+            $qualitySelectAudio.appendChild(option);
         }
 
         // 默认选择最高质量音频 (有损)
@@ -106,12 +150,32 @@ function selectInfo() {
         $multiPartSelector.classList.add('hidden');
     }
 
+    // 显示分P视频的每一P的标题和选择框
     function addMultipart(pages) {
         let counter = 0;
-        for (let i of pages) {
-            $multiPartSelectorInner.innerHTML += `<label><input class="p-item" type="checkbox" name="part[]" value="${counter}">P${i.page} - ${i.part}</label>`;
+
+        const fragment = document.createDocumentFragment();
+
+        for (const i of pages) {
+            const label = document.createElement("label");
+
+            const checkbox = document.createElement("input");
+            checkbox.className = "p-item";
+            checkbox.type = "checkbox";
+            checkbox.name = "part[]";
+            checkbox.value = counter;
+
+            label.appendChild(checkbox);
+
+            const text = document.createTextNode(`P${i.page} - ${i.part}`);
+            label.appendChild(text);
+
+            fragment.appendChild(label);
+
             counter++;
         }
+
+        $multiPartSelectorInner.appendChild(fragment);
     }
 
     function clearMultipart() {

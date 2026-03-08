@@ -47,12 +47,12 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     document.getElementById(`progress-${data.currentUid}`).style.width = `${data.progress}%`;
 
     if (data.avId === "audio") {
-        document.getElementById(`status-${data.currentUid}`).innerText = "下载音频中";
+        document.getElementById(`status-${data.currentUid}`).textContent = "下载音频中";
     } else if (data.avId === "video") {
-        document.getElementById(`status-${data.currentUid}`).innerText = "下载视频中";
+        document.getElementById(`status-${data.currentUid}`).textContent = "下载视频中";
     }
 
-    document.getElementById(`speed-${data.currentUid}`).innerText = speedSm.update(data.speed);
+    document.getElementById(`speed-${data.currentUid}`).textContent = speedSm.update(data.speed);
 });
 
 window.electronAPI.on('download-finished', (data) => {
@@ -128,23 +128,51 @@ function manageDownloadStart() {
 }
 
 function displayTasks(newTask) {
-    const $taskItem = document.createElement('div');
-    $taskItem.className = 'task';
+    const $taskItem = document.createElement("div");
+    $taskItem.className = "task";
     $taskItem.id = "task-" + newTask.uid;
-    $taskItem.innerHTML = `
-        <div>
-            <div class="title title-vc p-10 pl-0">
-                <span>${newTask.title}</span>
-            </div>
-            <div class="progress">
-                <i id='progress-${newTask.uid}' style="width:0%"></i>
-            </div>
-            <div class="meta mt-5">状态：<span id='status-${newTask.uid}'>排队中</span> · 速度：<span id='speed-${newTask.uid}'>0.00</span> MB/s</div>
-        </div>
-        <!-- <div style="display:grid; gap:8px; align-content:center">
-            <button class="btn" data-action="remove" data-id="demo1">取消</button>
-        </div> -->
-    `;
+
+    const wrapper = document.createElement("div");
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "title title-vc p-10 pl-0";
+
+    const titleSpan = document.createElement("span");
+    titleSpan.textContent = newTask.title;
+    titleDiv.appendChild(titleSpan);
+
+    const progressDiv = document.createElement("div");
+    progressDiv.className = "progress";
+
+    const progressBar = document.createElement("i");
+    progressBar.id = "progress-" + newTask.uid;
+    progressBar.style.width = "0%";
+    progressDiv.appendChild(progressBar);
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "meta mt-5";
+
+    metaDiv.append("状态：");
+
+    const statusSpan = document.createElement("span");
+    statusSpan.id = "status-" + newTask.uid;
+    statusSpan.textContent = "排队中";
+    metaDiv.appendChild(statusSpan);
+
+    metaDiv.append(" · 速度：");
+
+    const speedSpan = document.createElement("span");
+    speedSpan.id = "speed-" + newTask.uid;
+    speedSpan.textContent = "0.00";
+    metaDiv.appendChild(speedSpan);
+
+    metaDiv.append(" MB/s");
+
+    wrapper.appendChild(titleDiv);
+    wrapper.appendChild(progressDiv);
+    wrapper.appendChild(metaDiv);
+
+    $taskItem.appendChild(wrapper);
     $tasksContainer.appendChild($taskItem);
 }
 

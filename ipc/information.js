@@ -163,12 +163,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            //const data = auth.load();
             const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
-            // const data = auth.load();
-            // const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
-            console.log(credentialCookie);
-            //const cre = credentialCookie.split(';').map(c => c.trim());
             const response = await fetch(url, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,

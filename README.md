@@ -12,13 +12,16 @@
 ### 开发中功能
 * 字幕下载
 
+### 实验性功能
+* Windows on ARM 支持
+
 
 ## ⚡ 快速体验
 
 ### Windows
 从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可 (可能被折叠)
 ![展开折叠](images/image-1.png)  
-Windows 现仅支持 X64，理论可在ARM64上转译运行，暂无设备测试
+Windows 已经经实验性支持 ARM64，暂无设备测试
 
 ### Linux
 #### 从 Release 中下载支持的发行版包，目前支持：

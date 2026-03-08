@@ -7,6 +7,7 @@ const registerIpc = require('./ipc');
 // app.commandLine.appendSwitch('disable-features', 'UserAgentClientHint');
 
 // aria2c 相关模块动态加载
+app.commandLine.appendSwitch('log-level', '3') // 只输出错误日志，减少控制台噪音
 
 function createWindow() {
     const win = new BrowserWindow({

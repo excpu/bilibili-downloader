@@ -12,13 +12,13 @@ const s = [11, 10, 3, 8, 4, 6];
 const xor = 177451812;
 const add = 8728348608;
 
-function bvdec(x) {
-    let r = 0;
-    for (let i = 0; i < 6; i++) {
-        r += tr[x[s[i]]] * 58 ** i;
-    }
-    return (r - add) ^ xor;
-}
+// function bvdec(x) {
+//     let r = 0;
+//     for (let i = 0; i < 6; i++) {
+//         r += tr[x[s[i]]] * 58 ** i;
+//     }
+//     return (r - add) ^ xor;
+// }
 
 function bvenc(x) {
     x = (x ^ xor) + add;
@@ -28,12 +28,3 @@ function bvenc(x) {
     }
     return r.join('');
 }
-
-// 测试
-console.log(dec('BV17x411w7KC'));   // 170001
-console.log(dec('BV1Q541167Qg'));   // 455017605
-console.log(dec('BV1mK4y1C7Bz'));   // 882584971
-
-console.log(enc(170001));      // BV17x411w7KC
-console.log(enc(455017605));   // BV1Q541167Qg
-console.log(enc(882584971));   // BV1mK4y1C7Bz

@@ -49,6 +49,11 @@ function getVideoInfo() {
     $urlInput.value = "";
     // 获取视频基本信息
     window.electronAPI.invoke('getVideoInfo', bv).then((videoInfo) => {
+        if (!videoInfo.success) {
+            alert('获取视频信息失败：' + videoInfo.message);
+            infoSection.hide();
+            return;
+        }
         console.log('获取到视频信息:', videoInfo);
         // 有些视频会需要跳转
         if (videoInfo.data.need_jump_bv) {
@@ -107,9 +112,26 @@ $downloadBtn.addEventListener('click', async () => {
 
 
 // 提取连接中BV号
-function extractBV(url) {
-    const bvMatch = url.match(/BV[0-9A-Za-z]+/);
-    return bvMatch ? bvMatch[0] : null;
+function extractBV(input) {
+    // 1. 先匹配 BV 号
+    const bvMatch = input.match(/BV[0-9A-Za-z]+/);
+    if (bvMatch) {
+        return bvMatch[0];
+    }
+
+    // 2. 匹配 av 号 (例如 av123456)
+    const avMatch = input.match(/av(\d+)/i);
+    if (avMatch) {
+        return bvenc(avMatch[1]);
+    }
+
+    // 3. 纯数字 (认为是 avid)
+    const numMatch = input.match(/^\d+$/);
+    if (numMatch) {
+        return bvenc(numMatch[0]);
+    }
+
+    return null;
 }
 
 // 用户取消下载

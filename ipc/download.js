@@ -4,6 +4,7 @@ const axios = require('axios'); // 替换 axios 进行稳定下载
 
 const Auth = require('../modules/auth');
 const { encWbi, getWbiKeys } = require('../modules/wbi');
+const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安全函数
 
 const auth = new Auth();
 
@@ -220,8 +221,8 @@ module.exports = function registerDownloadIpc(mainWindow) {
             // }
             try {
                 const { stdout, stderr } = await execFileAsync(ffmpeg, ffmpegArgs);
-                console.log(`✅ [${title}] ffmpeg stdout:`, stdout);
-                console.log(`✅ [${title}] ffmpeg stderr:`, stderr);
+                // console.log(`✅ [${title}] ffmpeg stdout:`, stdout);
+                // console.log(`✅ [${title}] ffmpeg stderr:`, stderr);
                 console.log(`✅ [${title}] 转换完成`);
             } catch (err) {
                 console.error(`❌ [${title}] 合并出错`);
@@ -316,26 +317,5 @@ module.exports = function registerDownloadIpc(mainWindow) {
         } catch (error) {
             return { success: false, message: '发生错误: ' + error.message };
         }
-    }
-
-    function sanitizePath(input, replacement = '_') {
-        // Windows 禁止: <>:"/\|?* 及控制字符 \x00-\x1F
-        // POSIX 禁止: /
-        // macOS HFS+ 禁止: :
-        const illegalRegex = /[<>:"/\\|?*\x00-\x1F]/g;
-
-        // 先替换所有非法字符
-        let output = input.replace(illegalRegex, replacement);
-
-        // macOS HFS+ 特殊：禁止 ":" 
-        output = output.replace(/:/g, replacement);
-
-        // 移除多余重复替代符号
-        output = output.replace(new RegExp(`${replacement}+`, 'g'), replacement);
-
-        // 去掉开头或结尾的替换符号
-        output = output.replace(new RegExp(`^${replacement}+|${replacement}+$`, 'g'), '');
-
-        return output;
     }
 }

@@ -161,9 +161,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 fourk: 1,
                 gaia_source: 'view-card'
             };
-            console.log(bvid, cid);
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
-            console.log(wbiQuery);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
             //const data = auth.load();
             const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
@@ -189,6 +187,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             }
             const json = await response.json();
             if (json.code === 0) {
+                console.log('视频流信息获取成功');
                 return { success: true, data: json.data };
             } else {
                 return { success: false, message: json.message || '获取视频流信息失败' };

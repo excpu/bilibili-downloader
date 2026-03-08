@@ -14,6 +14,8 @@ let multiPartVideo = false;
 
 // 视频信息展示和用户选择器
 const infoSection = selectInfo();
+// BV 编码函数
+const av2bv = bvEnc();
 
 // 用户防止在没有正常更新数据时下载旧视频
 let downloadLock = false;
@@ -122,13 +124,13 @@ function extractBV(input) {
     // 2. 匹配 av 号 (例如 av123456)
     const avMatch = input.match(/av(\d+)/i);
     if (avMatch) {
-        return bvenc(avMatch[1]);
+        return av2bv(avMatch[1]);
     }
 
     // 3. 纯数字 (认为是 avid)
     const numMatch = input.match(/^\d+$/);
     if (numMatch) {
-        return bvenc(numMatch[0]);
+        return av2bv(numMatch[0]);
     }
 
     return null;

@@ -182,6 +182,15 @@ function selectInfo() {
         $multiPartSelectorInner.innerHTML = '';
     }
 
+    // 分P视频全选与取消全选
+    function selectAllPart() {
+        document.querySelectorAll(".p-item").forEach(box => box.checked = true);
+    }
+
+    function ignoreAllPart() {
+        document.querySelectorAll(".p-item").forEach(box => box.checked = false);
+    }
+
 
     return {
         updateTitle,
@@ -195,6 +204,8 @@ function selectInfo() {
         displayStreamOptions,
         show,
         hide,
-        hideMultipartSelector
+        hideMultipartSelector,
+        selectAllPart,
+        ignoreAllPart
     }
 }

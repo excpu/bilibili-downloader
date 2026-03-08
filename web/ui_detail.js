@@ -21,14 +21,3 @@ function input_identifier(input) {
 document.getElementById('urlInput').addEventListener('input', (event) => {
     input_identifier(event.target.value);
 });
-
-
-// 分P视频全选与取消全选
-function selectAllPart() {
-    document.querySelectorAll(".p-item").forEach(box => box.checked = true);
-}
-function ignoreAllPart() {
-    document.querySelectorAll(".p-item").forEach(box => box.checked = false);
-}
-
-// 不支持的格式提示

@@ -43,7 +43,7 @@ function encWbi(params, img_key, sub_key) {
 
 // 获取最新的 img_key 和 sub_key
 async function getWbiKeys() {
-    let credentialCookie = auth.getCredentialCookie();
+    let credentialCookie = auth.getConstructedCookie();
     const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
         headers: {
             'Referer': 'https://www.bilibili.com/',

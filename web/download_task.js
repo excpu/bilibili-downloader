@@ -198,9 +198,20 @@ async function taskManager() {
         return;
     }
     globalTaskLock = true;
-    await window.electronAPI.invoke('downloadTarget', taskQuene[0]);
-    await downloadDanmu(taskQuene[0].cid, taskQuene[0].title, taskQuene[0].danmu, taskQuene[0].uid);
+    const result = await window.electronAPI.invoke('downloadTarget', taskQuene[0]);
+    if (result.success) {
+        // 下载成功
+        await downloadDanmu(taskQuene[0].cid, taskQuene[0].title, taskQuene[0].danmu, taskQuene[0].uid);
+    } else {
+        alert(`下载 ${taskQuene[0].title} 失败：${result.message}`);
+        // 在UI上标记下载失败
+        document.getElementById(`status-${taskQuene[0].uid}`).textContent = "下载失败";
+        document.getElementById(`status-${taskQuene[0].uid}`).style.color = "red";
+        document.getElementById(`progress-${data.currentUid}`).style.color = "red";
+        document.getElementById(`speed-${data.currentUid}`).textContent = "0.00";
+    }
 
+    // 无论成功与否，都继续下一个任务
     taskQuene.shift();
     globalTaskLock = false;
     taskManager();

@@ -48,7 +48,7 @@ Intel版
 ``` bash
 xattr -cr 
 ```
-后拖入.app 包并回车
+后拖入.app 包并回车  
 **4. 移入Application并且开始使用**  
 #### 从本地开发环境运行
 见教程

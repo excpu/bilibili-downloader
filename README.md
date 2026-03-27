@@ -8,6 +8,7 @@
 * 视频下载
 * 分P视频下载
 * 弹幕下载
+* 封面下载
 
 ### 开发中功能
 * 字幕下载
@@ -21,7 +22,7 @@
 ### Windows
 从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可 (可能被折叠)
 ![展开折叠](images/image-1.png)  
-Windows 已经经实验性支持 ARM64，暂无设备测试
+Windows 已经经实验性支持 ARM64 共用同一个安装包，暂无设备测试
 
 ### Linux
 #### 从 Release 中下载支持的发行版包，目前支持：
@@ -36,13 +37,20 @@ arm64
 ### Mac
 MAC 版本无签名，需要命令行处理或从本地开发环境运行
 #### 从Release下载并使用命令行处理
-下载ZIP软件包，方便后续处理  
+**1. 下载ZIP软件包，方便后续处理**  
 注意区分Intel版和AppleSilicon（ARM64）版本  
+Apple芯片版  
 ![ARM版](images/image-2.png)  
+Intel版  
 ![Intel版](images/image-3.png)  
-解压ZIP获取.app包  
-使用命令行去除互联网下载标签  
-移入Application并且开始使用  
+**2. 解压ZIP获取.app包**  
+**3. 使用命令行去除互联网下载标签**  
+输入（注意空格）
+``` bash
+xattr -cr 
+```
+后拖入.app 包并回车
+**移入Application并且开始使用**  
 #### 从本地开发环境运行
 见教程
 
@@ -53,6 +61,35 @@ MAC 版本无签名，需要命令行处理或从本地开发环境运行
 
 * **Node.js**: 推荐使用 [LTS 版本](https://nodejs.org/) (v22.x)。
 * **Git**: 用于克隆项目仓库。（可选从Github下载ZIP）
+
+### 📥下载项目
+#### 使用git
+``` bash
+cd path/to/your/folder
+git clone https://github.com/excpu/bilibili-downloader.git
+cd bilibili-downloader
+```
+#### 使用ZIP
+解压ZIP
+``` bash
+cd bilibili-downloader
+```
+
+### 📦安装依赖
+``` bash
+npm install
+```
+
+### ▶️开发环境运行或自己打包
+#### 开发环境运行
+``` bash
+npm run start
+```
+#### 自行打包
+``` bash
+npm run build
+```
+打包后文件会出现在 dist 目录中
 
 ## 🐞 Bug、意见反馈和帮助
 ### Bug

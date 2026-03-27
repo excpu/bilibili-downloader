@@ -1,5 +1,6 @@
 const $taskCount = document.getElementById('taskCount');
 const $downloadDanmuCheckbox = document.getElementById("downloadDanmuCheckbox");
+const $downloadCoverCheckbox = document.getElementById("downloadCoverCheckbox");
 
 // 平滑下载速度
 class SpeedSmoother {
@@ -79,6 +80,7 @@ function manageDownloadStart() {
     const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
     const audioIndex = parseInt($qualitySelectAudio.value);
     currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
+    currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
     if (currentVideoIdentity.p.length > 0) {
         const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
@@ -105,7 +107,9 @@ function manageDownloadStart() {
                 title: `P${currentVideoIdentity.p[i].page} - ${currentVideoIdentity.title} - ${currentVideoIdentity.p[i].part}`,
                 videoIndex,
                 audioIndex,
-                danmu: currentVideoIdentity.danmu
+                danmu: currentVideoIdentity.danmu,
+                cover: currentVideoIdentity.cover,
+                coverUrl: currentVideoIdentity.coverUrl
             }
             taskQuene.push(videoEle);
             displayTasks(videoEle);
@@ -119,7 +123,9 @@ function manageDownloadStart() {
             title: currentVideoIdentity.title,
             videoIndex,
             audioIndex,
-            danmu: currentVideoIdentity.danmu
+            danmu: currentVideoIdentity.danmu,
+            cover: currentVideoIdentity.cover,
+            coverUrl: currentVideoIdentity.coverUrl
         }
         taskQuene.push(videoEle);
         displayTasks(videoEle);
@@ -188,6 +194,16 @@ async function downloadDanmu(cid, title, danmu, uid) {
         return;
     }
 }
+// Call 封面下载
+async function downloadCover(cover, coverUrl, title, uid) {
+    if (cover && coverUrl) {
+        await window.electronAPI.invoke('downloadCover', { url: coverUrl, title });
+        console.log('封面下载完成');
+    } else {
+        // 如果没有封面，直接返回
+        return;
+    }
+}
 
 async function taskManager() {
     $taskCount.innerText = taskQuene.length;
@@ -202,13 +218,15 @@ async function taskManager() {
     if (result.success) {
         // 下载成功
         await downloadDanmu(taskQuene[0].cid, taskQuene[0].title, taskQuene[0].danmu, taskQuene[0].uid);
+        await downloadCover(taskQuene[0].cover, taskQuene[0].coverUrl, taskQuene[0].title, taskQuene[0].uid);
     } else {
         alert(`下载 ${taskQuene[0].title} 失败：${result.message}`);
         // 在UI上标记下载失败
         document.getElementById(`status-${taskQuene[0].uid}`).textContent = "下载失败";
         document.getElementById(`status-${taskQuene[0].uid}`).style.color = "red";
-        document.getElementById(`progress-${data.currentUid}`).style.color = "red";
-        document.getElementById(`speed-${data.currentUid}`).textContent = "0.00";
+        document.getElementById(`speed-${taskQuene[0].uid}`).textContent = "0.00";
+        // 将progress 的i元素设置为红色
+        document.getElementById(`progress-${taskQuene[0].uid}`).style.background = "red";
     }
 
     // 无论成功与否，都继续下一个任务

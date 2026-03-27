@@ -20,8 +20,7 @@
 ## ⚡ 快速体验
 
 ### Windows
-从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可 (可能被折叠)
-![展开折叠](images/image-1.png)  
+从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可
 Windows 已经经实验性支持 ARM64 共用同一个安装包，暂无设备测试
 
 ### Linux
@@ -50,7 +49,7 @@ Intel版
 xattr -cr 
 ```
 后拖入.app 包并回车
-**移入Application并且开始使用**  
+**4. 移入Application并且开始使用**  
 #### 从本地开发环境运行
 见教程
 

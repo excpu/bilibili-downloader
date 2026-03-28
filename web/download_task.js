@@ -2,7 +2,7 @@ const $taskCount = document.getElementById('taskCount');
 const $downloadDanmuCheckbox = document.getElementById("downloadDanmuCheckbox");
 const $downloadCoverCheckbox = document.getElementById("downloadCoverCheckbox");
 
-// 平滑下载速度
+// 平滑下载速度， alpa 越小越平滑
 class SpeedSmoother {
     constructor(alpha = 0.4, digits = 2) {
         this.alpha = alpha;
@@ -40,7 +40,7 @@ class SpeedSmoother {
         this.smoothedValue = null;
     }
 }
-const speedSm = new SpeedSmoother(0.25);
+const speedSm = new SpeedSmoother(0.1);
 
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     console.log('进度来了：', data);

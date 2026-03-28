@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>bilibili视频下载器</title>
     <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="model.css">
 </head>
 
 <body>
@@ -65,9 +66,9 @@
                     </div>
                     <div class="quality-selection">
                         <input type="checkbox" id="downloadDanmuCheckbox">
-                        <label for="downloadDanmuCheckbox">下载弹幕</label>
+                        <label class="clickable" onclick="independentDownload.downloadDanmu()">下载弹幕</label>
                         <input type="checkbox" id="downloadCoverCheckbox">
-                        <label for="downloadCoverCheckbox">下载封面</label>
+                        <label class="clickable" onclick="independentDownload.downloadCover()">下载封面</label>
                     </div>
                     <!-- 分P视频选择框 -->
                     <div class="multi-part-selector hidden" id="multiPartSelector">
@@ -110,7 +111,9 @@
     </main>
     <div class="spacer"></div>
     <script src="bv_enc.js"></script>
+    <script src="independent_download.js"></script>
     <script src="select_card.js"></script>
+    <script src="model.js"></script>
     <script src="index.js"></script>
     <script src="download_task.js"></script>
     <script src="ui_detail.js"></script>

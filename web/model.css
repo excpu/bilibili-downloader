@@ -1,0 +1,53 @@
+
+/* 通知消息 */
+.notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideDown 0.3s ease-out;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 90%;
+}
+
+.notification-success {
+    background: var(--ok);
+    color: white;
+    border: 1px solid #1e8449;
+}
+
+.notification-error {
+    background: var(--err);
+    color: white;
+    border: 1px solid #c0392b;
+}
+
+.notification-hide {
+    animation: slideUp 0.3s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+}

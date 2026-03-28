@@ -419,3 +419,9 @@ body {
     max-height: 100px;
     overflow-y: scroll;
 }
+
+.clickable {
+    cursor: pointer;
+    /* 下划线 */
+    text-decoration: underline;
+}

@@ -79,23 +79,23 @@ function getVideoInfo() {
             infoSection.addMultipart(videoInfo.data.pages);
 
             // 获取视频流信息时传入分P信息
-            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages, videoInfo.data.pic);
+            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages, videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = true;
         } else {
             // 非分P隐藏分P选择器，直接获取视频流信息
             infoSection.hideMultipartSelector();
-            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, [], videoInfo.data.pic);
+            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, [], videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = false;
         }
     });
 }
 
 let currentVideoIdentity = null;
-function getVideoStreams(bvid, cid, title, p = [], coverUrl = null) {
+function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl };
+        currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration};
         // 渲染音频流和视频流
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;

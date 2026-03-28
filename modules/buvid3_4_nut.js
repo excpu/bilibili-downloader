@@ -4,7 +4,7 @@ const Auth = require('./auth');
 const axios = require("axios");
 
 
-async function getBvid34() {
+async function getBuvid34() {
     //const cookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
     try {
         const response = await axios.get('https://api.bilibili.com/x/frontend/finger/spi', {
@@ -38,6 +38,6 @@ async function getNut() {
 }
 
 module.exports = {
-    getBvid34,
+    getBuvid34,
     getNut
 };

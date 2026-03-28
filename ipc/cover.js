@@ -1,9 +1,6 @@
 const { ipcMain, app } = require('electron');
 const path = require('path');
 
-const Auth = require('../modules/auth');
-const auth = new Auth();
-
 const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安全函数
 
 const downloadFile = require('../modules/download_without_progress'); // 引入下载函数

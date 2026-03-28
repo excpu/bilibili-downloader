@@ -20,7 +20,7 @@
 ## ⚡ 快速体验
 
 ### Windows
-从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可
+从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可  
 Windows 已经经实验性支持 ARM64 共用同一个安装包，暂无设备测试
 
 ### Linux

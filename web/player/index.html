@@ -1,12 +1,41 @@
-<!-- 内嵌XML弹幕视频播放器 -->
 <!DOCTYPE html>
 <html lang="zh-cn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>哔哩哔哩 XML弹幕播放器</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="icon.png">
+    <script src="./artplayer-5.3.0/package/dist/artplayer.js"></script>
+    <script src="./artplayer-plugin-danmuku-5.2.0/package/dist/artplayer-plugin-danmuku.js"></script>
 </head>
 <body>
+    <div class="container">
+        <h1>哔哩哔哩 XML弹幕播放器</h1>
+        <p class="subtitle">选择XML文件或文件夹开始</p>
+        
+        <div class="button-group">
+            <button class="btn-file" id="fileBtn">
+                <span>📄</span>
+                <span>选择文件</span>
+            </button>
+            <button class="btn-folder" id="folderBtn">
+                <span>📁</span>
+                <span>选择文件夹</span>
+            </button>
+        </div>
+        
+        <div class="selected-info" id="selectedInfo">
+            <div class="info-label">已选择：</div>
+            <div class="info-content" id="selectedPath"></div>
+        </div>
+    </div>
+    <div class="player-container hide"></div>
     
+    <input type="file" id="fileInput" multiple class="file-input" accept=".xml,.mp4">
+    <input type="file" id="folderInput" class="file-input" webkitdirectory>
+    
+    <script src="script.js"></script>
+    <script src="player.js"></script>
 </body>
 </html>

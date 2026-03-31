@@ -14,7 +14,6 @@ async function downloadFile(url, outputPath, credential = true) {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0.1 Safari/605.1.15',
         'Accept-Encoding': 'gzip, deflate, br, zstd',
         'Accept-Language': 'zh-CN,zh;q=0.9,zh-TW;q=0.8,zh-HK;q=0.7,en-US;q=0.6,en;q=0.5',
-        'Connection': 'keep-alive',
         'DNT': '1',
         'Host': getHttpHostHeader(url),
         'Priority': 'u=5, i',

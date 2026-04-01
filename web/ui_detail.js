@@ -21,3 +21,7 @@ function input_identifier(input) {
 document.getElementById('urlInput').addEventListener('input', (event) => {
     input_identifier(event.target.value);
 });
+
+function openPlayer() {
+    window.electronAPI.invoke('openPlayer');
+}

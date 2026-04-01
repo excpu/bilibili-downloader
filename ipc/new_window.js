@@ -3,7 +3,7 @@ const { ipcMain, app, BrowserWindow } = require('electron');
 let playerWindow = null; // 持有引用，防止重复打开
 
 module.exports = function registerNewWindowIpc(mainWindow) {
-    ipcMain.handle('openPlayer', (event, payload) => {
+    ipcMain.handle('openPlayer', async () => {
         // electron 新窗口打开html
         if (playerWindow) {
             if (playerWindow.isMinimized()) playerWindow.restore();
@@ -19,7 +19,7 @@ module.exports = function registerNewWindowIpc(mainWindow) {
                 contextIsolation: true,
             },
         });
-        playerWindow.loadFile('../web/player/index.html');
+        playerWindow.loadFile('./web/player/index.html');
 
         playerWindow.on('closed', () => {
             playerWindow = null;

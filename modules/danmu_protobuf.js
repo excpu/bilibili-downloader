@@ -1,4 +1,4 @@
-const axios = require('axios');
+const got = require('got');
 const protobuf = require('protobufjs');
 const path = require('path');
 // 身份验证相关
@@ -67,18 +67,19 @@ async function fetchAllVideoDanmaku(cid, duration) {
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
 
             // 3. 发送请求
-            const response = await axios.get(`https://api.bilibili.com/x/v2/dm/wbi/web/seg.so?${wbiQuery}`, {
+            const response = await got(`https://api.bilibili.com/x/v2/dm/wbi/web/seg.so?${wbiQuery}`, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Referer': 'https://www.bilibili.com',
                     'Cookie': credentialCookie,
                     'Origin': 'https://www.bilibili.com'
                 },
-                responseType: 'arraybuffer'
+                responseType: 'buffer',
+                http2: true
             });
 
             // 4. 解析二进制数据
-            const buffer = Buffer.from(response.data);
+            const buffer = response.body;
 
             console.log(`4. 收到数据长度: ${buffer.length} bytes`);
 
@@ -101,7 +102,7 @@ async function fetchAllVideoDanmaku(cid, duration) {
                     allDanmakus = allDanmakus.concat(result.elems);
 
                     // 5. 随机延迟防止风控
-                    const delay = Math.floor(Math.random() * 500) + 500;
+                    const delay = Math.floor(Math.random() * 500) + 300;
                     await sleep(delay);
                 } else {
                     // 没有更多弹幕

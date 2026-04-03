@@ -4,6 +4,8 @@ const Auth = require('../modules/auth');
 
 const { encWbi, getWbiKeys } = require('../modules/wbi');
 
+const got = require('got');
+
 const auth = new Auth();
 
 module.exports = function registerInformationIpc(mainWindow) {
@@ -21,27 +23,36 @@ module.exports = function registerInformationIpc(mainWindow) {
             //const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || "";
             // 更换为统一构造函数
             const credentialCookie = auth.getConstructedCookie();
-            const result = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Referer': 'https://www.bilibili.com/',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-                    'Accept': 'application/json',
-                    'Cookie': credentialCookie // 登录验证
-                },
-            });
-            const json = await result.json();
-            if (json.code === 0 && json.data.isLogin === true) {
-                return {
-                    status: true,
-                    data: json.data,
-                };
-            } else {
-                auth.updateLoginStatus(false); // 更新登录状态为未登录
+            try {
+                const result = await got(url, {
+                    method: 'GET',
+                    headers: {
+                        'Referer': 'https://www.bilibili.com/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                        'Accept': 'application/json',
+                        'Cookie': credentialCookie // 登录验证
+                    },
+                    responseType: 'json',
+                    http2: true
+                });
+                const json = result.body;
+                if (json.code === 0 && json.data.isLogin === true) {
+                    return {
+                        status: true,
+                        data: json.data,
+                    };
+                } else {
+                    auth.updateLoginStatus(false); // 更新登录状态为未登录
+                    return {
+                        status: false,
+                        message: '登录信息验证失败或登录已经过期',
+                    };
+                }
+            } catch (error) {
                 return {
                     status: false,
-                    message: '登录信息验证失败或登录已经过期',
-                }
+                    message: '网络请求失败: ' + error.message,
+                };
             }
         } else {
             auth.updateTicket(); // 尝试更新票据
@@ -54,24 +65,24 @@ module.exports = function registerInformationIpc(mainWindow) {
 
     // 请求登录二维码
     ipcMain.handle('requestLoginQr', async () => {
-        const url = `https://passport.bilibili.com/x/passport-login/web/qrcode/generate`;
-        const response = await fetch(url, {
-            headers: {
-                'Referer': 'https://www.bilibili.com/', // 伪造 B站 Referer
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0', // 防止被屏蔽
-                'Accept': 'application/json' // 明确表明要 JSON
-            }
-        });
-
-        if (!response.ok) {
+        try {
+            const url = `https://passport.bilibili.com/x/passport-login/web/qrcode/generate`;
+            const response = await got(url, {
+                headers: {
+                    'Referer': 'https://www.bilibili.com/', // 伪造 B站 Referer
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0', // 防止被屏蔽
+                    'Accept': 'application/json' // 明确表明要 JSON
+                },
+                responseType: 'json',
+                http2: true
+            });
+            const json = response.body;
+            return {
+                success: true,
+                data: json.data
+            };
+        } catch (error) {
             return { success: false, message: '网络请求失败' };
-        }
-
-        const json = await response.json();
-
-        return {
-            success: true,
-            data: json.data
         }
     });
 
@@ -80,40 +91,43 @@ module.exports = function registerInformationIpc(mainWindow) {
         if (!oauthKey) {
             return { success: false, message: '缺少 oauthKey 参数' };
         }
-        const url = `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${oauthKey}`;
-        const response = await fetch(url, {
-            headers: {
-                'Referer': 'https://www.bilibili.com/', // 伪造 B站 Referer
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0', // 防止被屏蔽
-                'Accept': 'application/json' // 明确表明要 JSON
-            }
-        });
-        if (!response.ok) {
-            return { success: false, message: '网络请求失败' };
-        }
-        const json = await response.json();
-        if (json.data.code === 0) {
-            // 登录成功，保存登录信息
-            // 使用 getSetCookie() 获取所有 Set-Cookie 头（Node.js 20+）
-            const setCookieHeaders = response.headers.getSetCookie() || [];
-            // 解析 cookies
-            let cookieData = {};
-            setCookieHeaders.forEach(cookie => {
-                let match = cookie.match(/([^=]+)=([^;]+)/);
-                if (match) {
-                    cookieData[match[1]] = match[2];
-                }
+        try {
+            const url = `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${oauthKey}`;
+            const response = await got(url, {
+                headers: {
+                    'Referer': 'https://www.bilibili.com/', // 伪造 B站 Referer
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0', // 防止被屏蔽
+                    'Accept': 'application/json' // 明确表明要 JSON
+                },
+                responseType: 'json',
+                http2: true
             });
-            // 提取 SESSDATA 和 bili_jct
-            const sessdata = cookieData['SESSDATA'] || '';
-            const biliJct = cookieData['bili_jct'] || '';
-            auth.updateLoginInfo(sessdata, biliJct);
-            auth.updateTicket(); // 更新票据
-            return { success: true };
-        } else if (json.data.code === 86038) {
-            return { success: false, message: '二维码过期' };
-        } else {
-            return { success: false, message: '登录未完成' };
+            const json = response.body;
+            if (json.data.code === 0) {
+                // 登录成功，保存登录信息
+                // got 的 response.headers['set-cookie'] 已经是数组
+                const setCookieHeaders = response.headers['set-cookie'] || [];
+                // 解析 cookies
+                let cookieData = {};
+                setCookieHeaders.forEach(cookie => {
+                    let match = cookie.match(/([^=]+)=([^;]+)/);
+                    if (match) {
+                        cookieData[match[1]] = match[2];
+                    }
+                });
+                // 提取 SESSDATA 和 bili_jct
+                const sessdata = cookieData['SESSDATA'] || '';
+                const biliJct = cookieData['bili_jct'] || '';
+                auth.updateLoginInfo(sessdata, biliJct);
+                auth.updateTicket(); // 更新票据
+                return { success: true };
+            } else if (json.data.code === 86038) {
+                return { success: false, message: '二维码过期' };
+            } else {
+                return { success: false, message: '登录未完成' };
+            }
+        } catch (error) {
+            return { success: false, message: '网络请求失败' };
         }
     });
 
@@ -127,18 +141,17 @@ module.exports = function registerInformationIpc(mainWindow) {
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/web-interface/wbi/view?${wbiQuery}`;
             const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
-            const response = await fetch(url, {
+            const response = await got(url, {
                 headers: {
                     'Referer': 'https://www.bilibili.com/',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
                     'Accept': 'application/json',
                     'Cookie': credentialCookie // 登录验证
-                }
+                },
+                responseType: 'json',
+                http2: true
             });
-            if (!response.ok) {
-                return { success: false, message: '网络请求失败' };
-            }
-            const json = await response.json();
+            const json = response.body;
             if (json.code === 0) {
                 return { success: true, data: json.data };
             } else {
@@ -164,23 +177,20 @@ module.exports = function registerInformationIpc(mainWindow) {
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
             const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
-            const response = await fetch(url, {
+            const response = await got(url, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.1',
                     'Accept': 'application/json',
-                    "Connection": "keep-alive",
                     'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
                     'Cache-Control': 'no-cache',
                     'Origin': 'https://www.bilibili.com',
                     'Cookie': credentialCookie // 登录验证
-                }
+                },
+                responseType: 'json',
+                http2: true
             });
-            if (!response.ok) {
-                console.error(`HTTP Error Code: ${response.status}, Cause: ${response.statusText}`);
-                return { success: false, message: '网络请求失败' };
-            }
-            const json = await response.json();
+            const json = response.body;
             if (json.code === 0) {
                 console.log('视频流信息获取成功');
                 return { success: true, data: json.data };
@@ -188,6 +198,9 @@ module.exports = function registerInformationIpc(mainWindow) {
                 return { success: false, message: json.message || '获取视频流信息失败' };
             }
         } catch (error) {
+            if (error.response) {
+                console.error(`HTTP Error Code: ${error.response.statusCode}, Cause: ${error.response.statusMessage}`);
+            }
             return { success: false, message: '发生错误: ' + error.message };
         }
     });

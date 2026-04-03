@@ -1,6 +1,6 @@
 const { ipcMain, app } = require('electron');
 const path = require('path');
-const axios = require('axios'); // 替换 axios 进行稳定下载
+const got = require('got'); // 使用 got 进行稳定下载
 
 const Auth = require('../modules/auth');
 const { encWbi, getWbiKeys } = require('../modules/wbi');
@@ -20,13 +20,19 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
     ffmpeg = ffmpeg.replace('app.asar', 'app.asar.unpacked');
 }
 
-// 辅助函数：使用 axios 流式下载文件并计算进度
-async function downloadFileWithAxios(url, destPath, headers, onProgress, maxRetries = 5) {
+// 辅助函数：使用 got 流式下载文件并计算进度（支持断点续传）
+async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetries = 5) {
+    const MAX_DOWNLOAD_DURATION_MS = 110 * 60 * 1000; // 1小时50分钟
+    const deadline = Date.now() + MAX_DOWNLOAD_DURATION_MS;
     let retries = maxRetries;
     let totalLength = 0;
 
     while (retries >= 0) {
         try {
+            if (Date.now() >= deadline) {
+                throw new Error('下载链接已超过 1 小时 50 分钟有效期，停止重试并退出');
+            }
+
             // 1. 检查本地是否已有下载过一半的文件，获取大小
             let downloadedLength = 0;
             if (fs.existsSync(destPath)) {
@@ -39,31 +45,7 @@ async function downloadFileWithAxios(url, destPath, headers, onProgress, maxRetr
                 reqHeaders['Range'] = `bytes=${downloadedLength}-`;
             }
 
-            const response = await axios({
-                url,
-                method: 'GET',
-                responseType: 'stream',
-                headers: reqHeaders,
-                timeout: 30000,
-                maxRedirects: 5
-            });
-
-            // 3. 解析服务器支持情况
-            if (response.status === 200) {
-                // 状态码 200 表示服务器忽略了 Range，或者这是第一次下载。需要从头开始。
-                downloadedLength = 0;
-                totalLength = parseInt(response.headers['content-length'], 10) || 0;
-            } else if (response.status === 206) {
-                // 状态码 206 表示服务器接受了断点续传。解析总体积。
-                const contentRange = response.headers['content-range']; // 格式如: "bytes 100-199/200"
-                if (contentRange) {
-                    totalLength = parseInt(contentRange.split('/')[1], 10);
-                } else {
-                    totalLength = downloadedLength + parseInt(response.headers['content-length'], 10);
-                }
-            }
-
-            // 4. 如果文件已经下载完整，直接返回成功
+            // 3. 如果文件已经下载完整，直接返回成功
             if (totalLength > 0 && downloadedLength >= totalLength) {
                 if (onProgress) onProgress(100, "0.00");
                 return;
@@ -72,11 +54,88 @@ async function downloadFileWithAxios(url, destPath, headers, onProgress, maxRetr
             let lastDownloadedLength = downloadedLength;
             let lastTime = Date.now();
 
-            // 5. 如果有残留文件且支持续传，使用 'a' (追加) 模式；否则用 'w' (覆盖) 模式
-            const writer = fs.createWriteStream(destPath, { flags: downloadedLength > 0 ? 'a' : 'w' });
-
             await new Promise((resolve, reject) => {
-                response.data.on('data', (chunk) => {
+                let writer = null;
+                let settled = false;
+
+                const finish = (error) => {
+                    if (settled) return;
+                    settled = true;
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                };
+
+                const remainingTime = Math.max(1, deadline - Date.now());
+
+                const downloadStream = got.stream(url, {
+                    method: 'GET',
+                    headers: reqHeaders,
+                    timeout: {
+                        request: remainingTime
+                    },
+                    followRedirect: true,
+                    maxRedirects: 5,
+                    http2: true,
+                    retry: {
+                        limit: Math.min(2, maxRetries),
+                        methods: ['GET'],
+                        statusCodes: [408, 413, 429, 500, 502, 503, 504, 521, 522, 524],
+                        errorCodes: ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ENOTFOUND', 'ECONNREFUSED', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE']
+                    }
+                });
+
+                downloadStream.on('retry', (retryCount, error) => {
+                    console.warn(`⚠️ 下载遇到网络波动，got 正在重试... (第 ${retryCount} 次) - 错误: ${error.message}`);
+                });
+
+                downloadStream.on('response', (response) => {
+                    // 4. 解析服务器是否接受断点续传
+                    if (response.statusCode === 200) {
+                        // 服务器忽略了 Range，需要从头开始覆盖写入
+                        downloadedLength = 0;
+                        lastDownloadedLength = 0;
+                        totalLength = parseInt(response.headers['content-length'], 10) || 0;
+                    } else if (response.statusCode === 206) {
+                        // 服务器接受了断点续传，解析总大小
+                        const contentRange = response.headers['content-range'];
+                        if (contentRange) {
+                            totalLength = parseInt(contentRange.split('/')[1], 10);
+                        } else {
+                            totalLength = downloadedLength + (parseInt(response.headers['content-length'], 10) || 0);
+                        }
+                    }
+
+                    if (totalLength > 0 && downloadedLength >= totalLength) {
+                        if (onProgress) onProgress(100, "0.00");
+                        downloadStream.destroy();
+                        finish();
+                        return;
+                    }
+
+                    const shouldAppend = response.statusCode === 206 && downloadedLength > 0;
+                    writer = fs.createWriteStream(destPath, { flags: shouldAppend ? 'a' : 'w' });
+
+                    writer.on('error', (err) => {
+                        downloadStream.destroy();
+                        finish(err);
+                    });
+
+                    writer.on('finish', () => {
+                        if (totalLength && downloadedLength < totalLength) {
+                            finish(new Error('网络流意外关闭，文件未下载完整'));
+                        } else {
+                            if (onProgress) onProgress(100, "0.00");
+                            finish();
+                        }
+                    });
+
+                    downloadStream.pipe(writer);
+                });
+
+                downloadStream.on('data', (chunk) => {
                     downloadedLength += chunk.length;
 
                     const now = Date.now();
@@ -97,44 +156,46 @@ async function downloadFileWithAxios(url, destPath, headers, onProgress, maxRetr
                     }
                 });
 
-                response.data.pipe(writer);
-
-                writer.on('finish', () => {
-                    // 检查是否因为流意外断开导致提前触发 finish
-                    if (totalLength && downloadedLength < totalLength) {
-                        reject(new Error("网络流意外关闭，文件未下载完整"));
-                    } else {
-                        if (onProgress) onProgress(100, "0.00");
-                        resolve();
+                downloadStream.on('error', (err) => {
+                    if (writer && !writer.destroyed) {
+                        writer.destroy();
                     }
-                });
 
-                writer.on('error', reject);
-                response.data.on('error', reject);
+                    if (err.response && err.response.statusCode === 416) {
+                        if (onProgress) onProgress(100, "0.00");
+                        finish();
+                        return;
+                    }
+
+                    finish(err);
+                });
             });
 
-            // 如果执行到这里，说明这段 Promise 跑完了且未抛出异常，直接跳出 while 循环
             return;
-
         } catch (err) {
-            // 如果报错 416 (Range Not Satisfiable)，通常代表你请求的起始字节超出了文件总大小
-            // 这意味着文件其实已经全部下完了，可以直接当做成功处理
-            if (err.response && err.response.status === 416) {
+            // 416 通常表示本地文件已完整
+            if (err.response && err.response.statusCode === 416) {
                 if (onProgress) onProgress(100, "0.00");
                 return;
             }
 
-            // 如果报错且还有重试次数，则等待 2 秒后继续下一个 while 循环
+            if (Date.now() >= deadline) {
+                throw new Error(`下载失败：已超过 1 小时 50 分钟有效期，停止重试并退出。原始错误: ${err.message}`);
+            }
+
             retries--;
             if (retries < 0) {
-                // 重试次数彻底耗尽，把错误抛给上层的主逻辑（触发 finally 清理文件）
                 throw new Error(`下载失败，已重试耗尽: ${err.message}`);
             }
 
-            console.warn(`⚠️ 下载遇到网络波动，2秒后尝试断点续传... (剩余重试次数: ${retries}) - 错误: ${err.message}`);
+            console.warn(`⚠️ 下载中断，正在尝试断点续传... (剩余重试次数: ${retries}) - 错误: ${err.message}`);
 
-            // 等待 2 秒
-            await new Promise(res => setTimeout(res, 2000));
+            // 超时退出，迎合下载链接有效期限制
+            const waitTime = Math.min(2000, Math.max(0, deadline - Date.now()));
+            if (waitTime <= 0) {
+                throw new Error(`下载失败：已超过 1 小时 50 分钟有效期，停止重试并退出。原始错误: ${err.message}`);
+            }
+            await new Promise(res => setTimeout(res, waitTime));
         }
     }
 }
@@ -170,13 +231,12 @@ module.exports = function registerDownloadIpc(mainWindow) {
             'Origin': 'https://www.bilibili.com',
             'Accept': '*/*',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Connection': 'keep-alive'
         };
 
         try {
             // 串行下载：等待音频下载完成后，再开始视频下载
             console.log(`⏳ [${title}] 开始下载音频...`);
-            await downloadFileWithAxios(
+            await downloadFileWithGot(
                 videoStream.audioUrl,
                 audioPath,
                 downloadHeaders,
@@ -184,7 +244,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             );
 
             console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
-            await downloadFileWithAxios(
+            await downloadFileWithGot(
                 videoStream.videoUrl,
                 videoPath,
                 downloadHeaders,
@@ -212,26 +272,13 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 outputPath
             ];
 
-            // try {
-            //     await execFileAsync(ffmpeg, ffmpegArgs);
-            //     console.log(`✅ [${title}] 转换完成`);
-            // } catch (err) {
-            //     console.error(`❌ [${title}] 合并出错：`, err);
-            //     return { success: false, message: '音视频合并失败' };
-            // }
+
+            // 合并音视频
             try {
-                const { stdout, stderr } = await execFileAsync(ffmpeg, ffmpegArgs);
-                // console.log(`✅ [${title}] ffmpeg stdout:`, stdout);
-                // console.log(`✅ [${title}] ffmpeg stderr:`, stderr);
+                await execFileAsync(ffmpeg, ffmpegArgs);
                 console.log(`✅ [${title}] 转换完成`);
             } catch (err) {
                 console.error(`❌ [${title}] 合并出错`);
-                console.error('platform:', process.platform);
-                console.error('arch:', process.arch);
-                console.error('ffmpeg path:', ffmpeg);
-                console.error('ffmpeg exists:', fs.existsSync(ffmpeg));
-                console.error('ffmpeg args:', ffmpegArgs);
-                console.error('err.code:', err.code);
                 console.error('err.message:', err.message);
                 console.error('err.stderr:', err.stderr);
                 console.error('err.stdout:', err.stdout);

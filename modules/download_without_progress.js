@@ -10,18 +10,10 @@ const auth = new Auth();
 async function downloadFile(url, outputPath, credential = true) {
     const headers = {
         'Referer': 'https://www.bilibili.com/',
+        'Origin': 'https://www.bilibili.com',
         'Accept': '*/*',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0.1 Safari/605.1.15',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Accept-Language': 'zh-CN,zh;q=0.9,zh-TW;q=0.8,zh-HK;q=0.7,en-US;q=0.6,en;q=0.5',
-        'DNT': '1',
-        'Host': getHttpHostHeader(url),
-        'Priority': 'u=5, i',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'no-cors',
-        'Sec-Fetch-Site': 'cross-site',
-        'Sec-Fetch-Storage-Access': 'none',
-        'TE': 'trailers'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
     };
 
     // 动态添加 Cookie
@@ -53,6 +45,9 @@ async function downloadFile(url, outputPath, credential = true) {
 
     } catch (error) {
         // 捕获 pipeline 或请求阶段抛出的所有异常
+        if (error.response) {
+            console.error(`❌ 下载失败：HTTP ${error.response.statusCode} ${error.response.statusMessage || ''}`);
+        }
         console.error('❌ 写入文件或网络请求弹幕失败：', error);
         throw error;
     }

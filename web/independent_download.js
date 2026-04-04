@@ -8,7 +8,7 @@ function createIndependentDownload() {
         const cid = videoEle.cid;
         const title = videoEle.title;
         const duration = videoEle.duration;
-        window.electronAPI.invoke('downloadDanmuProtobuf', { cid, title, duration });
+        window.electronAPI.invoke('downloadDanmu', { cid, title, duration });
     }
     function downloadCover(videoEle = currentVideoIdentity) {
         if (!videoEle.coverUrl) {

@@ -12,7 +12,7 @@ module.exports = function registerDanmuIpc(mainWindow) {
     ipcMain.handle('downloadDanmu', async (event, payload) => {
         const { cid, title } = payload;
         // 旧版弹幕接口
-        const url = `https://comment.bilibili.com/${cid}.xml`;
+        const url = `https://api.bilibili.com/x/v1/dm/list.so?oid=${cid}`;
 
         try {
             await downloadFile(url, path.join(app.getPath('downloads'), `${sanitizePath(title)}.xml`));

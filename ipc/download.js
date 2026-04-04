@@ -123,7 +123,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
         } catch (err) {
             console.error(`❌ [${title}] 出错：`, err);
-            return { success: false, message: '下载或合并出错' };
+            return {
+                success: false,
+                message: err?.message ? `下载或合并出错: ${err.message}` : '下载或合并出错'
+            };
         } finally {
             // 清理临时 m4s 文件
             if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);

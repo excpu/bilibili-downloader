@@ -4,10 +4,13 @@ const fs = require('fs');
 const got = require('got');
 const { pipeline } = require('stream/promises');
 
+const zlib = require('zlib'); // 引入 zlib
+const { PassThrough } = require('stream'); // 引入 PassThrough
+
 const Auth = require('../modules/auth');
 const auth = new Auth();
 
-async function downloadFile(url, outputPath, credential = true) {
+async function downloadFile(url, outputPath, credential = true, http2Enable = true) {
     const headers = {
         'Referer': 'https://www.bilibili.com/',
         'Origin': 'https://www.bilibili.com',
@@ -16,35 +19,66 @@ async function downloadFile(url, outputPath, credential = true) {
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
     };
 
-    // 动态添加 Cookie
     if (credential) {
         headers['Cookie'] = auth.getConstructedCookie();
     }
 
     try {
-        // 创建 got 流实例
+        //设置 decompress: false，防止 got 内部自动解压抛错
         const downloadStream = got.stream(url, {
             headers,
-            http2: true, // 启用 HTTP/2
-            retry: 2,    // 重试2次
-            throwHttpErrors: true // 如果状态码不是 2xx，抛出错误
+            http2: http2Enable,
+            retry: 0,
+            decompress: false, // 禁用自动解压，手动接管
+            throwHttpErrors: true
         });
 
-        // 处理请求错误（例如 DNS 解析失败、404 等）
+        // 处理基础网络错误
         downloadStream.on('error', (error) => {
             console.error('❌ 网络请求失败：', error.message);
         });
 
         const fileWriter = fs.createWriteStream(outputPath);
 
-        // 使用 stream/promises 的 pipeline
-        await pipeline(
-            downloadStream,
-            fileWriter
-        );
+        // 2. 核心逻辑：监听 response 事件，根据响应头动态选择解压器
+        const responsePromise = new Promise((resolve, reject) => {
+            downloadStream.on('response', async (res) => {
+                try {
+                    const encoding = res.headers['content-encoding'];
+                    let decompressor;
+
+                    // 根据不同的编码类型选择解压流
+                    if (encoding === 'gzip') {
+                        decompressor = zlib.createGunzip();
+                    } else if (encoding === 'br') {
+                        decompressor = zlib.createBrotliDecompress();
+                    } else if (encoding === 'deflate') {
+                        // B站弹幕报错是因为缺少标头，使用 createInflateRaw 处理
+                        decompressor = zlib.createInflateRaw();
+                    } else {
+                        // 无压缩或未知压缩，直接透传
+                        decompressor = new PassThrough();
+                    }
+
+                    // 执行 pipeline 传输
+                    await pipeline(
+                        downloadStream,
+                        decompressor,
+                        fileWriter
+                    );
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+
+            // 确保 downloadStream 本身的错误能被捕获
+            downloadStream.on('error', reject);
+        });
+
+        await responsePromise;
 
     } catch (error) {
-        // 捕获 pipeline 或请求阶段抛出的所有异常
         if (error.response) {
             console.error(`❌ 下载失败：HTTP ${error.response.statusCode} ${error.response.statusMessage || ''}`);
         }

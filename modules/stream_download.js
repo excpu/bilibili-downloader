@@ -222,7 +222,7 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                     // 节流更新进度，避免过于频繁地向 UI 发送消息。
                     if (timeDiff >= 200) {
                         const percentage = knownTotalLength
-                            ? Math.min(100, Math.round((downloadedLength / knownTotalLength) * 100))
+                            ? Number(Math.min(100, (downloadedLength / knownTotalLength) * 100).toFixed(2))
                             : 0;
                         const bytesDiff = downloadedLength - lastDownloadedLength;
                         const speed = timeDiff > 0

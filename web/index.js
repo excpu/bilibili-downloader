@@ -8,6 +8,7 @@ const $cancelLoginBtn = document.getElementById('cancelLogin');
 const $cancelVideoInfo = document.getElementById('cancelVideoInfo');
 const $downloadBtn = document.getElementById('downloadBtn');
 
+// 全局登录状态
 let globalLoginStatus = false;
 
 let multiPartVideo = false;

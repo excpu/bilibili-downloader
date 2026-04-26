@@ -25,7 +25,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
     ipcMain.handle('downloadTarget', async (event, payload) => {
         let { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
         title = sanitizePath(title);
-
+        
         const videoStream = await getUpToDateUrl(bvid, cid, audioIndex, videoIndex);
         if (!videoStream.success) {
             console.error(`❌ [${title}] 获取视频流失败: ${videoStream.message}`);
@@ -35,9 +35,17 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const videoPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
         const audioPath = path.join(app.getPath('downloads'), `${title}_audio.m4s`);
         const outputPath = path.join(app.getPath('downloads'), `${title}.mp4`);
+        const m4aOutputPath = path.join(app.getPath('downloads'), `${title}.m4a`);
+
+        // 检查是否仅下载音频
+        const audioOnly = parseInt(videoIndex) === -1;
 
         // 新任务开始前清理上次异常退出残留的临时文件，避免一开始就命中 416
-        for (const tempPath of [videoPath, audioPath]) {
+        const tempPathsToClean = [audioPath];
+        if (!audioOnly) tempPathsToClean.push(videoPath);
+        if (audioOnly && fs.existsSync(m4aOutputPath)) tempPathsToClean.push(m4aOutputPath);
+        
+        for (const tempPath of tempPathsToClean) {
             if (fs.existsSync(tempPath)) {
                 try {
                     fs.unlinkSync(tempPath);
@@ -74,51 +82,89 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 (percent, speed) => notifyProgress(percent, speed, 'audio')
             );
 
-            console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
-            await downloadFileWithGot(
-                videoStream.videoUrl,
-                videoPath,
-                downloadHeaders,
-                (percent, speed) => notifyProgress(percent, speed, 'video')
-            );
-
-            // 合并音视频
-            console.log(`⏳ [${title}] 正在合并...`);
-            // 1. 修复 macOS/Linux 下的执行权限问题
-            if (process.platform === 'darwin' || process.platform === 'linux') {
-                try {
-                    fs.chmodSync(ffmpeg, 0o755);
-                } catch (chmodErr) {
-                    console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
+            if (audioOnly) {
+                // 仅音频模式：直接转换音频为 m4a
+                console.log(`⏳ [${title}] 正在转换为 m4a 格式...`);
+                
+                // 修复 macOS/Linux 下的执行权限问题
+                if (process.platform === 'darwin' || process.platform === 'linux') {
+                    try {
+                        fs.chmodSync(ffmpeg, 0o755);
+                    } catch (chmodErr) {
+                        console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响转换:', chmodErr);
+                    }
                 }
-            }
 
-            // 2. 使用 execFile 代替 exec，将参数写成数组，彻底避免路径转义问题
-            const ffmpegArgs = [
-                '-y',
-                '-i', videoPath,
-                '-i', audioPath,
-                '-c:v', 'copy',
-                '-c:a', 'copy',
-                outputPath
-            ];
+                // 使用 ffmpeg 将 m4s 转换为 m4a
+                const ffmpegArgs = [
+                    '-y',
+                    '-i', audioPath,
+                    '-c:a', 'copy',
+                    m4aOutputPath
+                ];
 
+                try {
+                    await execFileAsync(ffmpeg, ffmpegArgs);
+                    console.log(`✅ [${title}] 转换为 m4a 完成`);
+                } catch (err) {
+                    console.error(`❌ [${title}] 转换为 m4a 出错`);
+                    console.error('err.message:', err.message);
+                    console.error('err.stderr:', err.stderr);
+                    console.error('err.stdout:', err.stdout);
+                    console.error('full err:', err);
 
-            // 合并音视频
-            try {
-                await execFileAsync(ffmpeg, ffmpegArgs);
-                console.log(`✅ [${title}] 转换完成`);
-            } catch (err) {
-                console.error(`❌ [${title}] 合并出错`);
-                console.error('err.message:', err.message);
-                console.error('err.stderr:', err.stderr);
-                console.error('err.stdout:', err.stdout);
-                console.error('full err:', err);
+                    return {
+                        success: false,
+                        message: err.stderr || err.message || '音频转换失败'
+                    };
+                }
+            } else {
+                // 音视频模式：下载视频并合并
+                console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
+                await downloadFileWithGot(
+                    videoStream.videoUrl,
+                    videoPath,
+                    downloadHeaders,
+                    (percent, speed) => notifyProgress(percent, speed, 'video')
+                );
 
-                return {
-                    success: false,
-                    message: err.stderr || err.message || '音视频合并失败'
-                };
+                // 合并音视频
+                console.log(`⏳ [${title}] 正在合并...`);
+                // 1. 修复 macOS/Linux 下的执行权限问题
+                if (process.platform === 'darwin' || process.platform === 'linux') {
+                    try {
+                        fs.chmodSync(ffmpeg, 0o755);
+                    } catch (chmodErr) {
+                        console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
+                    }
+                }
+
+                // 2. 使用 execFile 代替 exec，将参数写成数组，彻底避免路径转义问题
+                const ffmpegArgs = [
+                    '-y',
+                    '-i', videoPath,
+                    '-i', audioPath,
+                    '-c:v', 'copy',
+                    '-c:a', 'copy',
+                    outputPath
+                ];
+
+                // 合并音视频
+                try {
+                    await execFileAsync(ffmpeg, ffmpegArgs);
+                    console.log(`✅ [${title}] 转换完成`);
+                } catch (err) {
+                    console.error(`❌ [${title}] 合并出错`);
+                    console.error('err.message:', err.message);
+                    console.error('err.stderr:', err.stderr);
+                    console.error('err.stdout:', err.stdout);
+                    console.error('full err:', err);
+
+                    return {
+                        success: false,
+                        message: err.stderr || err.message || '音视频合并失败'
+                    };
+                }
             }
 
         } catch (err) {
@@ -129,7 +175,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             };
         } finally {
             // 清理临时 m4s 文件
-            if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+            if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
             if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
         }
 
@@ -192,7 +238,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
             return {
                 success: true,
-                videoUrl: json.data.dash.video[parseInt(videoIndex)].baseUrl,
+                videoUrl: parseInt(videoIndex) === -1 ? null : json.data.dash.video[parseInt(videoIndex)].baseUrl,
                 audioUrl
             };
         } catch (error) {

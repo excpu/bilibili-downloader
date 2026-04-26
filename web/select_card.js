@@ -1,4 +1,5 @@
 // 视频信息展示和用户选择器
+// infosection
 function selectInfo() {
     const $videoInfoSection = document.getElementById('videoInfoSection');
     const $multiPartSelector = document.getElementById('multiPartSelector');
@@ -137,6 +138,12 @@ function selectInfo() {
         } catch (e) {
             console.log('默认最高音质选择错误');
         }
+
+        // 插入选择不下载视频的选项
+        const noVideoOption = document.createElement("option");
+        noVideoOption.value = "-1";
+        noVideoOption.textContent = "无视频";
+        $qualitySelect.appendChild(noVideoOption);
     }
 
     // 显示分P选择器

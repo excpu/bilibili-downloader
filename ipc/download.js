@@ -25,7 +25,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
     ipcMain.handle('downloadTarget', async (event, payload) => {
         let { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
         title = sanitizePath(title);
-        
+
         const videoStream = await getUpToDateUrl(bvid, cid, audioIndex, videoIndex);
         if (!videoStream.success) {
             console.error(`❌ [${title}] 获取视频流失败: ${videoStream.message}`);
@@ -35,7 +35,16 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const videoPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
         const audioPath = path.join(app.getPath('downloads'), `${title}_audio.m4s`);
         const outputPath = path.join(app.getPath('downloads'), `${title}.mp4`);
-        const m4aOutputPath = path.join(app.getPath('downloads'), `${title}.m4a`);
+        let m4aOutputPath = path.join(app.getPath('downloads'), `${title}.m4a`);
+
+        if (audioIndex == 30251) {
+            m4aOutputPath = path.join(app.getPath('downloads'), `${title}.flac`);
+        }
+
+        if (audioIndex == 30251) {
+            m4aOutputPath = path.join(app.getPath('downloads'), `${title}.mkv`);
+        }
+
 
         // 检查是否仅下载音频
         const audioOnly = parseInt(videoIndex) === -1;
@@ -44,7 +53,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const tempPathsToClean = [audioPath];
         if (!audioOnly) tempPathsToClean.push(videoPath);
         if (audioOnly && fs.existsSync(m4aOutputPath)) tempPathsToClean.push(m4aOutputPath);
-        
+
         for (const tempPath of tempPathsToClean) {
             if (fs.existsSync(tempPath)) {
                 try {
@@ -85,7 +94,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             if (audioOnly) {
                 // 仅音频模式：直接转换音频为 m4a
                 console.log(`⏳ [${title}] 正在转换为 m4a 格式...`);
-                
+
                 // 修复 macOS/Linux 下的执行权限问题
                 if (process.platform === 'darwin' || process.platform === 'linux') {
                     try {

@@ -41,7 +41,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             m4aOutputPath = path.join(app.getPath('downloads'), `${title}.flac`);
         }
 
-        if (audioIndex == 30251) {
+        if (audioIndex == 30250) {
             m4aOutputPath = path.join(app.getPath('downloads'), `${title}.mkv`);
         }
 

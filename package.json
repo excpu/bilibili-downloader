@@ -74,5 +74,14 @@
                 }
             ]
         }
-    }
+    },
+    "extraResources": [
+        {
+            "from": "assets/bin/${platform}",
+            "to": "bin/${platform}",
+            "filter": [
+                "**/*"
+            ]
+        }
+    ]
 }

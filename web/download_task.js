@@ -45,21 +45,33 @@ const speedSm = new SpeedSmoother(0.1);
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     console.log('进度来了：', data);
     // { percent: 30, speed: 123456, name: 'xxx' }
-    document.getElementById(`progress-${data.currentUid}`).style.width = `${data.progress}%`;
+    // 添加容错：检查对应的DOM元素是否存在
+    const progressEl = document.getElementById(`progress-${data.currentUid}`);
+    const statusEl = document.getElementById(`status-${data.currentUid}`);
+    const speedEl = document.getElementById(`speed-${data.currentUid}`);
+    
+    if (!progressEl || !statusEl || !speedEl) {
+        console.warn(`找不到对应的UI元素，uid: ${data.currentUid}`);
+        return;
+    }
+    
+    progressEl.style.width = `${data.progress}%`;
 
     if (data.avId === "audio") {
-        document.getElementById(`status-${data.currentUid}`).textContent = "下载音频中";
+        statusEl.textContent = "下载音频中";
     } else if (data.avId === "video") {
-        document.getElementById(`status-${data.currentUid}`).textContent = "下载视频中";
+        statusEl.textContent = "下载视频中";
     }
 
-    document.getElementById(`speed-${data.currentUid}`).textContent = speedSm.update(data.speed);
+    speedEl.textContent = speedSm.update(data.speed);
 });
 
 window.electronAPI.on('download-finished', (data) => {
     console.log('下载完成');
     let taskEle = document.getElementById(`task-${data}`);
-    taskEle.remove();
+    if (taskEle) {
+        taskEle.remove();
+    }
     // { percent: 30, speed: 123456, name: 'xxx' }
 });
 
@@ -83,8 +95,8 @@ function manageDownloadStart() {
     currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
     if (currentVideoIdentity.p.length > 0) {
-        const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
         for (let i = 0; i < currentVideoIdentity.p.length; i++) {
+            const uid = `${Date.now()}${Math.round(Math.random() * 1000)}_P${i}`;
             // 查看是否被用户选中 （$multiPartSelector）
             const checked = document.querySelectorAll('input[name="part[]"]:checked');
 
@@ -221,12 +233,22 @@ async function taskManager() {
         await downloadCover(taskQuene[0].cover, taskQuene[0].coverUrl, taskQuene[0].title, taskQuene[0].uid);
     } else {
         alert(`下载 ${taskQuene[0].title} 失败：${result.message}`);
-        // 在UI上标记下载失败
-        document.getElementById(`status-${taskQuene[0].uid}`).textContent = "下载失败";
-        document.getElementById(`status-${taskQuene[0].uid}`).style.color = "red";
-        document.getElementById(`speed-${taskQuene[0].uid}`).textContent = "0.00";
-        // 将progress 的i元素设置为红色
-        document.getElementById(`progress-${taskQuene[0].uid}`).style.background = "red";
+        // 在UI上标记下载失败，并移除该任务UI（防止进度显示混乱）
+        const failedUid = taskQuene[0].uid;
+        const taskEl = document.getElementById(`task-${failedUid}`);
+        const statusEl = document.getElementById(`status-${failedUid}`);
+        const speedEl = document.getElementById(`speed-${failedUid}`);
+        const progressEl = document.getElementById(`progress-${failedUid}`);
+        
+        if (statusEl) statusEl.textContent = "下载失败";
+        if (statusEl) statusEl.style.color = "red";
+        if (speedEl) speedEl.textContent = "0.00";
+        if (progressEl) progressEl.style.background = "red";
+        
+        // 3秒后自动移除失败的任务UI，避免后续进度事件错误更新
+        // setTimeout(() => {
+        //     if (taskEl) taskEl.remove();
+        // }, 3000);
     }
 
     // 无论成功与否，都继续下一个任务

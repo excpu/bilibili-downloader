@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Bilibili 本地缓存批量合并</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header">Bilibili 本地缓存批量合并 / 重命名</div>
+
+    <div class="container">
+        <div class="left-panel">
+            <fieldset>
+                <legend>输入目录 (B站缓存根)</legend>
+                <div class="input-group">
+                    <input type="text" id="inputPath" placeholder="请选择或输入路径...">
+                    <button onclick="selectDir('input')">浏览...</button>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>输出目录 (保存合成后 mp4)</legend>
+                <div class="input-group">
+                    <input type="text" id="outputPath" placeholder="请选择或输入路径...">
+                    <button onclick="selectDir('output')">浏览...</button>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>输出文件命名方式</legend>
+                <label><input type="radio" name="namingMode" value="title"> title</label>
+                <label><input type="radio" name="namingMode" value="title_part"> title - page_data.part</label>
+                <label><input type="radio" name="namingMode" value="part_title" checked> page_data.part - title</label>
+            </fieldset>
+
+            <fieldset>
+                <legend>顺序 / 前缀 / 弹幕</legend>
+                <p class="desc">
+                    顺序：智能猜测 (page_data.page / page_data.part / title 中的集数)<br>
+                    若无法判断则按时间与扫描顺序兜底。
+                </p>
+                <label>
+                    <input type="checkbox" id="addPrefix"> 
+                    在文件名首添加 01-, 02-, ... 前缀 (基于上述智能顺序)
+                </label>
+                <label>
+                    <input type="checkbox" id="copyDanmaku" checked> 
+                    同时复制弹幕 danmaku.xml，并重命名为与视频同名的 .xml
+                </label>
+            </fieldset>
+
+            <button id="startBtn" class="primary-btn">开始合并</button>
+        </div>
+
+        <div class="right-panel">
+            <div class="log-label">运行日志</div>
+            <textarea id="log" readonly></textarea>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,6 +4,8 @@ const registerDownloadIpc = require('./download');
 const registerDanmuIpc = require('./danmu');
 const registerCoverIpc = require('./cover');
 const registerNewWindowIpc = require('./new_window');
+// 为 merge 窗口注册 IPC
+const registerMergeIpc = require('./merge/merge');
 
 module.exports = function registerIpc(mainWindow) {
     registerInformationIpc(mainWindow);
@@ -11,4 +13,7 @@ module.exports = function registerIpc(mainWindow) {
     registerDanmuIpc(mainWindow);
     registerCoverIpc(mainWindow);
     registerNewWindowIpc(mainWindow);
+
+    // merge 页面 IPC
+    registerMergeIpc();
 }

@@ -25,3 +25,7 @@ document.getElementById('urlInput').addEventListener('input', (event) => {
 function openPlayer() {
     window.electronAPI.invoke('openPlayer');
 }
+
+function openMergeTool() {
+    window.electronAPI.invoke('openMergeTool');
+}

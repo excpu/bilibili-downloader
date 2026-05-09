@@ -14,7 +14,7 @@ document.getElementById('startBtn').onclick = async () => {
     const logEl = document.getElementById('log');
 
     // 获取单选框的值
-    let namingMode = 'part_title';
+    let namingMode = 'title'; // 默认值
     const radios = document.getElementsByName('namingMode');
     for (let r of radios) {
         if (r.checked) namingMode = r.value;
@@ -42,7 +42,7 @@ document.getElementById('startBtn').onclick = async () => {
 };
 
 // 接收主进程的日志推送
-ipcRenderer.on('log', (event, msg) => {
+ipcRenderer.on('log', (msg) => {
     const logEl = document.getElementById('log');
     logEl.value += (logEl.value ? '\n' : '') + msg;
     // 自动滚动到底部

@@ -29,9 +29,9 @@
 
             <fieldset>
                 <legend>输出文件命名方式</legend>
-                <label><input type="radio" name="namingMode" value="title"> title</label>
+                <label><input type="radio" name="namingMode" value="title" checked> title</label>
                 <label><input type="radio" name="namingMode" value="title_part"> title - page_data.part</label>
-                <label><input type="radio" name="namingMode" value="part_title" checked> page_data.part - title</label>
+                <label><input type="radio" name="namingMode" value="part_title"> page_data.part - title</label>
             </fieldset>
 
             <fieldset>
@@ -45,7 +45,7 @@
                     在文件名首添加 01-, 02-, ... 前缀 (基于上述智能顺序)
                 </label>
                 <label>
-                    <input type="checkbox" id="copyDanmaku" checked> 
+                    <input type="checkbox" id="copyDanmaku"> 
                     同时复制弹幕 danmaku.xml，并重命名为与视频同名的 .xml
                 </label>
             </fieldset>
@@ -58,5 +58,6 @@
             <textarea id="log" readonly></textarea>
         </div>
     </div>
+    <script src="script.js"></script>
 </body>
 </html>

@@ -29,3 +29,4 @@ function openPlayer() {
 function openMergeTool() {
     window.electronAPI.invoke('openMergeTool');
 }
+

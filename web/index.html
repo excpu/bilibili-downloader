@@ -8,6 +8,7 @@
     <title>bilibili视频下载器</title>
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="model.css">
+    <link rel="stylesheet" href="setting.css">
 </head>
 
 <body>
@@ -19,6 +20,7 @@
             <span class="pill"><span id="taskCount">0</span>个任务</span>
             <span class="pill clickable" onclick="openPlayer()">播放器</span>
             <span class="pill clickable" onclick="openMergeTool()">合并工具</span>
+            <span class="pill clickable" onclick="settingWeb.openSetting()">设置</span>
         </div>
         <div class="avatar" id="avatar">登录</div>
     </div>
@@ -109,9 +111,10 @@
                 </div> -->
             </div>
         </section>
+
+        <!-- 弹出框容器 -->
         <!-- 工具弹出框 -->
-        <div class="hidden">
-        <div class="model" id="model">
+        <div class="model hidden" id="model">
             <div class="model-content">
                 <div class="model-header">
                     <span id="modelTitle">标题</span>
@@ -124,7 +127,59 @@
                 </div>
             </div>
         </div>
+        <!-- 设置弹出框 -->
+        <div class="model hidden" id="settingModel">
+            <div class="model-content">
+                <div class="model-header">
+                    <span id="settingModelTitle">设置</span>
+                    <button class="btn small" id="settingModelCloseBtn">关闭</button>
+                </div>
+                <div class="model-body" id="settingModelBody">
+                    <!-- 用户信息部分 -->
+                    <div class="setting-section">
+                        <h3 class="setting-section-title">用户信息</h3>
+                        <div class="user-info">
+                            <img id="settingUserAvatar" class="user-avatar" src="./assets/compressed-loading-placeholder.jpg" alt="用户头像" />
+                            <div class="user-details">
+                                <div class="user-name" id="settingUserName">未登录</div>
+                                <!-- <button class="btn small" id="logoutBtn">退出登录</button> -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 下载目录部分 -->
+                    <!-- <div class="setting-section">
+                        <h3 class="setting-section-title">下载设置</h3>
+                        <div class="setting-item">
+                            <label for="downloadPathInput">下载目录：</label>
+                            <div class="path-input-group">
+                                <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..." readonly />
+                                <button class="btn small" id="selectDownloadPathBtn">浏览</button>
+                            </div>
+                        </div>
+                    </div> -->
+
+                    <!-- 下载引擎部分 -->
+                    <div class="setting-section">
+                        <h3 class="setting-section-title">下载引擎</h3>
+                        <div class="setting-item">
+                            <label for="downloadEngineSelect">选择下载引擎：</label>
+                            <select id="downloadEngineSelect" class="setting-select">
+                                <option value="node">Node.js 引擎</option>
+                                <option value="aria2">Aria2 引擎</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 保存按钮 -->
+                    <div class="setting-actions">
+                        <button class="btn brand" id="saveSettingBtn">保存设置</button>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <div class="hidden">
     </main>
     <div class="spacer"></div>
     <script src="bv_enc.js"></script>
@@ -134,6 +189,7 @@
     <script src="index.js"></script>
     <script src="download_task.js"></script>
     <script src="ui_detail.js"></script>
+    <script src="./script/setting_web.js"></script>
     <!-- 开发专用 -->
     <script src="dev.js"></script>
 </body>

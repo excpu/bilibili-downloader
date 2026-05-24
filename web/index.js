@@ -96,7 +96,7 @@ function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration};
+        currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration };
         // 渲染音频流和视频流
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;
@@ -152,12 +152,16 @@ window.electronAPI.invoke('loginStatus').then((status) => {
 });
 
 
+let globalUserInfo = null;
 // 若登录，获取用户信息
 function fetchUserInfo() {
     window.electronAPI.invoke('getUserInfo').then((userInfo) => {
-        console.log('用户信息:', userInfo);
-        globalLoginStatus = true;
-        $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
+        //console.log('用户信息:', userInfo);
+        if (userInfo.data.isLogin) {
+            globalUserInfo = userInfo;
+            globalLoginStatus = true;
+            $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
+        }
     });
 }
 

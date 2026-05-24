@@ -7,12 +7,14 @@ const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安
 const { downloadFileWithGot } = require('../modules/stream_download');
 const Aria2Client = require('../modules/aria2-client'); // 引入 Aria2Client 类
 const { downloadWithAria2 } = require('../modules/aria2-client');
+const Setting = require("../modules/config_setting");
+const setting = new Setting();
+setting.load(); // 加载设置数据
 
-const downloadFunction = "aria2"; // 可切换 "got" 或 "aria2"，默认使用 aria2 进行下载
-
-// 根据 downloadFunction 选择下载函数
+// 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
 const getDownloadFunction = () => {
-    return downloadFunction === 'aria2' ? downloadWithAria2 : downloadFileWithGot;
+    const engine = setting.getDownloadEngine() || 'node';
+    return engine === 'aria2' ? downloadWithAria2 : downloadFileWithGot;
 };
 
 const aria2 = new Aria2Client();

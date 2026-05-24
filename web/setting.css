@@ -1,0 +1,161 @@
+/* 设置弹出框样式 */
+
+/* 设置分区 */
+.setting-section {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.setting-section:last-child {
+    border-bottom: none;
+}
+
+.setting-section-title {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 用户信息部分 */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background: var(--bg-light, rgba(0, 0, 0, 0.02));
+    border-radius: 8px;
+}
+
+.user-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border);
+}
+
+.user-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* 设置选项 */
+.setting-item {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-item label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+    display: block;
+}
+
+/* 路径输入组 */
+.path-input-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.path-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--input-bg, white);
+    color: var(--text);
+    font-family: inherit;
+}
+
+.path-input:focus {
+    outline: none;
+    border-color: var(--primary, #0066cc);
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.path-input::placeholder {
+    color: var(--text-tertiary, rgba(0, 0, 0, 0.4));
+}
+
+/* 下载引擎选择 */
+.setting-select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--input-bg, white);
+    color: var(--text);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.setting-select:hover {
+    border-color: var(--primary, #0066cc);
+}
+
+.setting-select:focus {
+    outline: none;
+    border-color: var(--primary, #0066cc);
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.setting-select option {
+    padding: 6px;
+}
+
+/* 设置操作按钮 */
+.setting-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+    .user-info {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .user-avatar {
+        width: 48px;
+        height: 48px;
+    }
+
+    .user-details {
+        align-items: center;
+    }
+
+    .setting-item {
+        gap: 6px;
+    }
+
+    .path-input-group {
+        flex-wrap: wrap;
+    }
+
+    .setting-select {
+        width: 100%;
+    }
+}

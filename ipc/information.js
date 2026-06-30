@@ -209,38 +209,151 @@ module.exports = function registerInformationIpc(mainWindow) {
         }
     });
     // 获取合集信息
-    ipcMain.handle('searchCollection', async (event, ugc_season_id, mid) => {
+    ipcMain.handle('searchCollection', async (event, ugc_season_id, mid, ep_count) => {
         try {
             if (ugc_season_id === undefined || ugc_season_id === null || mid === undefined || mid === null) {
                 return { success: false, message: '合集参数缺失：ugc_season_id 或 mid 为空' };
             }
 
             const wbiKeys = await getWbiKeys();
-            const params = {
-                mid: String(mid),
-                season_id: String(ugc_season_id)
-            };
-            const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
-            const url = `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?${wbiQuery}`;
             const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
-            const response = await got(url, {
-                headers: {
-                    'Referer': `https://www.bilibili.com/`,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-                    'Accept': 'application/json',
-                    'Cookie': credentialCookie // 登录验证
-                },
-                responseType: 'json',
-                http2: true
-            });
-            const json = response.body;
-            if (json.code === 0) {
+
+            const pageSize = 30;
+            const normalizedEpCount = Number.parseInt(ep_count, 10);
+
+            const fetchSeasonPage = async (pageNum) => {
+                const params = {
+                    mid: String(mid),
+                    season_id: String(ugc_season_id),
+                    page_num: String(pageNum),
+                    page_size: String(pageSize)
+                };
+                const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
+                const url = `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?${wbiQuery}`;
+
+                const response = await got(url, {
+                    headers: {
+                        'Referer': `https://www.bilibili.com/`,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                        'Accept': 'application/json',
+                        'Cookie': credentialCookie // 登录验证
+                    },
+                    responseType: 'json',
+                    http2: true
+                });
+
+                const json = response.body;
+                if (json.code !== 0) {
+                    const biliCode = typeof json.code === 'number' ? json.code : 'unknown';
+                    const biliMessage = json.message || json.msg || '未知业务错误';
+                    return {
+                        success: false,
+                        message: `第${pageNum}页获取失败: B站返回 code=${biliCode}, message=${biliMessage}`
+                    };
+                }
+
                 return { success: true, data: json.data };
-            } else {
-                return { success: false, message: json.message || '获取合集信息失败' };
+            };
+
+            const firstPageResult = await fetchSeasonPage(1);
+            if (!firstPageResult.success) {
+                return firstPageResult;
             }
+
+            const firstData = firstPageResult.data || {};
+            const mergedArchives = Array.isArray(firstData.archives) ? [...firstData.archives] : [];
+            const mergedAids = Array.isArray(firstData.aids) ? [...firstData.aids] : [];
+
+            const totalFromResponse = Number.parseInt(firstData?.page?.total, 10);
+            const totalCount = Number.isFinite(totalFromResponse) && totalFromResponse > 0
+                ? totalFromResponse
+                : (Number.isFinite(normalizedEpCount) && normalizedEpCount > 0 ? normalizedEpCount : mergedArchives.length);
+
+            const pagesByTotal = Math.max(1, Math.ceil(totalCount / pageSize));
+            const pagesByEpCount = Number.isFinite(normalizedEpCount) && normalizedEpCount > 0
+                ? Math.ceil(normalizedEpCount / pageSize)
+                : 1;
+            const totalPages = Math.max(pagesByTotal, pagesByEpCount);
+
+            for (let pageNum = 2; pageNum <= totalPages; pageNum++) {
+                const pageResult = await fetchSeasonPage(pageNum);
+                if (!pageResult.success) {
+                    return pageResult;
+                }
+
+                const pageData = pageResult.data || {};
+                if (Array.isArray(pageData.archives)) {
+                    mergedArchives.push(...pageData.archives);
+                }
+                if (Array.isArray(pageData.aids)) {
+                    mergedAids.push(...pageData.aids);
+                }
+            }
+
+            // 去重，避免分页边界重复数据
+            const uniqueArchives = [];
+            const archiveKeySet = new Set();
+            for (const item of mergedArchives) {
+                const key = item?.bvid || item?.aid;
+                if (!key || archiveKeySet.has(key)) {
+                    continue;
+                }
+                archiveKeySet.add(key);
+                uniqueArchives.push(item);
+            }
+
+            const uniqueAids = [...new Set(mergedAids)];
+
+            return {
+                success: true,
+                data: {
+                    ...firstData,
+                    archives: uniqueArchives,
+                    aids: uniqueAids,
+                    page: {
+                        ...(firstData.page || {}),
+                        page_num: 1,
+                        page_size: pageSize,
+                        total: totalCount
+                    }
+                }
+            };
         } catch (error) {
-            return { success: false, message: '发生错误: ' + error.message };
+            const statusCode = error?.response?.statusCode;
+            const statusMessage = error?.response?.statusMessage;
+            const body = error?.response?.body;
+
+            let remoteCode = null;
+            let remoteMessage = null;
+
+            if (body && typeof body === 'object') {
+                remoteCode = body.code;
+                remoteMessage = body.message || body.msg;
+            }
+
+            const detailParts = [];
+            if (statusCode) {
+                detailParts.push(`HTTP ${statusCode}${statusMessage ? ` ${statusMessage}` : ''}`);
+            }
+            if (error?.code) {
+                detailParts.push(`错误码 ${error.code}`);
+            }
+            if (remoteCode !== null && remoteCode !== undefined) {
+                detailParts.push(`B站code=${remoteCode}`);
+            }
+            if (remoteMessage) {
+                detailParts.push(`B站message=${remoteMessage}`);
+            }
+            if (error?.message) {
+                detailParts.push(`异常=${error.message}`);
+            }
+
+            return {
+                success: false,
+                message: detailParts.length > 0
+                    ? `获取合集请求失败: ${detailParts.join(' | ')}`
+                    : '获取合集请求失败: 未知错误'
+            };
         }
     });
 }

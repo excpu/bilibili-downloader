@@ -202,7 +202,10 @@ function selectInfo() {
         const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
         $searchCollectionBtn.classList.remove('hidden');
         $searchCollectionBtn.onclick = async () => {
-            const seasondata = await window.electronAPI.invoke('searchCollection', videoData.ugc_season.id, videoData.ugc_season.mid);
+            console.log('搜索合集', videoData.ugc_season.id);
+            console.log('合集用户', videoData.ugc_season.mid);
+            const seasondata = await window.electronAPI.invoke('searchCollection', videoData.ugc_season.id, videoData.ugc_season.mid, videoData.ugc_season.ep_count
+            );
             console.log('合集搜索结果:', seasondata);
 
             if (!seasondata.success) {

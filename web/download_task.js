@@ -96,6 +96,7 @@ function manageDownloadStart() {
     // 如果是多P视频，生成多个下载任务
     if (currentVideoIdentity.p.length > 0) {
         for (let i = 0; i < currentVideoIdentity.p.length; i++) {
+            const partInfo = currentVideoIdentity.p[i];
             const uid = `${Date.now()}${Math.round(Math.random() * 1000)}_P${i}`;
             // 查看是否被用户选中 （$multiPartSelector）
             const checked = document.querySelectorAll('input[name="part[]"]:checked');
@@ -112,16 +113,23 @@ function manageDownloadStart() {
                 continue;
             }
 
+            const taskBvid = partInfo.bvid || currentVideoIdentity.bvid;
+            const taskCid = partInfo.cid || null;
+            const taskTitle = currentVideoIdentity.isCollection
+                ? `P${partInfo.page} - ${partInfo.part}`
+                : `P${partInfo.page} - ${currentVideoIdentity.title} - ${partInfo.part}`;
+
             const videoEle = {
                 uid,
-                bvid: currentVideoIdentity.bvid,
-                cid: currentVideoIdentity.p[i].cid,
-                title: `P${currentVideoIdentity.p[i].page} - ${currentVideoIdentity.title} - ${currentVideoIdentity.p[i].part}`,
+                bvid: taskBvid,
+                cid: taskCid,
+                title: taskTitle,
                 videoIndex,
                 audioIndex,
                 danmu: currentVideoIdentity.danmu,
                 cover: currentVideoIdentity.cover,
-                coverUrl: currentVideoIdentity.coverUrl
+                coverUrl: partInfo.coverUrl || currentVideoIdentity.coverUrl,
+                needFetchCid: !taskCid
             }
             taskQuene.push(videoEle);
             displayTasks(videoEle);
@@ -137,7 +145,8 @@ function manageDownloadStart() {
             audioIndex,
             danmu: currentVideoIdentity.danmu,
             cover: currentVideoIdentity.cover,
-            coverUrl: currentVideoIdentity.coverUrl
+            coverUrl: currentVideoIdentity.coverUrl,
+            needFetchCid: !currentVideoIdentity.cid
         }
         taskQuene.push(videoEle);
         displayTasks(videoEle);
@@ -226,15 +235,40 @@ async function taskManager() {
         return;
     }
     globalTaskLock = true;
-    const result = await window.electronAPI.invoke('downloadTarget', taskQuene[0]);
+    const currentTask = taskQuene[0];
+
+    if (!currentTask.cid || currentTask.needFetchCid) {
+        const statusEl = document.getElementById(`status-${currentTask.uid}`);
+        if (statusEl) {
+            statusEl.textContent = '获取CID中';
+        }
+
+        const videoInfo = await window.electronAPI.invoke('getVideoInfo', currentTask.bvid);
+        if (!videoInfo.success || !videoInfo.data || !videoInfo.data.cid) {
+            alert(`获取 ${currentTask.title} 的CID失败：${videoInfo.message || '未知错误'}`);
+            if (statusEl) {
+                statusEl.textContent = 'CID获取失败';
+                statusEl.style.color = 'red';
+            }
+            taskQuene.shift();
+            globalTaskLock = false;
+            taskManager();
+            return;
+        }
+
+        currentTask.cid = videoInfo.data.cid;
+        currentTask.needFetchCid = false;
+    }
+
+    const result = await window.electronAPI.invoke('downloadTarget', currentTask);
     if (result.success) {
         // 下载成功
-        await downloadDanmu(taskQuene[0].cid, taskQuene[0].title, taskQuene[0].danmu, taskQuene[0].uid);
-        await downloadCover(taskQuene[0].cover, taskQuene[0].coverUrl, taskQuene[0].title, taskQuene[0].uid);
+        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.danmu, currentTask.uid);
+        await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid);
     } else {
-        alert(`下载 ${taskQuene[0].title} 失败：${result.message}`);
+        alert(`下载 ${currentTask.title} 失败：${result.message}`);
         // 在UI上标记下载失败，并移除该任务UI（防止进度显示混乱）
-        const failedUid = taskQuene[0].uid;
+        const failedUid = currentTask.uid;
         const taskEl = document.getElementById(`task-${failedUid}`);
         const statusEl = document.getElementById(`status-${failedUid}`);
         const speedEl = document.getElementById(`speed-${failedUid}`);

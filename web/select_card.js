@@ -198,6 +198,46 @@ function selectInfo() {
         document.querySelectorAll(".p-item").forEach(box => box.checked = false);
     }
 
+    function collectionSearch(videoData) {
+        const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        $searchCollectionBtn.classList.remove('hidden');
+        $searchCollectionBtn.onclick = async () => {
+            const seasondata = await window.electronAPI.invoke('searchCollection', videoData.ugc_season.id, videoData.ugc_season.mid);
+            console.log('合集搜索结果:', seasondata);
+
+            if (!seasondata.success) {
+                alert(`合集搜索失败: ${seasondata.message || '未知错误'}`);
+                return;
+            }
+
+            const archives = Array.isArray(seasondata.data.archives) ? seasondata.data.archives : [];
+            if (archives.length < 1) {
+                alert('该合集暂无可下载视频');
+                return;
+            }
+
+            clearMultipart();
+            showMultipartSelector();
+            addMultipart(archives.map((item, index) => ({
+                page: index + 1,
+                part: item.title
+            })));
+
+            window.dispatchEvent(new CustomEvent('season-data-loaded', {
+                detail: {
+                    sourceVideo: videoData,
+                    seasonData: seasondata.data
+                }
+            }));
+        };
+    }
+
+    function hideCollectionSearch() {
+        const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        $searchCollectionBtn.classList.add('hidden');
+        $searchCollectionBtn.onclick = null;
+    }
+
 
     return {
         updateTitle,
@@ -213,6 +253,8 @@ function selectInfo() {
         hide,
         hideMultipartSelector,
         selectAllPart,
-        ignoreAllPart
+        ignoreAllPart,
+        collectionSearch,
+        hideCollectionSearch
     }
 }

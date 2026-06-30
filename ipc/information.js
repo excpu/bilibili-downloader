@@ -208,4 +208,39 @@ module.exports = function registerInformationIpc(mainWindow) {
             return { success: false, message: '发生错误: ' + error.message };
         }
     });
+    // 获取合集信息
+    ipcMain.handle('searchCollection', async (event, ugc_season_id, mid) => {
+        try {
+            if (ugc_season_id === undefined || ugc_season_id === null || mid === undefined || mid === null) {
+                return { success: false, message: '合集参数缺失：ugc_season_id 或 mid 为空' };
+            }
+
+            const wbiKeys = await getWbiKeys();
+            const params = {
+                mid: String(mid),
+                season_id: String(ugc_season_id)
+            };
+            const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
+            const url = `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?${wbiQuery}`;
+            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+            const response = await got(url, {
+                headers: {
+                    'Referer': `https://www.bilibili.com/`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                    'Accept': 'application/json',
+                    'Cookie': credentialCookie // 登录验证
+                },
+                responseType: 'json',
+                http2: true
+            });
+            const json = response.body;
+            if (json.code === 0) {
+                return { success: true, data: json.data };
+            } else {
+                return { success: false, message: json.message || '获取合集信息失败' };
+            }
+        } catch (error) {
+            return { success: false, message: '发生错误: ' + error.message };
+        }
+    });
 }

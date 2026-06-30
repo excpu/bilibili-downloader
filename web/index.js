@@ -64,6 +64,8 @@ function getVideoInfo() {
             alert('该视频需要跳转，当前版本暂不支持此类视频的下载。');
             return;
         }
+        // 隐藏合集搜索按钮
+        infoSection.hideCollectionSearch();
         // 更新UI显示视频信息
         infoSection.updateTitle(videoInfo.data.title);
         // 更新UP主信息
@@ -84,6 +86,9 @@ function getVideoInfo() {
             multiPartVideo = true;
         } else {
             // 非分P隐藏分P选择器，直接获取视频流信息
+            // 非分P视频支持搜索合集，暂不支持合集和分P嵌套的情况
+            // 判断视频是否有合集，若有合集显示合集搜索按钮
+            infoSection.collectionSearch(videoInfo.data);
             infoSection.hideMultipartSelector();
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, [], videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = false;
@@ -92,6 +97,42 @@ function getVideoInfo() {
 }
 
 let currentVideoIdentity = null;
+
+window.addEventListener('season-data-loaded', (event) => {
+    const detail = event.detail || {};
+    const seasonData = detail.seasonData || {};
+    const sourceVideo = detail.sourceVideo || {};
+    const archives = Array.isArray(seasonData.archives) ? seasonData.archives : [];
+
+    if (archives.length < 1) {
+        return;
+    }
+
+    const seasonTitle = seasonData.meta?.title || seasonData.meta?.name || sourceVideo.title || '合集';
+    const seasonCover = seasonData.meta?.cover || sourceVideo.pic;
+
+    currentVideoIdentity = {
+        bvid: sourceVideo.bvid,
+        cid: null,
+        title: seasonTitle,
+        p: archives.map((item, index) => ({
+            page: index + 1,
+            part: item.title,
+            bvid: item.bvid,
+            aid: item.aid,
+            cid: null,
+            coverUrl: item.pic
+        })),
+        danmu: false,
+        coverUrl: seasonCover,
+        duration: 0,
+        isCollection: true
+    };
+
+    infoSection.updateTitle(seasonTitle);
+    infoSection.updateThumbnail(seasonCover);
+});
+
 function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
     console.log('视频CID:', cid);
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {

@@ -87,7 +87,7 @@ jobs:
           files: |
             dist/**/*.zip
             dist/**/*.pkg
-            dist/**/*Setup*.exe
+            dist/**/*win*.exe
             dist/**/*.msi
             dist/**/*.AppImage
             dist/**/*.deb

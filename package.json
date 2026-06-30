@@ -30,6 +30,7 @@
     "build": {
         "appId": "bilibili.downloader.app",
         "productName": "bilibili 视频下载工具",
+        "artifactName": "${name}-${version}-${os}-${arch}.${ext}",
         "extraResources": [
             {
                 "from": "assets/bin/${platform}",

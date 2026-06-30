@@ -14,10 +14,14 @@ module.exports = function registerInformationIpc(mainWindow) {
         return auth.loadLoginStatus();
     });
 
+    ipcMain.handle('logout', () => {
+        auth.logout();
+        return { success: true };
+    });
+
     // 获取用户信息
     ipcMain.handle('getUserInfo', async () => {
         if (auth.loadLoginStatus()) {
-            const data = auth.load();
             await auth.updateTicket(); // 尝试更新票据
             const url = `https://api.bilibili.com/x/web-interface/nav`;
             //const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || "";

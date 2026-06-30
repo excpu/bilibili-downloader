@@ -65,6 +65,16 @@ class Auth {
         this.save(data);
     }
 
+    logout() {
+        const data = this.load() || {};
+        data.loginStatus = false;
+        data.SESSDATA = '';
+        data.bili_jct = '';
+        data.ticket = '';
+        data.ticketExpiry = 0;
+        this.save(data);
+    }
+
     // 使用 Ticket 防止API被风控
     async updateTicket() {
         const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;

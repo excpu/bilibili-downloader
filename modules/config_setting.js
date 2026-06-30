@@ -7,6 +7,7 @@ const path = require('path');
 class Setting {
     constructor() {
         this.settingFilePath = path.join(app.getPath('userData'), 'config.json');
+        this.defaultDownloadPath = app.getPath('downloads');
         this.defaultData = {
             downloadInFolder: false,  // 是否在下载目录中创建子文件夹
             downloadEngine: "node", // 下载引擎，默认使用node got，也可以选择aria2
@@ -50,6 +51,23 @@ class Setting {
     getDownloadEngine() {
         const data = this.load();
         return data ? data.downloadEngine : this.defaultData.downloadEngine;
+    }
+
+    updateDownloadPath(downloadPath) {
+        const data = this.load() || {};
+        data.downloadPath = downloadPath;
+        this.save(data);
+    }
+
+    getDownloadPath() {
+        const data = this.load() || {};
+        const downloadPath = data.downloadPath;
+
+        if (!downloadPath || downloadPath === 'HomeDownloads') {
+            return this.defaultDownloadPath;
+        }
+
+        return downloadPath;
     }
 }
 

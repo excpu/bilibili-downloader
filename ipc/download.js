@@ -42,6 +42,11 @@ module.exports = function registerDownloadIpc(mainWindow) {
     ipcMain.handle('downloadTarget', async (event, payload) => {
         let { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
         title = sanitizePath(title);
+        const downloadDir = setting.getDownloadPath();
+
+        if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir, { recursive: true });
+        }
 
         const videoStream = await getUpToDateUrl(bvid, cid, audioIndex, videoIndex);
         if (!videoStream.success) {
@@ -49,17 +54,17 @@ module.exports = function registerDownloadIpc(mainWindow) {
             return { success: false, message: videoStream.message };
         }
 
-        const videoPath = path.join(app.getPath('downloads'), `${title}_video.m4s`);
-        const audioPath = path.join(app.getPath('downloads'), `${title}_audio.m4s`);
-        const outputPath = path.join(app.getPath('downloads'), `${title}.mp4`);
-        let m4aOutputPath = path.join(app.getPath('downloads'), `${title}.m4a`);
+        const videoPath = path.join(downloadDir, `${title}_video.m4s`);
+        const audioPath = path.join(downloadDir, `${title}_audio.m4s`);
+        const outputPath = path.join(downloadDir, `${title}.mp4`);
+        let m4aOutputPath = path.join(downloadDir, `${title}.m4a`);
 
         if (audioIndex == 30251) {
-            m4aOutputPath = path.join(app.getPath('downloads'), `${title}.flac`);
+            m4aOutputPath = path.join(downloadDir, `${title}.flac`);
         }
 
         if (audioIndex == 30250) {
-            m4aOutputPath = path.join(app.getPath('downloads'), `${title}.mkv`);
+            m4aOutputPath = path.join(downloadDir, `${title}.mkv`);
         }
 
 

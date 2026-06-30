@@ -153,14 +153,31 @@ window.electronAPI.invoke('loginStatus').then((status) => {
 
 
 let globalUserInfo = null;
+function renderLoggedIn(userInfo) {
+    globalUserInfo = userInfo;
+    globalLoginStatus = true;
+    $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
+}
+
+function renderLoggedOut() {
+    globalUserInfo = null;
+    globalLoginStatus = false;
+    $avatar.textContent = '登录';
+}
+
+window.syncLoginState = {
+    loggedIn: renderLoggedIn,
+    loggedOut: renderLoggedOut,
+};
+
 // 若登录，获取用户信息
 function fetchUserInfo() {
     window.electronAPI.invoke('getUserInfo').then((userInfo) => {
         //console.log('用户信息:', userInfo);
         if (userInfo.data.isLogin) {
-            globalUserInfo = userInfo;
-            globalLoginStatus = true;
-            $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
+            renderLoggedIn(userInfo);
+        } else {
+            renderLoggedOut();
         }
     });
 }

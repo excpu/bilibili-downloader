@@ -43,7 +43,7 @@ class SpeedSmoother {
 const speedSm = new SpeedSmoother(0.1);
 
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
-    console.log('进度来了：', data);
+    //console.log('进度来了：', data);
     // { percent: 30, speed: 123456, name: 'xxx' }
     // 添加容错：检查对应的DOM元素是否存在
     const progressEl = document.getElementById(`progress-${data.currentUid}`);

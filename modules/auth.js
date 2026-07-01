@@ -2,10 +2,18 @@ const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { getBiliTicket } = require('./bilibili_ticket');
+const { refreshBuvidCredentials } = require('./buvid3_4_nut');
+
+const BUVID_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isValidCookieValue(value) {
+    return value !== '' && value !== undefined && value !== 'undefined';
+}
 
 class Auth {
     constructor() {
         this.authFilePath = path.join(app.getPath('userData'), 'auth.dat');
+        this._buvidRefreshPromise = null;
     }
 
     load() {
@@ -24,6 +32,7 @@ class Auth {
                     buvid3: '',
                     buvid4: '',
                     b_nut: '',
+                    buvidRefreshAt: 0,
                     ticketExpiry: Date.now()
                 };
                 this.save(emptyData);
@@ -63,6 +72,74 @@ class Auth {
         data.bili_jct = bili_jct;
         data.loginStatus = true;
         this.save(data);
+    }
+
+    hasFreshBuvid(data) {
+        const refreshAt = Number(data?.buvidRefreshAt || 0);
+        const now = Date.now();
+
+        return (
+            isValidCookieValue(data?.buvid3)
+            && isValidCookieValue(data?.buvid4)
+            && isValidCookieValue(data?.b_nut)
+            && refreshAt > 0
+            && now - refreshAt < BUVID_REFRESH_INTERVAL_MS
+        );
+    }
+
+    async ensureBuvidCredentials(force = false) {
+        const current = this.load() || {};
+        if (!force && this.hasFreshBuvid(current)) {
+            return current;
+        }
+
+        if (this._buvidRefreshPromise) {
+            return this._buvidRefreshPromise;
+        }
+
+        this._buvidRefreshPromise = (async () => {
+            try {
+                const refreshed = await refreshBuvidCredentials();
+                const latest = this.load() || {};
+
+                const buvid3 = refreshed.buvid3 || latest.buvid3 || '';
+                const buvid4 = refreshed.buvid4 || latest.buvid4 || '';
+                const bNut = refreshed.b_nut || latest.b_nut || '';
+
+                const shouldSave = buvid3 !== latest.buvid3 || buvid4 !== latest.buvid4 || bNut !== latest.b_nut;
+                if (shouldSave || !latest.buvidRefreshAt) {
+                    latest.buvid3 = buvid3;
+                    latest.buvid4 = buvid4;
+                    latest.b_nut = bNut;
+                    latest.buvidRefreshAt = Date.now();
+                    this.save(latest);
+                }
+
+                return latest;
+            } catch (error) {
+                console.error('Refresh buvid3/buvid4/b_nut failed:', error.message);
+                return this.load() || {};
+            } finally {
+                this._buvidRefreshPromise = null;
+            }
+        })();
+
+        return this._buvidRefreshPromise;
+    }
+
+    refreshBuvidInBackground() {
+        if (this._buvidRefreshPromise) {
+            return;
+        }
+
+        const current = this.load() || {};
+        if (this.hasFreshBuvid(current)) {
+            return;
+        }
+
+        this.ensureBuvidCredentials().catch((error) => {
+            console.error('Background buvid refresh failed:', error.message);
+        });
     }
 
     logout() {
@@ -116,14 +193,28 @@ class Auth {
     // 获取构造好的Cookie字符串
     getConstructedCookie() {
         const data = this.load();
-        // 构造Cookie字符串，优先包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
-        if (data.buvid3 !== '' && data.buvid4 !== '' && data.b_nut !== '' && data.buvid3 !== undefined && data.buvid4 !== undefined && data.b_nut !== undefined && data.buvid3 !== "undefined" && data.buvid4 !== "undefined" && data.b_nut !== "undefined") {
-            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}; buvid3=${data.buvid3}; buvid4=${data.buvid4}; b_nut=${data.b_nut}` || '';
-        } else if (data.ticket !== '' && data.ticket !== undefined && data.ticket !== "undefined") {
-            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}; bili_ticket=${data.ticket}` || '';
-        } else {
-            return `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct}` || '';
+        this.refreshBuvidInBackground();
+
+        const cookieParts = [];
+        if (isValidCookieValue(data.SESSDATA)) {
+            cookieParts.push(`SESSDATA=${data.SESSDATA}`);
         }
+        if (isValidCookieValue(data.bili_jct)) {
+            cookieParts.push(`bili_jct=${data.bili_jct}`);
+        }
+        if (isValidCookieValue(data.ticket)) {
+            cookieParts.push(`bili_ticket=${data.ticket}`);
+        }
+
+        // buvid3 / buvid4 / b_nut 需要成组携带，避免发送不完整 cookie 组合。
+        if (isValidCookieValue(data.buvid3) && isValidCookieValue(data.buvid4) && isValidCookieValue(data.b_nut)) {
+            cookieParts.push(`buvid3=${data.buvid3}`);
+            cookieParts.push(`buvid4=${data.buvid4}`);
+            cookieParts.push(`b_nut=${data.b_nut}`);
+        }
+
+        //console.log('请求拼接:', cookieParts.join('; '));
+        return cookieParts.join('; ');
     }
 }
 

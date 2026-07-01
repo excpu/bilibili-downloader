@@ -75,6 +75,8 @@ function selectInfo() {
             const option = document.createElement("option");
 
             option.value = i;
+            option.dataset.qualityId = String(dash.video[i].id);
+            option.dataset.codec = (dash.video[i].codecs || '').split(".")[0] || '';
 
             const id = qualityIndex[dash.video[i].id] || dash.video[i].id;
             const codec =
@@ -97,6 +99,8 @@ function selectInfo() {
             const option = document.createElement("option");
 
             option.value = audio.id;
+            option.dataset.qualityId = String(audio.id);
+            option.dataset.codec = (audio.codecs || '').split(".")[0] || '';
 
             const label = audioIndex[audio.id] || audio.id;
             const codec = audio.codecs.split(".")[0].toUpperCase();
@@ -117,6 +121,8 @@ function selectInfo() {
             const option = document.createElement("option");
 
             option.value = dash.flac.audio.id;
+            option.dataset.qualityId = String(dash.flac.audio.id);
+            option.dataset.codec = (dash.flac.audio.codecs || '').split(".")[0] || '';
             option.textContent = "FLAC  无损";
 
             $qualitySelectAudio.appendChild(option);
@@ -127,6 +133,8 @@ function selectInfo() {
             const option = document.createElement("option");
 
             option.value = dash.dolby.audio[0].id;
+            option.dataset.qualityId = String(dash.dolby.audio[0].id);
+            option.dataset.codec = (dash.dolby.audio[0].codecs || '').split(".")[0] || '';
             option.textContent = "杜比全景声";
 
             $qualitySelectAudio.appendChild(option);
@@ -142,6 +150,8 @@ function selectInfo() {
         // 插入选择不下载视频的选项
         const noVideoOption = document.createElement("option");
         noVideoOption.value = "-1";
+        noVideoOption.dataset.qualityId = "-1";
+        noVideoOption.dataset.codec = "";
         noVideoOption.textContent = "无视频";
         $qualitySelect.appendChild(noVideoOption);
     }

@@ -80,7 +80,7 @@ let taskQuene = [];
 let globalTaskLock = false;
 
 // taskQuene 子项格式
-//{uid,bvid,cid,title,videoIndex,audioIndex}
+//{uid,bvid,cid,title,videoIndex,audioIndex,videoQualityId,videoCodec,audioQualityId,audioCodec}
 
 function manageDownloadStart() {
     if (!currentVideoIdentity) {
@@ -89,8 +89,16 @@ function manageDownloadStart() {
     }
     const $qualitySelect = document.getElementById('qualitySelect');
     const videoIndex = parseInt($qualitySelect.value);
+    const videoOption = $qualitySelect.options[$qualitySelect.selectedIndex];
+    // 记录用户选择的“清晰度ID + 编码”，供主进程执行回退匹配。
+    const videoQualityId = videoOption ? parseInt(videoOption.dataset.qualityId || '-1') : -1;
+    const videoCodec = videoOption ? (videoOption.dataset.codec || '') : '';
     const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
     const audioIndex = parseInt($qualitySelectAudio.value);
+    const audioOption = $qualitySelectAudio.options[$qualitySelectAudio.selectedIndex];
+    // 音频同理：避免不同视频返回的可用流不一致时直接失败。
+    const audioQualityId = audioOption ? parseInt(audioOption.dataset.qualityId || String(audioIndex)) : audioIndex;
+    const audioCodec = audioOption ? (audioOption.dataset.codec || '') : '';
     currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
     currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
@@ -126,6 +134,10 @@ function manageDownloadStart() {
                 title: taskTitle,
                 videoIndex,
                 audioIndex,
+                videoQualityId,
+                videoCodec,
+                audioQualityId,
+                audioCodec,
                 danmu: currentVideoIdentity.danmu,
                 cover: currentVideoIdentity.cover,
                 coverUrl: partInfo.coverUrl || currentVideoIdentity.coverUrl,
@@ -143,6 +155,10 @@ function manageDownloadStart() {
             title: currentVideoIdentity.title,
             videoIndex,
             audioIndex,
+            videoQualityId,
+            videoCodec,
+            audioQualityId,
+            audioCodec,
             danmu: currentVideoIdentity.danmu,
             cover: currentVideoIdentity.cover,
             coverUrl: currentVideoIdentity.coverUrl,
@@ -154,6 +170,7 @@ function manageDownloadStart() {
     taskManager();
 }
 
+// DOM 插入HTML元素，显示下载任务
 function displayTasks(newTask) {
     const $taskItem = document.createElement("div");
     $taskItem.className = "task";

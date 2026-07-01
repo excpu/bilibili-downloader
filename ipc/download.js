@@ -40,7 +40,18 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
 module.exports = function registerDownloadIpc(mainWindow) {
     // 添加下载任务 (新增支持多视频并发)
     ipcMain.handle('downloadTarget', async (event, payload) => {
-        let { uid, bvid, cid, title, audioIndex, videoIndex } = payload;
+        let {
+            uid,
+            bvid,
+            cid,
+            title,
+            audioIndex,
+            videoIndex,
+            audioQualityId,
+            audioCodec,
+            videoQualityId,
+            videoCodec
+        } = payload;
         title = sanitizePath(title);
         const downloadDir = setting.getDownloadPath();
 
@@ -48,7 +59,14 @@ module.exports = function registerDownloadIpc(mainWindow) {
             fs.mkdirSync(downloadDir, { recursive: true });
         }
 
-        const videoStream = await getUpToDateUrl(bvid, cid, audioIndex, videoIndex);
+        const videoStream = await getUpToDateUrl(bvid, cid, {
+            audioIndex,
+            videoIndex,
+            audioQualityId,
+            audioCodec,
+            videoQualityId,
+            videoCodec
+        });
         if (!videoStream.success) {
             console.error(`❌ [${title}] 获取视频流失败: ${videoStream.message}`);
             return { success: false, message: videoStream.message };
@@ -59,11 +77,11 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const outputPath = path.join(downloadDir, `${title}.mp4`);
         let m4aOutputPath = path.join(downloadDir, `${title}.m4a`);
 
-        if (audioIndex == 30251) {
+        if (videoStream.selectedAudioId == 30251) {
             m4aOutputPath = path.join(downloadDir, `${title}.flac`);
         }
 
-        if (audioIndex == 30250) {
+        if (videoStream.selectedAudioId == 30250) {
             m4aOutputPath = path.join(downloadDir, `${title}.mkv`);
         }
 
@@ -220,7 +238,90 @@ module.exports = function registerDownloadIpc(mainWindow) {
         return { success: true };
     });
 
-    async function getUpToDateUrl(bvid, cid, audioIndex, videoIndex) {
+    function getCodecPrefix(codecs) {
+        return String(codecs || '').split('.')[0].toLowerCase();
+    }
+
+    // 视频选择策略：优先同清晰度同编码；其次同清晰度其他编码；最后按清晰度降档兜底。
+    function pickVideoStream(videoList, preferredQualityId, preferredCodec) {
+        const normalizedCodec = String(preferredCodec || '').toLowerCase();
+        const targetQuality = parseInt(preferredQualityId);
+
+        if (!Array.isArray(videoList) || videoList.length === 0) return null;
+
+        if (Number.isFinite(targetQuality)) {
+            if (normalizedCodec) {
+                const exactMatch = videoList.find(item =>
+                    parseInt(item.id) === targetQuality && getCodecPrefix(item.codecs) === normalizedCodec
+                );
+                if (exactMatch) return exactMatch;
+            }
+
+            const sameQualityAnyCodec = videoList.find(item => parseInt(item.id) === targetQuality);
+            if (sameQualityAnyCodec) return sameQualityAnyCodec;
+
+            const lowerQualityList = videoList
+                .filter(item => parseInt(item.id) < targetQuality)
+                .sort((a, b) => parseInt(b.id) - parseInt(a.id));
+
+            if (normalizedCodec) {
+                const lowerQualityCodecMatch = lowerQualityList.find(item => getCodecPrefix(item.codecs) === normalizedCodec);
+                if (lowerQualityCodecMatch) return lowerQualityCodecMatch;
+            }
+
+            if (lowerQualityList.length > 0) return lowerQualityList[0];
+        }
+
+        return videoList.slice().sort((a, b) => parseInt(b.id) - parseInt(a.id))[0] || null;
+    }
+
+    function getAudioQualityScore(audioId) {
+        const scoreMap = {
+            30251: 5100, // FLAC
+            30250: 5000, // Dolby
+            30280: 2800,
+            30232: 2320,
+            30216: 2160,
+        };
+        const id = parseInt(audioId);
+        return scoreMap[id] || id;
+    }
+
+    // 音频选择策略与视频一致，但使用质量分值做“降档”排序以兼容 FLAC / Dolby。
+    function pickAudioStream(audioList, preferredQualityId, preferredCodec) {
+        const normalizedCodec = String(preferredCodec || '').toLowerCase();
+        const targetQuality = parseInt(preferredQualityId);
+
+        if (!Array.isArray(audioList) || audioList.length === 0) return null;
+
+        if (Number.isFinite(targetQuality)) {
+            if (normalizedCodec) {
+                const exactMatch = audioList.find(item =>
+                    parseInt(item.id) === targetQuality && getCodecPrefix(item.codecs) === normalizedCodec
+                );
+                if (exactMatch) return exactMatch;
+            }
+
+            const sameQualityAnyCodec = audioList.find(item => parseInt(item.id) === targetQuality);
+            if (sameQualityAnyCodec) return sameQualityAnyCodec;
+
+            const targetScore = getAudioQualityScore(targetQuality);
+            const lowerQualityList = audioList
+                .filter(item => getAudioQualityScore(item.id) < targetScore)
+                .sort((a, b) => getAudioQualityScore(b.id) - getAudioQualityScore(a.id));
+
+            if (normalizedCodec) {
+                const lowerQualityCodecMatch = lowerQualityList.find(item => getCodecPrefix(item.codecs) === normalizedCodec);
+                if (lowerQualityCodecMatch) return lowerQualityCodecMatch;
+            }
+
+            if (lowerQualityList.length > 0) return lowerQualityList[0];
+        }
+
+        return audioList.slice().sort((a, b) => getAudioQualityScore(b.id) - getAudioQualityScore(a.id))[0] || null;
+    }
+
+    async function getUpToDateUrl(bvid, cid, options = {}) {
         try {
             const wbiKeys = await getWbiKeys();
             const params = {
@@ -257,22 +358,67 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 return { success: false, message: json.message || '获取视频流信息失败' };
             }
 
-            let audioUrl = "";
-            if (parseInt(audioIndex) === 30251) {
-                // flac 无损音频
-                audioUrl = json.data.dash.flac.audio.baseUrl;
-            } else if (parseInt(audioIndex) === 30250) {
-                // dolby 杜比全景声
-                audioUrl = json.data.dash.dolby.audio[0].baseUrl;
-            } else {
-                const audioObj = json.data.dash.audio.find(i => parseInt(i.id) === parseInt(audioIndex));
-                audioUrl = audioObj ? audioObj.baseUrl : json.data.dash.audio[0].baseUrl;
+            const dash = json?.data?.dash;
+            if (!dash || !Array.isArray(dash.video) || !Array.isArray(dash.audio)) {
+                return { success: false, message: '未找到可下载的 DASH 资源' };
+            }
+
+            const parsedVideoIndex = parseInt(options.videoIndex);
+            const parsedAudioIndex = parseInt(options.audioIndex);
+
+            let preferredVideoQualityId = parseInt(options.videoQualityId);
+            let preferredVideoCodec = String(options.videoCodec || '').toLowerCase();
+
+            if (!Number.isFinite(preferredVideoQualityId) && Number.isInteger(parsedVideoIndex) && parsedVideoIndex >= 0 && parsedVideoIndex < dash.video.length) {
+                preferredVideoQualityId = parseInt(dash.video[parsedVideoIndex].id);
+                if (!preferredVideoCodec) {
+                    preferredVideoCodec = getCodecPrefix(dash.video[parsedVideoIndex].codecs);
+                }
+            }
+
+            let selectedVideo = null;
+            if (parsedVideoIndex !== -1) {
+                selectedVideo = pickVideoStream(dash.video, preferredVideoQualityId, preferredVideoCodec);
+                if (!selectedVideo || !selectedVideo.baseUrl) {
+                    return { success: false, message: '未找到可用视频流（已尝试同清晰度与降档）' };
+                }
+            }
+
+            // 音频候选合并有损/无损/杜比，后续统一按同档与降档规则选择。
+            const audioCandidates = Array.isArray(dash.audio) ? [...dash.audio] : [];
+            if (dash.flac && dash.flac.audio) {
+                audioCandidates.push(dash.flac.audio);
+            }
+            if (dash.dolby && Array.isArray(dash.dolby.audio) && dash.dolby.audio.length > 0) {
+                audioCandidates.push(dash.dolby.audio[0]);
+            }
+
+            let preferredAudioQualityId = parseInt(options.audioQualityId);
+            let preferredAudioCodec = String(options.audioCodec || '').toLowerCase();
+
+            if (!Number.isFinite(preferredAudioQualityId)) {
+                preferredAudioQualityId = parsedAudioIndex;
+            }
+            if (!preferredAudioCodec) {
+                const oldMatched = audioCandidates.find(item => parseInt(item.id) === parsedAudioIndex);
+                if (oldMatched) {
+                    preferredAudioCodec = getCodecPrefix(oldMatched.codecs);
+                }
+            }
+
+            const selectedAudio = pickAudioStream(audioCandidates, preferredAudioQualityId, preferredAudioCodec);
+            if (!selectedAudio || !selectedAudio.baseUrl) {
+                return { success: false, message: '未找到可用音频流（已尝试同音质与降档）' };
             }
 
             return {
                 success: true,
-                videoUrl: parseInt(videoIndex) === -1 ? null : json.data.dash.video[parseInt(videoIndex)].baseUrl,
-                audioUrl
+                videoUrl: parsedVideoIndex === -1 ? null : selectedVideo.baseUrl,
+                audioUrl: selectedAudio.baseUrl,
+                selectedVideoId: selectedVideo ? parseInt(selectedVideo.id) : -1,
+                selectedAudioId: parseInt(selectedAudio.id),
+                selectedVideoCodec: selectedVideo ? getCodecPrefix(selectedVideo.codecs) : '',
+                selectedAudioCodec: getCodecPrefix(selectedAudio.codecs)
             };
         } catch (error) {
             return { success: false, message: '发生错误: ' + error.message };

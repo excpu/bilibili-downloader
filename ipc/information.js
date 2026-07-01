@@ -22,6 +22,7 @@ module.exports = function registerInformationIpc(mainWindow) {
     // 获取用户信息
     ipcMain.handle('getUserInfo', async () => {
         if (auth.loadLoginStatus()) {
+            await auth.ensureBuvidCredentials();
             await auth.updateTicket(); // 尝试更新票据
             const url = `https://api.bilibili.com/x/web-interface/nav`;
             //const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || "";
@@ -123,6 +124,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 const sessdata = cookieData['SESSDATA'] || '';
                 const biliJct = cookieData['bili_jct'] || '';
                 auth.updateLoginInfo(sessdata, biliJct);
+                await auth.ensureBuvidCredentials(true);
                 auth.updateTicket(); // 更新票据
                 return { success: true };
             } else if (json.data.code === 86038) {
@@ -138,6 +140,7 @@ module.exports = function registerInformationIpc(mainWindow) {
     // 获取视频信息
     ipcMain.handle('getVideoInfo', async (event, bvid) => {
         try {
+            await auth.ensureBuvidCredentials();
             const wbiKeys = await getWbiKeys();
             const params = {
                 bvid: bvid
@@ -169,6 +172,7 @@ module.exports = function registerInformationIpc(mainWindow) {
     // 获取视频流以及分辨率编码信息
     ipcMain.handle('getVideoStreams', async (event, payload) => {
         try {
+            await auth.ensureBuvidCredentials();
             const { bvid, cid } = payload;
             const wbiKeys = await getWbiKeys(); // 获取最新的 wbiKeys
             const params = {
@@ -211,6 +215,7 @@ module.exports = function registerInformationIpc(mainWindow) {
     // 获取合集信息
     ipcMain.handle('searchCollection', async (event, ugc_season_id, mid, ep_count) => {
         try {
+            await auth.ensureBuvidCredentials();
             if (ugc_season_id === undefined || ugc_season_id === null || mid === undefined || mid === null) {
                 return { success: false, message: '合集参数缺失：ugc_season_id 或 mid 为空' };
             }

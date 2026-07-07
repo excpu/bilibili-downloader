@@ -69,7 +69,7 @@
                     </div>
                     <div class="quality-selection">
                         <input type="checkbox" id="downloadDanmuCheckbox">
-                        <label class="clickable" onclick="independentDownload.downloadDanmu()">下载弹幕</label>
+                        <label class="clickable" id="downloadDanmuLabel" onclick="independentDownload.downloadDanmu()">下载弹幕</label>
                         <input type="checkbox" id="downloadCoverCheckbox">
                         <label class="clickable" onclick="independentDownload.downloadCover()">下载封面</label>
                     </div>
@@ -159,6 +159,13 @@
                                 <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..." readonly />
                                 <button class="btn small" id="selectDownloadPathBtn">浏览</button>
                             </div>
+                        </div>
+                        <div class="setting-item">
+                            <label for="danmuDownloadMethodSelect">弹幕下载方式：</label>
+                            <select id="danmuDownloadMethodSelect" class="setting-select">
+                                <option value="traditional">传统接口</option>
+                                <option value="protobuf">protobuf 接口</option>
+                            </select>
                         </div>
                     </div>
 

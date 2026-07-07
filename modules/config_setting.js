@@ -12,6 +12,7 @@ class Setting {
             downloadInFolder: false,  // 是否在下载目录中创建子文件夹
             downloadEngine: "node", // 下载引擎，默认使用node got，也可以选择aria2
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
+            danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
         };
     }
 
@@ -51,6 +52,17 @@ class Setting {
     getDownloadEngine() {
         const data = this.load();
         return data ? data.downloadEngine : this.defaultData.downloadEngine;
+    }
+
+    updateDanmuDownloadMethod(method) {
+        const data = this.load() || {};
+        data.danmuDownloadMethod = method;
+        this.save(data);
+    }
+
+    getDanmuDownloadMethod() {
+        const data = this.load();
+        return data ? data.danmuDownloadMethod : this.defaultData.danmuDownloadMethod;
     }
 
     updateDownloadPath(downloadPath) {

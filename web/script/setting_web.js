@@ -3,6 +3,7 @@ function createSettingWeb() {
     const settingModelCloseBtn = document.getElementById('settingModelCloseBtn');
     const $saveSettingBtn = document.getElementById('saveSettingBtn');
     const $downloadEngineSelect = document.getElementById('downloadEngineSelect');
+    const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
     
@@ -12,6 +13,7 @@ function createSettingWeb() {
         showAvatar(globalUserInfo ? globalUserInfo.data.face : 'https://static.hdslb.com/images/akari.jpg');
         await loadDownloadPath();
         await loadDownloadEngine();
+        await loadDanmuDownloadMethod();
     }
 
     function closeSetting() {
@@ -35,6 +37,13 @@ function createSettingWeb() {
         }
     }
 
+    async function loadDanmuDownloadMethod() {
+        const danmuDownloadMethod = await window.electronAPI.invoke('getDanmuDownloadMethod');
+        if (danmuDownloadMethod && $danmuDownloadMethodSelect) {
+            $danmuDownloadMethodSelect.value = danmuDownloadMethod;
+        }
+    }
+
     async function loadDownloadPath() {
         const downloadPath = await window.electronAPI.invoke('getDownloadPath');
         if (downloadPath && $downloadPathInput) {
@@ -54,6 +63,13 @@ function createSettingWeb() {
         const selectedEngine = event.target.value;
         window.electronAPI.invoke('setDownloadEngine', selectedEngine);
     });
+
+    if ($danmuDownloadMethodSelect) {
+        $danmuDownloadMethodSelect.addEventListener('change', (event) => {
+            const selectedMethod = event.target.value;
+            window.electronAPI.invoke('setDanmuDownloadMethod', selectedMethod);
+        });
+    }
 
     if ($selectDownloadPathBtn) {
         $selectDownloadPathBtn.addEventListener('click', selectDownloadPath);

@@ -132,6 +132,7 @@ function manageDownloadStart() {
                 bvid: taskBvid,
                 cid: taskCid,
                 title: taskTitle,
+                duration: currentVideoIdentity.duration,
                 videoIndex,
                 audioIndex,
                 videoQualityId,
@@ -153,6 +154,7 @@ function manageDownloadStart() {
             bvid: currentVideoIdentity.bvid,
             cid: currentVideoIdentity.cid,
             title: currentVideoIdentity.title,
+            duration: currentVideoIdentity.duration,
             videoIndex,
             audioIndex,
             videoQualityId,
@@ -222,9 +224,9 @@ function displayTasks(newTask) {
 
 
 // Call弹幕下载
-async function downloadDanmu(cid, title, danmu, uid) {
+async function downloadDanmu(cid, title, duration, danmu, uid) {
     if (danmu) {
-        await window.electronAPI.invoke('downloadDanmu', { cid, title });
+        await window.electronAPI.invoke('downloadDanmu', { cid, title, duration });
         //document.getElementById(`status-${uid}`).innerText = "下载弹幕完成";
         console.log('弹幕下载完成');
     } else {
@@ -280,7 +282,7 @@ async function taskManager() {
     const result = await window.electronAPI.invoke('downloadTarget', currentTask);
     if (result.success) {
         // 下载成功
-        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.danmu, currentTask.uid);
+        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid);
         await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid);
     } else {
         alert(`下载 ${currentTask.title} 失败：${result.message}`);

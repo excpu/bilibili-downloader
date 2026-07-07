@@ -13,6 +13,14 @@ module.exports = function registerSettingIpc(mainWindow) {
         setting.updateDownloadEngine(engine);
     });
 
+    ipcMain.handle('getDanmuDownloadMethod', () => {
+        return setting.getDanmuDownloadMethod();
+    });
+
+    ipcMain.handle('setDanmuDownloadMethod', (event, method) => {
+        setting.updateDanmuDownloadMethod(method);
+    });
+
     ipcMain.handle('getDownloadPath', () => {
         return setting.getDownloadPath();
     });

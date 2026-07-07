@@ -26,6 +26,12 @@
     border: 1px solid #c0392b;
 }
 
+.notification-info {
+    background: #3498db;
+    color: white;
+    border: 1px solid #2c80b9;
+}
+
 .notification-hide {
     animation: slideUp 0.3s ease-out forwards;
 }

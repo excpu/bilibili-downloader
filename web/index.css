@@ -425,3 +425,9 @@ body {
     /* 下划线 */
     text-decoration: underline;
 }
+
+.clickable.is-busy {
+    pointer-events: none;
+    cursor: wait;
+    opacity: .55;
+}

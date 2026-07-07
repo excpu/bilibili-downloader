@@ -1,14 +1,37 @@
 // 用于不下载视频的情况下单独下载 弹幕和封面
 function createIndependentDownload() {
+    let isDownloadingDanmu = false;
+
+    function setDanmuDownloadLock(locked) {
+        isDownloadingDanmu = locked;
+
+        const danmuLabel = document.getElementById('downloadDanmuLabel');
+        if (danmuLabel) {
+            danmuLabel.classList.toggle('is-busy', locked);
+            danmuLabel.setAttribute('aria-disabled', locked ? 'true' : 'false');
+        }
+    }
+
     function downloadDanmu(videoEle = currentVideoIdentity) {
+        if (isDownloadingDanmu) {
+            return;
+        }
+
         if (!videoEle.cid) {
             model.showErrorMessage('无法下载弹幕：缺少视频信息');
             return;
         }
+
         const cid = videoEle.cid;
         const title = videoEle.title;
         const duration = videoEle.duration;
-        window.electronAPI.invoke('downloadDanmu', { cid, title, duration });
+
+        setDanmuDownloadLock(true);
+
+        window.electronAPI.invoke('downloadDanmu', { cid, title, duration })
+            .finally(() => {
+                setDanmuDownloadLock(false);
+            });
     }
     function downloadCover(videoEle = currentVideoIdentity) {
         if (!videoEle.coverUrl) {
@@ -29,7 +52,9 @@ const independentDownload = createIndependentDownload();
 
 // 处理弹幕或封面下载错误和成功的提示
 window.electronAPI.on('downloadDanmuProgress', (data) => {
-    if (data.status === 'error') {
+    if (data.status === 'info') {
+        model.showInfoMessage(data.message);
+    } else if (data.status === 'error') {
         model.showErrorMessage(`弹幕下载失败：${data.message}`);
     } else if (data.status === 'success') {
         model.showSuccessMessage('弹幕下载成功');

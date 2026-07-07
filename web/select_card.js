@@ -210,11 +210,20 @@ function selectInfo() {
 
     function collectionSearch(videoData) {
         const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        const season = videoData?.ugc_season;
+
+        if (!season) {
+            // 没有合集的视频不显示 搜索合集按钮
+            $searchCollectionBtn.classList.add('hidden');
+            $searchCollectionBtn.onclick = null;
+            return;
+        }
+
         $searchCollectionBtn.classList.remove('hidden');
         $searchCollectionBtn.onclick = async () => {
-            console.log('搜索合集', videoData.ugc_season.id);
-            console.log('合集用户', videoData.ugc_season.mid);
-            const seasondata = await window.electronAPI.invoke('searchCollection', videoData.ugc_season.id, videoData.ugc_season.mid, videoData.ugc_season.ep_count
+            console.log('搜索合集', season.id);
+            console.log('合集用户', season.mid);
+            const seasondata = await window.electronAPI.invoke('searchCollection', season.id, season.mid, season.ep_count
             );
             console.log('合集搜索结果:', seasondata);
 

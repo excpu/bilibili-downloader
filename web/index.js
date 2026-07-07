@@ -98,6 +98,7 @@ function getVideoInfo() {
 
 let currentVideoIdentity = null;
 
+// 处理合集数据
 window.addEventListener('season-data-loaded', (event) => {
     const detail = event.detail || {};
     const seasonData = detail.seasonData || {};

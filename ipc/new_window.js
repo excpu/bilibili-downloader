@@ -44,7 +44,8 @@ module.exports = function registerNewWindowIpc(mainWindow) {
         });
 
         const menu = Menu.buildFromTemplate(playerTemplate);
-        Menu.setApplicationMenu(menu);
+        Menu.setApplicationMenu(null);
+        playerWindow.setMenu(menu);
 
     });
 
@@ -73,6 +74,7 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             mergeWindow = null;
         });
 
+        mergeWindow.setMenu(null);
         Menu.setApplicationMenu(null); // 合并工具不需要菜单
 
     });

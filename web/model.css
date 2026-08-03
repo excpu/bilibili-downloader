@@ -1,4 +1,3 @@
-
 /* 通知消息 */
 .notification {
     position: fixed;
@@ -41,6 +40,7 @@
         opacity: 0;
         transform: translateX(-50%) translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateX(-50%) translateY(0);
@@ -52,6 +52,7 @@
         opacity: 1;
         transform: translateX(-50%) translateY(0);
     }
+
     to {
         opacity: 0;
         transform: translateX(-50%) translateY(-20px);
@@ -105,10 +106,47 @@
     overflow-y: auto;
 }
 
+/* 工具弹窗 */
+
+.tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+
+/* 工具元素 */
+.tool-slot {
+    border: 1px dashed var(--stroke);
+    border-radius: 12px;
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(0, 120, 255, 0.04), rgba(0, 120, 255, 0.01));
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.tool-slot-title {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.tool-slot-meta {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* 工具弹窗结束 */
+
+
 @keyframes fadeIn {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -119,6 +157,7 @@
         opacity: 0;
         transform: scale(0.9);
     }
+
     to {
         opacity: 1;
         transform: scale(1);

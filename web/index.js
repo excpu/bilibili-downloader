@@ -122,6 +122,7 @@ window.addEventListener('season-data-loaded', (event) => {
             bvid: item.bvid,
             aid: item.aid,
             cid: null,
+            duration: Number(item.duration) || 0,
             coverUrl: item.pic
         })),
         danmu: false,

@@ -132,7 +132,7 @@ function manageDownloadStart() {
                 bvid: taskBvid,
                 cid: taskCid,
                 title: taskTitle,
-                duration: currentVideoIdentity.duration,
+                duration: Number(partInfo.duration) || Number(currentVideoIdentity.duration) || 0,
                 videoIndex,
                 audioIndex,
                 videoQualityId,
@@ -276,6 +276,9 @@ async function taskManager() {
         }
 
         currentTask.cid = videoInfo.data.cid;
+        if (!currentTask.duration && videoInfo.data.duration) {
+            currentTask.duration = Number(videoInfo.data.duration) || 0;
+        }
         currentTask.needFetchCid = false;
     }
 

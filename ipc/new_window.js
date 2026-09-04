@@ -1,4 +1,4 @@
-const { ipcMain, app, BrowserWindow, Menu, shell } = require('electron');
+const { ipcMain, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 
 // 持有引用，防止重复打开
@@ -44,7 +44,6 @@ module.exports = function registerNewWindowIpc(mainWindow) {
         });
 
         const menu = Menu.buildFromTemplate(playerTemplate);
-        Menu.setApplicationMenu(null);
         playerWindow.setMenu(menu);
 
     });
@@ -75,7 +74,6 @@ module.exports = function registerNewWindowIpc(mainWindow) {
         });
 
         mergeWindow.setMenu(null);
-        Menu.setApplicationMenu(null); // 合并工具不需要菜单
 
     });
 }

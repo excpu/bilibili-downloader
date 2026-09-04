@@ -63,6 +63,7 @@ function selectInfo() {
         const codecIndex = {
             avc1: "H.264 AVC 编码",
             hev1: "H.265 HEVC 编码",
+            hvc1: "H.265 HEVC 编码",
             av01: "AV1 编码"
         };
         let bestAudio = 0;

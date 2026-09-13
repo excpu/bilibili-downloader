@@ -15,10 +15,23 @@ const aria2args = [
     '--rpc-listen-all=false',      // 仅允许本地访问 (安全)
     '--rpc-listen-port=6818',      // 端口 6818
     '--rpc-allow-origin-all',      // 允许跨域 (方便渲染进程调用)
-    '--max-connection-per-server=8', // 最大连接数
-    '--min-split-size=1M',
+    '--max-connection-per-server=32', // 最大连接数
+    '--split=32',
+    '--min-split-size=8M',
     '--quiet=true',                // 静默模式，减少日志输出
     '--continue=true',             // 断点续传
+    '--check-certificate=false',
+    // 额外速度配置
+    '--timeout=10',
+    '--connect-timeout=10',
+    '--max-tries=0',
+    '--retry-wait=10',
+    '--http-accept-gzip=true',
+    '--content-disposition-default-utf8=true',
+    // 磁盘配置
+    '--disk-cache=64M',
+    '--file-allocation=falloc',
+    '--no-file-allocation-limit=64M',
 ];
 const aria2BinaryPath = getAriaBinaryPath();
 const { spawn } = require('child_process');

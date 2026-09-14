@@ -34,17 +34,17 @@ const aria2args = [
     '--no-file-allocation-limit=64M',
 ];
 const aria2BinaryPath = getAriaBinaryPath();
-const { chmodSync } = require('fs');
+// const { chmodSync } = require('fs');
 const { spawn } = require('child_process');
 
-if (process.platform === 'darwin' || process.platform === 'linux') {
-    try {
-        chmodSync(aria2BinaryPath, 0o755);
-    } catch (err) {
-        // 即使 chmod 失败（比如只读文件系统或权限不足），也只打日志，不阻断后续执行
-        console.warn('[Aria2] 尝试赋予执行权限失败 (可能已具备权限或目录只读):', err.message);
-    }
-}
+// if (process.platform === 'darwin' || process.platform === 'linux') {
+//     try {
+//         chmodSync(aria2BinaryPath, 0o755);
+//     } catch (err) {
+//         // 即使 chmod 失败（比如只读文件系统或权限不足），也只打日志，不阻断后续执行
+//         console.warn('[Aria2] 尝试赋予执行权限失败 (可能已具备权限或目录只读):', err.message);
+//     }
+// }
 
 aria2Process = spawn(aria2BinaryPath, aria2args);
 

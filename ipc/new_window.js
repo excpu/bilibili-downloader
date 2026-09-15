@@ -29,10 +29,17 @@ module.exports = function registerNewWindowIpc(mainWindow) {
         }
 
         playerWindow = new BrowserWindow({
-            width: 800,
-            height: 600,
+            width: 900,
+            height: 640,
             icon: path.join(__dirname, '../assets/icon/player.png'),
+            titleBarStyle: 'hidden',
+            titleBarOverlay: {
+                color: '#00000000',
+                symbolColor: '#333333',
+                height: 48
+            },
             webPreferences: {
+                preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,
                 contextIsolation: true,
             },
@@ -43,9 +50,15 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             playerWindow = null;
         });
 
-        const menu = Menu.buildFromTemplate(playerTemplate);
-        playerWindow.setMenu(menu);
+        playerWindow.setMenu(null);
 
+    });
+
+    // 打开外部链接
+    ipcMain.handle('openExternalUrl', (event, url) => {
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            shell.openExternal(url);
+        }
     });
 
     // 打开缓存合并工具
@@ -61,6 +74,12 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             width: 924,
             height: 650,
             icon: path.join(__dirname, '../assets/icon/player.png'),
+            titleBarStyle: 'hidden',
+            titleBarOverlay: {
+                color: '#3c78d8',
+                symbolColor: '#ffffff',
+                height: 40
+            },
             webPreferences: {
                 preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,

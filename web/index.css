@@ -1,11 +1,11 @@
 :root {
-    --bg: #f9fafc;
+    --bg: #f8fafc;
     /* 浅色背景 */
     --panel: #ffffff;
     /* 面板底色 */
-    --muted: #555;
+    --muted: #64748b;
     /* 次级文字 */
-    --text: #222;
+    --text: #1e293b;
     /* 主文字 */
     --brand: #0078ff;
     /* 品牌色 */
@@ -14,25 +14,26 @@
     --ok: #27ae60;
     --warn: #f39c12;
     --err: #e74c3c;
-    --stroke: #ddd;
+    --stroke: rgba(0, 0, 0, 0.08);
     /* 边框色 */
-    --shadow: 0 5px 20px rgba(0, 0, 0, .1);
-    --radius: 10px;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    --radius: 12px;
 }
 
 * {
-    box-sizing: border-box
+    box-sizing: border-box;
 }
 
 html,
 body {
-    height: 100%
+    height: 100%;
 }
 
 body {
     margin: 0;
     font-family: system-ui, -apple-system, Segoe UI, Roboto, PingFang SC, Microsoft YaHei, sans-serif;
-    background: var(--bg);
+    background: radial-gradient(circle at 50% -120px, rgba(64, 160, 255, 0.08) 0%, transparent 480px), var(--bg);
+    background-attachment: fixed;
     color: var(--text);
     letter-spacing: .2px;
 }
@@ -44,42 +45,73 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    height: 52px;
+    padding: 0 160px 0 24px;
     border-bottom: 1px solid var(--stroke);
-    background: rgba(255, 255, 255, .9);
-    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    -webkit-app-region: drag;
+    user-select: none;
 }
 
 .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-weight: 700;
 }
 
 .brand-badge {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 8px;
     display: grid;
     place-items: center;
     background: linear-gradient(135deg, var(--brand), var(--brand-2));
     color: white;
     font-size: .85rem;
+    box-shadow: 0 2px 6px rgba(0, 120, 255, 0.25);
+}
+
+.brand-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.3px;
 }
 
 .status {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     color: var(--muted);
     font-size: .95rem;
 }
 
 .pill {
-    padding: 5px 10px;
+    padding: 6px 14px;
     border: 1px solid var(--stroke);
     border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    font-size: 0.88rem;
+    transition: all 0.2s ease;
+    -webkit-app-region: no-drag;
+}
+
+.pill.clickable {
+    cursor: pointer;
+}
+
+.pill.clickable:hover {
+    background: rgba(0, 120, 255, 0.08);
+    border-color: var(--brand-2);
+    color: var(--brand);
+}
+
+.clickable {
+    -webkit-app-region: no-drag;
 }
 
 .toolbar {
@@ -99,6 +131,13 @@ body {
     font-weight: 700;
     border: 1px solid var(--stroke);
     cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-app-region: no-drag;
+}
+
+.avatar:hover {
+    border-color: var(--brand-2);
+    transform: scale(1.05);
 }
 
 .avatar img {
@@ -116,7 +155,8 @@ body {
     padding: 10px 14px;
     border-radius: 8px;
     transition: .15s ease;
-    font-weight: 600
+    font-weight: 600;
+    -webkit-app-region: no-drag;
 }
 
 .btn:hover {
@@ -137,7 +177,7 @@ body {
 
 .container {
     max-width: 960px;
-    margin: 40px auto;
+    margin: 28px auto 40px;
     padding: 0 16px
 }
 

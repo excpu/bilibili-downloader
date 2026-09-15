@@ -65,6 +65,30 @@ function findMediaFiles(entryDir) {
     return { videoPath, audioPath, danmakuPath };
 }
 
+function findCoverFile(entryDir) {
+    function searchDir(currentPath) {
+        let items;
+        try {
+            items = fs.readdirSync(currentPath, { withFileTypes: true });
+        } catch (e) {
+            return null;
+        }
+
+        const cover = items.find(item => item.isFile() && item.name.toLowerCase() === 'cover.jpg');
+        if (cover) return path.join(currentPath, cover.name);
+
+        for (const item of items) {
+            if (item.isDirectory()) {
+                const coverPath = searchDir(path.join(currentPath, item.name));
+                if (coverPath) return coverPath;
+            }
+        }
+        return null;
+    }
+
+    return searchDir(entryDir);
+}
+
 // ================== 智能提取逻辑 ==================
 
 function extractNumberFromString(text) {
@@ -198,17 +222,56 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
     ffmpeg = ffmpeg.replace('app.asar', 'app.asar.unpacked');
 }
 
-function runFFmpeg(videoPath, audioPath, outputPath) {
+function parseTimeToSeconds(value) {
+    const match = /^(\d+):(\d+):(\d+(?:\.\d+)?)$/.exec(value);
+    if (!match) return null;
+
+    return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function runFFmpeg(videoPath, audioPath, outputPath, onProgress) {
     return new Promise((resolve, reject) => {
         // 如果环境变量或者根目录有特定 ffmpeg，你可以改这里，默认调系统环境变量
         const ffmpegCmd = ffmpeg;
-        const args = ['-y', '-i', videoPath, '-i', audioPath, '-c', 'copy', outputPath];
+        const args = [
+            '-y',
+            '-i', videoPath,
+            '-i', audioPath,
+            '-c', 'copy',
+            '-progress', 'pipe:2',
+            '-nostats',
+            outputPath
+        ];
 
         // windowsHide: true 对应 Python 版的 CREATE_NO_WINDOW
         const child = spawn(ffmpegCmd, args, { windowsHide: true });
 
         let errLog = '';
-        child.stderr.on('data', data => { errLog += data.toString(); });
+        // 打印日志并且获取进度
+        let stderrBuffer = '';
+        let durationSeconds = null;
+        child.stderr.on('data', data => {
+            const chunk = data.toString();
+            errLog += chunk;
+            stderrBuffer += chunk;
+
+            const lines = stderrBuffer.split(/\r?\n/);
+            stderrBuffer = lines.pop();
+
+            for (const line of lines) {
+                const durationMatch = /Duration:\s*(\d+:\d+:\d+(?:\.\d+)?)/.exec(line);
+                if (durationMatch) {
+                    durationSeconds = parseTimeToSeconds(durationMatch[1]);
+                    continue;
+                }
+
+                const progressMatch = /^out_time_us=(\d+)$/.exec(line);
+                if (progressMatch && durationSeconds && onProgress) {
+                    const elapsedSeconds = Number(progressMatch[1]) / 1000000;
+                    onProgress(Math.min(elapsedSeconds / durationSeconds, 0.999));
+                }
+            }
+        });
 
         child.on('close', code => {
             if (code === 0) resolve();
@@ -240,7 +303,7 @@ module.exports = function registerMergeIpc() {
     ipcMain.on('start-merge', async (event, config) => {
         const sendLog = (msg) => event.sender.send('log', msg);
 
-        const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku } = config;
+        const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku, copyCover } = config;
         sendLog("[INFO] 开始任务...");
 
         sendLog(`[INFO] 输入目录: ${inputDir}`);
@@ -259,6 +322,8 @@ module.exports = function registerMergeIpc() {
             event.sender.send('merge-done');
             return;
         }
+
+        event.sender.send('merge-progress', { current: 0, total: items.length });
 
         let prefixWidth = 0;
 
@@ -301,9 +366,11 @@ module.exports = function registerMergeIpc() {
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             sendLog(`\n[INFO] 处理配置文件: ${item.path}`);
+            event.sender.send('merge-progress', { current: i, total: items.length });
 
             const entryDir = path.dirname(item.path);
             const { videoPath, audioPath, danmakuPath } = findMediaFiles(entryDir);
+            const coverPath = copyCover ? findCoverFile(entryDir) : null;
 
             if (!videoPath || !fs.existsSync(videoPath)) {
                 sendLog(`[WARN] 未找到 video.m4s，跳过: ${entryDir}`);
@@ -342,14 +409,32 @@ module.exports = function registerMergeIpc() {
                 }
             }
 
+            if (copyCover && coverPath && fs.existsSync(coverPath)) {
+                const coverOutputPath = outputPath.replace(/\.mp4$/, '.jpg');
+                try {
+                    fs.copyFileSync(coverPath, coverOutputPath);
+                    sendLog(`[INFO] 已复制封面: -> ${coverOutputPath}`);
+                } catch (e) {
+                    sendLog(`[WARN] 复制封面失败: ${e.message}`);
+                }
+            } else if (copyCover) {
+                sendLog(`[WARN] 未找到 cover.jpg，跳过: ${entryDir}`);
+            }
+
             try {
-                await runFFmpeg(videoPath, audioPath, outputPath);
+                await runFFmpeg(videoPath, audioPath, outputPath, (progress) => {
+                    event.sender.send('merge-progress', {
+                        current: i + progress,
+                        total: items.length
+                    });
+                });
                 sendLog(`[OK] 合成成功: ${outputPath}`);
             } catch (err) {
                 sendLog(`[ERROR] ffmpeg 合成失败: ${err.message}`);
             }
         }
 
+        event.sender.send('merge-progress', { current: items.length, total: items.length });
         sendLog(`\n[INFO] 处理完成，共发现 ${items.length} 个 entry.json`);
         sendLog(`[INFO] 所有任务完成。`);
         event.sender.send('merge-done');

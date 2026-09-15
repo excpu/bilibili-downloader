@@ -15,21 +15,25 @@ html {
 /* 顶部蓝色标题栏 */
 .header {
     background-color: #3c78d8;
-    /* 与 Python 脚本和截图一致的蓝色 */
     color: white;
     text-align: center;
-    padding: 12px 0;
-    font-size: 18px;
+    height: 40px;
+    padding: 0 138px 0 16px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
     font-weight: bold;
     letter-spacing: 1px;
+    -webkit-app-region: drag;
 }
 
 /* 主容器：左右分栏布局 */
 .container {
     display: flex;
     padding: 15px;
-    height: calc(100vh - 46px);
-    /* 减去 header 的高度 */
+    height: calc(100vh - 40px);
     box-sizing: border-box;
     gap: 15px;
 }
@@ -82,6 +86,7 @@ legend {
     border: 1px solid #adadad;
     cursor: pointer;
     font-family: inherit;
+    -webkit-app-region: no-drag;
 }
 
 .input-group button:hover {
@@ -120,6 +125,7 @@ label input {
     font-size: 14px;
     cursor: pointer;
     margin-top: auto;
+    -webkit-app-region: no-drag;
     /* 自动推到底部 */
 }
 
@@ -130,6 +136,62 @@ label input {
 .primary-btn:disabled {
     background-color: #a0c0f0;
     cursor: not-allowed;
+}
+
+/* 总体进度条 */
+.progress-wrap {
+    margin-top: 10px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 16px;
+    background-color: #e1e1e1;
+    border: 1px solid #a0a0a0;
+    border-radius: 2px;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #3c78d8;
+    position: relative;
+    overflow: hidden;
+    transition: width 0.5s ease;
+}
+
+.progress-fill::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -80px;
+    width: 80px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+}
+
+.progress-fill.is-active::after {
+    /* --track-width 由 JS 按进度条实际像素宽度设置，保证扫光速度不随进度变宽而加快 */
+    animation: progress-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes progress-sweep {
+    from {
+        left: -80px;
+    }
+
+    to {
+        left: var(--track-width, 400px);
+    }
+}
+
+.progress-text {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #333;
+    text-align: center;
 }
 
 /* 运行日志标题与文本域 */

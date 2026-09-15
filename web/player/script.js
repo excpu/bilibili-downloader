@@ -4,6 +4,17 @@ const fileInput = document.getElementById('fileInput');
 const folderInput = document.getElementById('folderInput');
 const selectedInfo = document.getElementById('selectedInfo');
 const selectedPath = document.getElementById('selectedPath');
+const openWebPlayerBtn = document.getElementById('openWebPlayerBtn');
+
+if (openWebPlayerBtn) {
+    openWebPlayerBtn.addEventListener('click', () => {
+        if (window.electronAPI && window.electronAPI.invoke) {
+            window.electronAPI.invoke('openExternalUrl', 'https://tools.5share.site/xml-player/');
+        } else {
+            window.open('https://tools.5share.site/xml-player/', '_blank');
+        }
+    });
+}
 
 fileBtn.addEventListener('click', () => {
     fileInput.click();

@@ -48,6 +48,42 @@ function createModel() {
         enqueueNotification('error', '❌', message, second);
     }
 
+    // 观察页面中所有模态框的显示状态，动态同步 Windows 标题栏原生按钮遮罩状态
+    function setupModalTitleBarSync() {
+        if (!window.electronAPI || !window.electronAPI.invoke) return;
+
+        function updateOverlayState() {
+            const hasVisibleModal = !!document.querySelector('.model:not(.hidden)');
+            if (hasVisibleModal) {
+                window.electronAPI.invoke('setTitleBarOverlay', {
+                    color: '#00000000',
+                    symbolColor: '#ffffff'
+                }).catch(() => {});
+            } else {
+                window.electronAPI.invoke('setTitleBarOverlay', {
+                    color: '#00000000',
+                    symbolColor: '#333333'
+                }).catch(() => {});
+            }
+        }
+
+        const modals = document.querySelectorAll('.model');
+        if (modals.length > 0) {
+            const observer = new MutationObserver(() => {
+                updateOverlayState();
+            });
+            modals.forEach(m => {
+                observer.observe(m, { attributes: true, attributeFilter: ['class', 'style'] });
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupModalTitleBarSync);
+    } else {
+        setupModalTitleBarSync();
+    }
+
     return {
         showSuccessMessage,
         showInfoMessage,

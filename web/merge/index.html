@@ -7,7 +7,7 @@
 </head>
 <body>
 
-    <div class="header">Bilibili 本地缓存批量合并 / 重命名</div>
+    <div class="header">&nbsp;&nbsp;&nbsp;&nbsp;Bilibili 本地缓存批量合并 / 重命名</div>
 
     <div class="container">
         <div class="left-panel">
@@ -35,7 +35,7 @@
             </fieldset>
 
             <fieldset>
-                <legend>顺序 / 前缀 / 弹幕</legend>
+                <legend>顺序 / 前缀 / 附加文件</legend>
                 <p class="desc">
                     顺序：智能猜测 (page_data.page / page_data.part / title 中的集数)<br>
                     若无法判断则按时间与扫描顺序兜底。
@@ -48,9 +48,20 @@
                     <input type="checkbox" id="copyDanmaku"> 
                     同时复制弹幕 danmaku.xml，并重命名为与视频同名的 .xml
                 </label>
+                <label>
+                    <input type="checkbox" id="copyCover">
+                    同时复制封面 cover.jpg，并重命名为与视频同名的 .jpg
+                </label>
             </fieldset>
 
             <button id="startBtn" class="primary-btn">开始合并</button>
+
+            <div class="progress-wrap">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText" class="progress-text">0 / 0</div>
+            </div>
         </div>
 
         <div class="right-panel">

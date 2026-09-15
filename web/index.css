@@ -56,6 +56,16 @@ body {
     user-select: none;
 }
 
+html[data-platform="darwin"] .topbar {
+    padding-left: 88px;
+    padding-right: 24px;
+}
+
+html[data-platform="linux"] .topbar {
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
 .brand {
     display: flex;
     align-items: center;

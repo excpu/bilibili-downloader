@@ -76,13 +76,19 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
         height: 900,
+        minWidth: 730,
+        minHeight: 520,
         icon: path.join(__dirname, 'assets/icon/icon.png'),
-        titleBarStyle: 'hidden',
-        titleBarOverlay: {
-            color: '#00000000',
-            symbolColor: '#333333',
-            height: 52
-        },
+        ...(process.platform === 'linux' ? {} : {
+            titleBarStyle: 'hidden',
+            ...(process.platform === 'win32' ? {
+                titleBarOverlay: {
+                    color: '#00000000',
+                    symbolColor: '#333333',
+                    height: 52
+                }
+            } : {})
+        }),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

@@ -14,9 +14,9 @@ html {
 
 /* 顶部蓝色标题栏 */
 .header {
+    position: relative;
     background-color: #3c78d8;
     color: white;
-    text-align: center;
     height: 40px;
     padding: 0 138px 0 16px;
     box-sizing: border-box;
@@ -27,6 +27,24 @@ html {
     font-weight: bold;
     letter-spacing: 1px;
     -webkit-app-region: drag;
+}
+
+.header-title {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+}
+
+html[data-platform="darwin"] .header {
+    padding-left: 88px;
+    padding-right: 16px;
+}
+
+html[data-platform="linux"] .header {
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 /* 主容器：左右分栏布局 */

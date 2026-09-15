@@ -32,12 +32,16 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             width: 900,
             height: 640,
             icon: path.join(__dirname, '../assets/icon/player.png'),
-            titleBarStyle: 'hidden',
-            titleBarOverlay: {
-                color: '#00000000',
-                symbolColor: '#333333',
-                height: 48
-            },
+            ...(process.platform === 'linux' ? {} : {
+                titleBarStyle: 'hidden',
+                ...(process.platform === 'win32' ? {
+                    titleBarOverlay: {
+                        color: '#00000000',
+                        symbolColor: '#333333',
+                        height: 48
+                    }
+                } : {})
+            }),
             webPreferences: {
                 preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,
@@ -74,12 +78,16 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             width: 924,
             height: 650,
             icon: path.join(__dirname, '../assets/icon/player.png'),
-            titleBarStyle: 'hidden',
-            titleBarOverlay: {
-                color: '#3c78d8',
-                symbolColor: '#ffffff',
-                height: 40
-            },
+            ...(process.platform === 'linux' ? {} : {
+                titleBarStyle: 'hidden',
+                ...(process.platform === 'win32' ? {
+                    titleBarOverlay: {
+                        color: '#3c78d8',
+                        symbolColor: '#ffffff',
+                        height: 40
+                    }
+                } : {})
+            }),
             webPreferences: {
                 preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,

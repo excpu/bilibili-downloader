@@ -74,6 +74,7 @@ html[data-platform="linux"] .topbar {
 }
 
 .brand-badge {
+    position: relative;
     width: 30px;
     height: 30px;
     border-radius: 8px;
@@ -83,6 +84,28 @@ html[data-platform="linux"] .topbar {
     color: white;
     font-size: .85rem;
     box-shadow: 0 2px 6px rgba(0, 120, 255, 0.25);
+}
+
+/* 下载图标：箭头用 clip-path 一体绘制，避免旋转位移导致错位；托盘用弧形边框绘制 */
+.download-icon {
+    width: 12px;
+    height: 11px;
+    margin-top: -3px;
+    background: #fff;
+    clip-path: polygon(35% 0%, 65% 0%, 65% 45%, 100% 45%, 50% 100%, 0% 45%, 35% 45%);
+}
+
+.brand-badge::after {
+    content: "";
+    position: absolute;
+    left: 44.5%;
+    bottom: 6px;
+    width: 16px;
+    height: 6px;
+    margin-left: -8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
 }
 
 .brand-title {

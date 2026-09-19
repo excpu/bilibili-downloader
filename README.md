@@ -1,7 +1,7 @@
 # bilibili-downloader
 开箱即用的 BiliBili 下载器  
 本项目是一个基于 Node.js 和 Electron 构建的跨平台BiliBili下载工具，支持所有主流操作系统。
-![主界面展示](images/image.png)
+![主界面展示](images/image-4.png)
 
 ## 🔧 功能
 ### 已经实现功能
@@ -10,6 +10,7 @@
 * 弹幕下载
 * 封面下载
 * 合集下载
+* 多线程下载
 
 ### 开发中功能
 * 字幕下载
@@ -23,7 +24,7 @@
 
 ### Windows
 从 Release 中下载 bilibili.Setup.x.x.x.exe 后执行正常安装流程即可  
-Windows 已经经实验性支持 ARM64 共用同一个安装包，暂无设备测试
+Windows 已经经实验性支持 ARM64 暂无设备测试，可下载 arm 专用包
 
 ### Linux
 #### 从 Release 中下载支持的发行版包，目前支持：

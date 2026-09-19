@@ -14,6 +14,14 @@ module.exports = function registerSettingIpc(mainWindow) {
         setting.updateDownloadEngine(engine);
     });
 
+    ipcMain.handle('getAria2Concurrency', () => {
+        return setting.getAria2Concurrency();
+    });
+
+    ipcMain.handle('setAria2Concurrency', (event, concurrency) => {
+        setting.updateAria2Concurrency(concurrency);
+    });
+
     ipcMain.handle('getDanmuDownloadMethod', () => {
         return setting.getDanmuDownloadMethod();
     });

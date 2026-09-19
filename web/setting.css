@@ -59,6 +59,10 @@
     gap: 8px;
 }
 
+.setting-item[hidden] {
+    display: none;
+}
+
 .setting-item label {
     font-size: 13px;
     font-weight: 500;

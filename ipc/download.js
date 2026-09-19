@@ -144,7 +144,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 applyCdnHost(videoStream.audioUrl),
                 audioPath,
                 downloadHeaders,
-                (percent, speed) => notifyProgress(percent, speed, 'audio')
+                (percent, speed) => notifyProgress(percent, speed, 'audio'),
+                undefined,
+                setting.getAria2Concurrency()
             );
 
             if (audioOnly) {
@@ -191,7 +193,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     applyCdnHost(videoStream.videoUrl),
                     videoPath,
                     downloadHeaders,
-                    (percent, speed) => notifyProgress(percent, speed, 'video')
+                    (percent, speed) => notifyProgress(percent, speed, 'video'),
+                    undefined,
+                    setting.getAria2Concurrency()
                 );
 
                 // 合并音视频

@@ -3,6 +3,8 @@ function createSettingWeb() {
     const settingModelCloseBtn = document.getElementById('settingModelCloseBtn');
     const $saveSettingBtn = document.getElementById('saveSettingBtn');
     const $downloadEngineSelect = document.getElementById('downloadEngineSelect');
+    const $aria2ConcurrencySetting = document.getElementById('aria2ConcurrencySetting');
+    const $aria2ConcurrencySelect = document.getElementById('aria2ConcurrencySelect');
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
@@ -14,6 +16,7 @@ function createSettingWeb() {
         showAvatar(globalUserInfo ? globalUserInfo.data.face : 'https://static.hdslb.com/images/akari.jpg');
         await loadDownloadPath();
         await loadDownloadEngine();
+        await loadAria2Concurrency();
         await loadDanmuDownloadMethod();
         await loadCdnList();
     }
@@ -32,10 +35,24 @@ function createSettingWeb() {
         $avatarDisplay.src = avatarUrl;
     }
 
+    function updateAria2ConcurrencyVisibility() {
+        if ($aria2ConcurrencySetting && $downloadEngineSelect) {
+            $aria2ConcurrencySetting.hidden = $downloadEngineSelect.value !== 'aria2';
+        }
+    }
+
     async function loadDownloadEngine() {
         const downloadEngine = await window.electronAPI.invoke('getDownloadEngine');
         if (downloadEngine && $downloadEngineSelect) {
             $downloadEngineSelect.value = downloadEngine;
+        }
+        updateAria2ConcurrencyVisibility();
+    }
+
+    async function loadAria2Concurrency() {
+        const concurrency = await window.electronAPI.invoke('getAria2Concurrency');
+        if (concurrency && $aria2ConcurrencySelect) {
+            $aria2ConcurrencySelect.value = String(concurrency);
         }
     }
 
@@ -92,7 +109,14 @@ function createSettingWeb() {
     $downloadEngineSelect.addEventListener('change', (event) => {
         const selectedEngine = event.target.value;
         window.electronAPI.invoke('setDownloadEngine', selectedEngine);
+        updateAria2ConcurrencyVisibility();
     });
+
+    if ($aria2ConcurrencySelect) {
+        $aria2ConcurrencySelect.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setAria2Concurrency', event.target.value);
+        });
+    }
 
     if ($danmuDownloadMethodSelect) {
         $danmuDownloadMethodSelect.addEventListener('change', (event) => {

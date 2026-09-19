@@ -91,8 +91,8 @@ class Aria2Client {
         const aria2Options = {
             dir: options.dir || process.cwd(), // 【核心】自定义下载目录，默认当前运行目录
             header: headerArray,
-            split: '8',
-            'max-connection-per-server': '8'
+            split: String(options.concurrency || 8),
+            'max-connection-per-server': String(options.concurrency || 8)
         };
 
         // 【核心】如果传入了自定义文件名，则添加到参数中
@@ -165,9 +165,10 @@ class Aria2Client {
  * @param {Object} headers - HTTP 请求头
  * @param {Function} onProgress - 进度回调：onProgress(percentage, speedMBs)
  * @param {number} maxRetries - 最大重试次数（此参数保留以兼容 stream_download 接口，aria2 暂不使用）
+ * @param {number} concurrency - aria2 单任务并发连接数
  * @returns {Promise<void>}
  */
-async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRetries = 4) {
+async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRetries = 4, concurrency = 8) {
     const path = require('path');
     
     // 从 destPath 提取目录和文件名
@@ -185,7 +186,7 @@ async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRet
         await client.connect();
         
         // 调用下载，使用包装的 onProgress 回调
-        await client.download(url, { dir, out, headers }, (progress) => {
+        await client.download(url, { dir, out, headers, concurrency }, (progress) => {
             // 将 aria2 的进度格式转换为 stream_download 的格式
             // stream_download: onProgress(percentage, speedMBs)
             // aria2: onProgress({ percent, speed(B/s), ... })

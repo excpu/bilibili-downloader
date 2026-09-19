@@ -2,6 +2,8 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+const ARIA2_CONCURRENCY_VALUES = [2, 4, 8, 16, 32, 64];
+const DEFAULT_ARIA2_CONCURRENCY = 8;
 
 // 配置文件保存在appData目录中的 config.json 不加密，和认证文件分开
 class Setting {
@@ -14,6 +16,7 @@ class Setting {
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
+            aria2Concurrency: DEFAULT_ARIA2_CONCURRENCY,
         };
     }
 
@@ -53,6 +56,23 @@ class Setting {
     getDownloadEngine() {
         const data = this.load();
         return data ? data.downloadEngine : this.defaultData.downloadEngine;
+    }
+
+    updateAria2Concurrency(concurrency) {
+        const value = Number(concurrency);
+        const data = this.load() || {};
+        data.aria2Concurrency = ARIA2_CONCURRENCY_VALUES.includes(value)
+            ? value
+            : DEFAULT_ARIA2_CONCURRENCY;
+        this.save(data);
+    }
+
+    getAria2Concurrency() {
+        const data = this.load() || {};
+        const value = Number(data.aria2Concurrency);
+        return ARIA2_CONCURRENCY_VALUES.includes(value)
+            ? value
+            : DEFAULT_ARIA2_CONCURRENCY;
     }
 
     updateDanmuDownloadMethod(method) {

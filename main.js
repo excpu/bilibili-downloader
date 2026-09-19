@@ -15,8 +15,8 @@ const aria2args = [
     '--rpc-listen-all=false',      // 仅允许本地访问 (安全)
     '--rpc-listen-port=6818',      // 端口 6818
     '--rpc-allow-origin-all',      // 允许跨域 (方便渲染进程调用)
-    '--max-connection-per-server=32', // 最大连接数
-    '--split=32',
+    '--max-connection-per-server=8', // 最大连接数
+    '--split=8',
     '--min-split-size=8M',
     '--quiet=true',                // 静默模式，减少日志输出
     '--continue=true',             // 断点续传

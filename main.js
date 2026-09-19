@@ -1,8 +1,9 @@
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true"; // 禁用安全警告，开发阶段使用
 // main.js
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const registerIpc = require('./ipc');
+const { hasActiveDownloads } = require('./ipc/download');
 const { getAriaBinaryPath } = require('./modules/bin_path');
 
 // // 禁用 User-Agent Client Hints，防止部分请求被拒绝
@@ -73,6 +74,7 @@ if (aria2Process && aria2Process.pid) {
 app.commandLine.appendSwitch('log-level', '3') // 只输出错误日志，减少控制台噪音
 
 function createWindow() {
+    let allowClose = false;
     const win = new BrowserWindow({
         width: 1200,
         height: 900,
@@ -107,6 +109,28 @@ function createWindow() {
 
     // 注册 IPC 处理器
     registerIpc(win);
+
+    win.on('close', (event) => {
+        if (allowClose || !hasActiveDownloads()) {
+            return;
+        }
+
+        event.preventDefault();
+        const response = dialog.showMessageBoxSync(win, {
+            type: 'warning',
+            buttons: ['取消', '仍然关闭'],
+            defaultId: 0,
+            cancelId: 0,
+            title: '下载正在进行',
+            message: '当前有正在下载的任务',
+            detail: '现在关闭将中断下载，是否仍然关闭？'
+        });
+
+        if (response === 1) {
+            allowClose = true;
+            win.close();
+        }
+    });
 }
 
 app.whenReady().then(createWindow);

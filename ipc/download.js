@@ -11,6 +11,8 @@ const Setting = require("../modules/config_setting");
 const setting = new Setting();
 setting.load(); // 加载设置数据
 
+let activeDownloadCount = 0;
+
 // 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
 const getDownloadFunction = () => {
     const engine = setting.getDownloadEngine() || 'node';
@@ -136,6 +138,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         };
 
+        activeDownloadCount += 1;
         try {
             // 串行下载：等待音频下载完成后，再开始视频下载
             console.log(`⏳ [${title}] 开始下载音频...`);
@@ -247,6 +250,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             // 清理临时 m4s 文件
             if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
             if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+            activeDownloadCount -= 1;
         }
 
         // 通知该视频已经下载完成
@@ -444,3 +448,5 @@ module.exports = function registerDownloadIpc(mainWindow) {
         }
     }
 }
+
+module.exports.hasActiveDownloads = () => activeDownloadCount > 0;

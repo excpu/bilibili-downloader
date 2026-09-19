@@ -537,7 +537,8 @@ html[data-platform="linux"] .topbar {
 
 .single-selector {
     margin-top: 9px;
-    max-height: 100px;
+    /* max-height: 100px; */
+    height: calc(100% - 40px);
     overflow-y: scroll;
 }
 

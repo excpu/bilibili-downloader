@@ -1,51 +1,45 @@
 function createModel() {
-    // 通知队列：用于串行显示消息，避免短时间内多次触发导致重叠。
-    const notificationQueue = [];
-    let isProcessingQueue = false;
+    let notificationContainer;
 
-    // 入队并尝试启动消费流程。
-    function enqueueNotification(type, icon, message, second = 3000) {
-        notificationQueue.push({ type, icon, message, second });
-        processQueue();
-    }
-
-    // 依次消费队列；每次只显示一条，等它完全消失后再显示下一条。
-    function processQueue() {
-        if (isProcessingQueue || notificationQueue.length === 0) {
-            return;
+    function getNotificationContainer() {
+        if (!notificationContainer) {
+            notificationContainer = document.createElement('div');
+            notificationContainer.className = 'notification-container';
+            document.body.appendChild(notificationContainer);
         }
 
-        isProcessingQueue = true;
-        const { type, icon, message, second } = notificationQueue.shift();
+        return notificationContainer;
+    }
+
+    // 每条通知独立显示与关闭，按触发顺序纵向排列。
+    function showNotification(type, icon, message, second = 3000) {
         const messageElement = document.createElement('div');
         messageElement.className = `notification notification-${type}`;
         messageElement.innerHTML = `<span style="margin-right: 8px;">${icon}</span>${message}`;
 
-        document.body.appendChild(messageElement);
+        getNotificationContainer().appendChild(messageElement);
 
         setTimeout(() => {
             messageElement.classList.add('notification-hide');
             setTimeout(() => {
                 messageElement.remove();
-                isProcessingQueue = false;
-                processQueue();
             }, 300);
         }, second);
     }
 
     function showSuccessMessage(message, second = 3000) {
         // 成功消息（绿色）✅
-        enqueueNotification('success', '✅', message, second);
+        showNotification('success', '✅', message, second);
     }
 
     function showInfoMessage(message, second = 3000) {
         // 信息消息（蓝色）ℹ️
-        enqueueNotification('info', 'ℹ️', message, second);
+        showNotification('info', 'ℹ️', message, second);
     }
     
     function showErrorMessage(message, second = 3000) {
         // 错误消息（红色）❌
-        enqueueNotification('error', '❌', message, second);
+        showNotification('error', '❌', message, second);
     }
 
     // 观察页面中所有模态框的显示状态，动态同步 Windows 标题栏原生按钮遮罩状态

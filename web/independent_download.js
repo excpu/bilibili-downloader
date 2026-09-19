@@ -53,7 +53,7 @@ const independentDownload = createIndependentDownload();
 // 处理弹幕或封面下载错误和成功的提示
 window.electronAPI.on('downloadDanmuProgress', (data) => {
     if (data.status === 'info') {
-        model.showInfoMessage(data.message, 1000);
+        model.showInfoMessage(data.message, 2000);
     } else if (data.status === 'error') {
         model.showErrorMessage(`弹幕下载失败：${data.message}`);
     } else if (data.status === 'success') {

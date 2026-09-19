@@ -1,16 +1,24 @@
 /* 通知消息 */
-.notification {
+.notification-container {
     position: fixed;
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(90%, max-content);
+}
+
+.notification {
     padding: 12px 20px;
     border-radius: 8px;
     font-weight: 600;
-    z-index: 9999;
     animation: slideDown 0.3s ease-out;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    max-width: 90%;
+    max-width: 100%;
 }
 
 .notification-success {
@@ -38,24 +46,24 @@
 @keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateX(-50%) translateY(-20px);
+        transform: translateY(-20px);
     }
 
     to {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        transform: translateY(0);
     }
 }
 
 @keyframes slideUp {
     from {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        transform: translateY(0);
     }
 
     to {
         opacity: 0;
-        transform: translateX(-50%) translateY(-20px);
+        transform: translateY(-20px);
     }
 }
 

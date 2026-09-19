@@ -2,8 +2,8 @@
 
 /* 设置分区 */
 .setting-section {
-    margin-bottom: 24px;
-    padding-bottom: 24px;
+    /* margin-bottom: 24px;
+    padding-bottom: 24px; */
     border-bottom: 1px solid var(--border);
 }
 

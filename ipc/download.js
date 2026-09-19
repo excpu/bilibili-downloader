@@ -25,6 +25,21 @@ const client = new Aria2Client({
 
 const auth = new Auth();
 
+// 将下载链接的域名替换为用户选择的 CDN，仅替换主机名，其余参数保持不变
+function applyCdnHost(url) {
+    const cdnHost = setting.getCdnHost();
+    if (!cdnHost || !url) return url;
+
+    try {
+        const parsedUrl = new URL(url);
+        parsedUrl.hostname = cdnHost;
+        return parsedUrl.toString();
+    } catch (error) {
+        console.warn('替换 CDN 域名失败，使用原始下载地址:', error.message);
+        return url;
+    }
+}
+
 const fs = require('fs');
 const util = require('util');
 // ffmpeg 用于合并Dash 音视频
@@ -126,7 +141,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             console.log(`⏳ [${title}] 开始下载音频...`);
             const downloadFunc = getDownloadFunction();
             await downloadFunc(
-                videoStream.audioUrl,
+                applyCdnHost(videoStream.audioUrl),
                 audioPath,
                 downloadHeaders,
                 (percent, speed) => notifyProgress(percent, speed, 'audio')
@@ -173,7 +188,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
                 const downloadFunc = getDownloadFunction();
                 await downloadFunc(
-                    videoStream.videoUrl,
+                    applyCdnHost(videoStream.videoUrl),
                     videoPath,
                     downloadHeaders,
                     (percent, speed) => notifyProgress(percent, speed, 'video')

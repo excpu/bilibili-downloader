@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     invoke: (ch, ...args) => ipcRenderer.invoke(ch, ...args),
 });
 
-document.documentElement.dataset.platform = process.platform;
+window.addEventListener('DOMContentLoaded', () => {
+    document.documentElement.dataset.platform = process.platform;
+});

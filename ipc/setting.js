@@ -1,5 +1,6 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const Setting = require('../modules/config_setting');
+const { fetchCdnList } = require('../modules/cdn_source');
 
 const setting = new Setting();
 setting.load(); // 加载设置数据
@@ -45,6 +46,18 @@ module.exports = function registerSettingIpc(mainWindow) {
         const selectedPath = result.filePaths[0];
         setting.updateDownloadPath(selectedPath);
         return selectedPath;
+    });
+
+    ipcMain.handle('getCdnList', async () => {
+        return fetchCdnList();
+    });
+
+    ipcMain.handle('getCdnHost', () => {
+        return setting.getCdnHost();
+    });
+
+    ipcMain.handle('setCdnHost', (event, cdnHost) => {
+        setting.updateCdnHost(cdnHost);
     });
 
     

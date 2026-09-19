@@ -6,6 +6,7 @@ function createSettingWeb() {
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
+    const $cdnSelect = document.getElementById('cdnSelect');
     
     async function openSetting() {
         settingModel.classList.remove('hidden');
@@ -14,6 +15,7 @@ function createSettingWeb() {
         await loadDownloadPath();
         await loadDownloadEngine();
         await loadDanmuDownloadMethod();
+        await loadCdnList();
     }
 
     function closeSetting() {
@@ -51,6 +53,34 @@ function createSettingWeb() {
         }
     }
 
+    async function loadCdnList() {
+        if (!$cdnSelect) return;
+
+        const [cdnList, cdnHost] = await Promise.all([
+            window.electronAPI.invoke('getCdnList'),
+            window.electronAPI.invoke('getCdnHost')
+        ]);
+
+        $cdnSelect.innerHTML = '<option value="">默认（不替换）</option>';
+
+        if (cdnList && typeof cdnList === 'object') {
+            for (const [region, hosts] of Object.entries(cdnList)) {
+                if (!Array.isArray(hosts) || hosts.length === 0) continue;
+                const $group = document.createElement('optgroup');
+                $group.label = region;
+                for (const host of hosts) {
+                    const $option = document.createElement('option');
+                    $option.value = host;
+                    $option.textContent = host;
+                    $group.appendChild($option);
+                }
+                $cdnSelect.appendChild($group);
+            }
+        }
+
+        $cdnSelect.value = cdnHost || '';
+    }
+
     async function selectDownloadPath() {
         const selectedPath = await window.electronAPI.invoke('selectDownloadPath');
         if (selectedPath && $downloadPathInput) {
@@ -73,6 +103,12 @@ function createSettingWeb() {
 
     if ($selectDownloadPathBtn) {
         $selectDownloadPathBtn.addEventListener('click', selectDownloadPath);
+    }
+
+    if ($cdnSelect) {
+        $cdnSelect.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setCdnHost', event.target.value);
+        });
     }
 
     // 当前设置项为实时保存，保存按钮仅用于关闭设置弹窗

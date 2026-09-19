@@ -13,6 +13,7 @@ class Setting {
             downloadEngine: "node", // 下载引擎，默认使用node got，也可以选择aria2
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
+            cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
         };
     }
 
@@ -80,6 +81,17 @@ class Setting {
         }
 
         return downloadPath;
+    }
+
+    updateCdnHost(cdnHost) {
+        const data = this.load() || {};
+        data.cdnHost = cdnHost || '';
+        this.save(data);
+    }
+
+    getCdnHost() {
+        const data = this.load();
+        return data ? (data.cdnHost || '') : this.defaultData.cdnHost;
     }
 }
 

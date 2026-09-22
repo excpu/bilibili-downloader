@@ -14,8 +14,9 @@ module.exports = function registerInformationIpc(mainWindow) {
         return auth.loadLoginStatus();
     });
 
-    ipcMain.handle('logout', () => {
-        auth.logout();
+    ipcMain.handle('logout', async () => {
+        await auth.logoutRemote(); // 先调用官方接口注销凭据
+        auth.logout(); // 再清除本地登录凭据
         return { success: true };
     });
 

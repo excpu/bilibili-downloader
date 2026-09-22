@@ -1,6 +1,7 @@
 const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const got = require('got');
 const { getBiliTicket } = require('./bilibili_ticket');
 const { refreshBuvidCredentials } = require('./buvid3_4_nut');
 
@@ -140,6 +141,35 @@ class Auth {
         this.ensureBuvidCredentials().catch((error) => {
             console.error('Background buvid refresh failed:', error.message);
         });
+    }
+
+    // 调用官方接口注销凭据（SESSDATA 服务端失效），不影响本地凭据清理流程
+    async logoutRemote() {
+        const data = this.load() || {};
+        if (!isValidCookieValue(data.SESSDATA) || !isValidCookieValue(data.bili_jct)) {
+            return { success: true }; // 未登录，无需请求官方接口
+        }
+        try {
+            const response = await got.post('https://passport.bilibili.com/login/exit/v2', {
+                headers: {
+                    'Referer': 'https://www.bilibili.com/',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                    'Cookie': this.getConstructedCookie()
+                },
+                form: {
+                    biliCSRF: data.bili_jct,
+                    gourl: 'https://www.bilibili.com'
+                },
+                responseType: 'json',
+                http2: true,
+                throwHttpErrors: false
+            });
+            const json = response.body || {};
+            return { success: json.code === 0, message: json.message };
+        } catch (error) {
+            console.error('官方注销接口调用失败:', error.message);
+            return { success: false, message: error.message };
+        }
     }
 
     logout() {

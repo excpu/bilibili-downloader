@@ -1,4 +1,4 @@
-# bilibili-downloader
+# bilibili-downloader  B站视频下载器
 开箱即用的 BiliBili 下载器  
 本项目是一个基于 Node.js 和 Electron 构建的跨平台BiliBili下载工具，支持所有主流操作系统。
 ![主界面展示](images/image-4.png)

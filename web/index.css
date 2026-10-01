@@ -519,6 +519,7 @@ html[data-platform="linux"] .topbar {
 
 /* 分P视频选择器 */
 .multi-part-selector {
+    height: 250px;
     border-radius: 8px;
     border: #a3a3a3dc dashed 1px;
     padding: 10px;
@@ -540,6 +541,46 @@ html[data-platform="linux"] .topbar {
     /* max-height: 100px; */
     height: calc(100% - 40px);
     overflow-y: scroll;
+}
+
+.collection-episode {
+    padding: 5px 0;
+}
+
+.collection-episode + .collection-episode {
+    border-top: 1px solid var(--stroke);
+}
+
+.collection-episode-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.collection-episode-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.collection-toggle {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.collection-parts {
+    margin-left: 22px;
+    padding-left: 10px;
+    border-left: 2px solid var(--stroke);
+}
+
+.collection-part {
+    padding: 3px 0;
+    color: var(--muted);
 }
 
 .clickable {

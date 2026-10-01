@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const fs = require('fs');
 
 class Aria2Client {
     /**
@@ -29,7 +30,10 @@ class Aria2Client {
                 // 处理我们主动发出的 RPC 请求的回调
                 if (response.id && this.callbacks[response.id]) {
                     if (response.error) {
-                        this.callbacks[response.id].reject(response.error);
+                        // JSON-RPC 错误是普通对象（{code, message}），统一包装为 Error，避免上层 err.message 取值异常
+                        const rpcError = new Error(response.error.message || 'Aria2 RPC 请求失败');
+                        rpcError.code = response.error.code;
+                        this.callbacks[response.id].reject(rpcError);
                     } else {
                         this.callbacks[response.id].resolve(response.result);
                     }
@@ -38,9 +42,23 @@ class Aria2Client {
             });
 
             this.ws.on('error', (err) => {
+                this._rejectPendingCallbacks(err);
                 reject(err);
             });
+
+            this.ws.on('close', () => {
+                // 连接意外断开时，必须主动拒绝所有挂起请求，否则调用方会一直卡住而非收到错误
+                this._rejectPendingCallbacks(new Error('与 Aria2 的 WebSocket 连接已断开'));
+            });
         });
+    }
+
+    // 连接异常时，确保所有等待响应的请求都能收到错误，而不是无限挂起
+    _rejectPendingCallbacks(err) {
+        for (const id of Object.keys(this.callbacks)) {
+            this.callbacks[id].reject(err);
+            delete this.callbacks[id];
+        }
     }
 
     // 发送基础 RPC 请求
@@ -109,7 +127,7 @@ class Aria2Client {
                 try {
                     const status = await this.request('aria2.tellStatus', [
                         gid,
-                        ['status', 'totalLength', 'completedLength', 'downloadSpeed', 'errorMessage', 'files']
+                        ['status', 'totalLength', 'completedLength', 'downloadSpeed', 'errorCode', 'errorMessage', 'files']
                     ]);
 
                     const total = parseInt(status.totalLength, 10);
@@ -132,7 +150,40 @@ class Aria2Client {
                     // 判断任务是否结束
                     if (status.status === 'complete') {
                         clearInterval(timer);
-                        resolve({ gid, path: status.files[0].path });
+
+                        // 【核心修复】即使 aria2 上报 complete，也要校验 errorCode 与实际字节数/文件大小，
+                        // 避免因重试后遗留的历史错误码或轮询竞态被当作下载成功，进而把不完整文件送去合并。
+                        const errorCode = parseInt(status.errorCode, 10) || 0;
+                        if (errorCode !== 0) {
+                            reject(new Error(status.errorMessage || `下载失败（errorCode ${status.errorCode}）`));
+                            return;
+                        }
+
+                        const filePath = status.files && status.files[0] && status.files[0].path;
+                        if (total > 0 && completed < total) {
+                            reject(new Error(`下载不完整：已完成 ${completed} 字节，总大小 ${total} 字节`));
+                            return;
+                        }
+
+                        if (!filePath) {
+                            reject(new Error('下载完成但未返回文件路径'));
+                            return;
+                        }
+
+                        let actualSize = -1;
+                        try {
+                            actualSize = fs.statSync(filePath).size;
+                        } catch (statErr) {
+                            reject(new Error(`下载完成但本地文件不存在或无法访问: ${statErr.message}`));
+                            return;
+                        }
+
+                        if (total > 0 && actualSize !== total) {
+                            reject(new Error(`下载文件大小校验失败：磁盘文件 ${actualSize} 字节，预期 ${total} 字节`));
+                            return;
+                        }
+
+                        resolve({ gid, path: filePath });
                     } else if (status.status === 'error') {
                         clearInterval(timer);
                         reject(new Error(status.errorMessage || '下载失败'));

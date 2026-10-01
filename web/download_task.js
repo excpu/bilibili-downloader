@@ -102,29 +102,27 @@ function manageDownloadStart() {
     currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
     currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
-    if (currentVideoIdentity.p.length > 0) {
+    if (currentVideoIdentity.isCollection && currentVideoIdentity.p.length === 0) {
+        alert('请先展开合集视频或搜索全部详情');
+        return;
+    }
+    if (currentVideoIdentity.p.length > 0 || currentVideoIdentity.isCollection) {
+        const selectedParts = new Set(
+            [...document.querySelectorAll('input[name="part[]"]:checked')]
+                .map(item => item.value)
+        );
         for (let i = 0; i < currentVideoIdentity.p.length; i++) {
             const partInfo = currentVideoIdentity.p[i];
             const uid = `${Date.now()}${Math.round(Math.random() * 1000)}_P${i}`;
-            // 查看是否被用户选中 （$multiPartSelector）
-            const checked = document.querySelectorAll('input[name="part[]"]:checked');
-
-            // 查看是否和某个选中的value相同
-            let isChecked = false;
-            checked.forEach((item) => {
-                if (parseInt(item.value) === i) {
-                    isChecked = true;
-                }
-            });
-
-            if (!isChecked) {
+            const selectionId = currentVideoIdentity.isCollection ? partInfo.selectionId : String(i);
+            if (!selectedParts.has(selectionId)) {
                 continue;
             }
 
             const taskBvid = partInfo.bvid || currentVideoIdentity.bvid;
             const taskCid = partInfo.cid || null;
             const taskTitle = currentVideoIdentity.isCollection
-                ? `P${partInfo.page} - ${partInfo.part}`
+                ? `E${partInfo.episode}P${partInfo.page} - ${partInfo.episodeTitle} - ${partInfo.part}`
                 : `P${partInfo.page} - ${currentVideoIdentity.title} - ${partInfo.part}`;
 
             const videoEle = {

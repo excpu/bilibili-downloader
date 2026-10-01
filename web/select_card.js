@@ -4,6 +4,81 @@ function selectInfo() {
     const $videoInfoSection = document.getElementById('videoInfoSection');
     const $multiPartSelector = document.getElementById('multiPartSelector');
     const $multiPartSelectorInner = document.getElementById("multiPartSelectorInner");
+    const $searchAllCollectionDetails = document.getElementById('searchAllCollectionDetails');
+    let activeCollectionEpisodes = [];
+    let activeDetailRequests = 0;
+    const detailRequestQueue = [];
+
+    function runWithDetailLimit(request) {
+        return new Promise((resolve, reject) => {
+            const run = () => {
+                activeDetailRequests++;
+                Promise.resolve()
+                    .then(request)
+                    .then(resolve, reject)
+                    .finally(() => {
+                        activeDetailRequests--;
+                        detailRequestQueue.shift()?.();
+                    });
+            };
+
+            if (activeDetailRequests < 2) {
+                run();
+            } else {
+                detailRequestQueue.push(run);
+            }
+        });
+    }
+
+    function ensureEpisodeDetails(episode) {
+        if (episode.detailsLoaded) {
+            return Promise.resolve(episode.pages);
+        }
+        if (episode.loadingPromise) {
+            return episode.loadingPromise;
+        }
+
+        episode.loadingPromise = runWithDetailLimit(async () => {
+            const result = await window.electronAPI.invoke('getVideoInfo', episode.bvid);
+            if (!result?.success || !result.data) {
+                throw new Error(result?.message || '获取视频信息失败');
+            }
+            return result.data;
+        }).then(videoData => {
+            const sourcePages = Array.isArray(videoData.pages) && videoData.pages.length > 0
+                ? videoData.pages
+                : [{
+                    page: 1,
+                    part: episode.title,
+                    cid: episode.archive.cid || videoData.cid,
+                    duration: episode.duration
+                }];
+            episode.pages = sourcePages.map((page, pageIndex) => ({
+                page: Number(page.page) || pageIndex + 1,
+                part: page.part || episode.title,
+                bvid: episode.bvid,
+                aid: episode.aid,
+                cid: page.cid || (sourcePages.length === 1 ? episode.archive.cid || videoData.cid : null),
+                duration: Number(page.duration) || episode.duration,
+                coverUrl: episode.coverUrl
+            }));
+            episode.detailsLoaded = true;
+
+            if (activeCollectionEpisodes.includes(episode)) {
+                window.dispatchEvent(new CustomEvent('collection-episode-details-loaded', {
+                    detail: { episodes: activeCollectionEpisodes }
+                }));
+            }
+            return episode.pages;
+        }).catch(error => {
+            episode.detailsError = error;
+            throw error;
+        }).finally(() => {
+            episode.loadingPromise = null;
+        });
+
+        return episode.loadingPromise;
+    }
     // 更新视频标题
     function updateTitle(title) {
         const $videoTitle = document.getElementById('videoTitle');
@@ -196,6 +271,150 @@ function selectInfo() {
         $multiPartSelectorInner.appendChild(fragment);
     }
 
+    function addCollection(episodes) {
+        const fragment = document.createDocumentFragment();
+
+        for (const episode of episodes) {
+            const episodeElement = document.createElement('div');
+            episodeElement.className = 'collection-episode';
+
+            const episodeHeading = document.createElement('div');
+            episodeHeading.className = 'collection-episode-heading';
+
+            const episodeCheckbox = document.createElement('input');
+            episodeCheckbox.className = 'e-item';
+            episodeCheckbox.type = 'checkbox';
+            episodeCheckbox.addEventListener('change', () => {
+                episode.selectAllRequested = episodeCheckbox.checked;
+                if (!episodeCheckbox.checked) {
+                    episodeElement.querySelectorAll('.p-item').forEach(box => box.checked = false);
+                    episodeCheckbox.indeterminate = false;
+                    return;
+                }
+
+                setEpisodeExpanded(true).then(loaded => {
+                    if (loaded && episode.selectAllRequested) {
+                        episodeElement.querySelectorAll('.p-item').forEach(box => box.checked = true);
+                        syncEpisodeCheckbox();
+                    }
+                });
+            });
+
+            const episodeTitle = document.createElement('span');
+            episodeTitle.textContent = `E${episode.episode} - ${episode.title}`;
+            episodeTitle.className = 'collection-episode-title';
+
+            const toggleButton = document.createElement('button');
+            toggleButton.type = 'button';
+            toggleButton.className = 'btn small collection-toggle';
+            toggleButton.textContent = '+';
+            toggleButton.setAttribute('aria-expanded', 'false');
+
+            episodeHeading.append(episodeCheckbox, episodeTitle, toggleButton);
+
+            const partsElement = document.createElement('div');
+            partsElement.className = 'collection-parts hidden';
+
+            function syncEpisodeCheckbox() {
+                const selectedCount = episodeElement.querySelectorAll('.p-item:checked').length;
+                const partCount = episodeElement.querySelectorAll('.p-item').length;
+                episodeCheckbox.checked = partCount > 0 && selectedCount === partCount;
+                episodeCheckbox.indeterminate = selectedCount > 0 && selectedCount < partCount;
+            }
+
+            function renderEpisodeParts() {
+                partsElement.replaceChildren();
+                for (const part of episode.pages) {
+                    const partLabel = document.createElement('label');
+                    partLabel.className = 'collection-part';
+
+                    const partCheckbox = document.createElement('input');
+                    partCheckbox.className = 'p-item';
+                    partCheckbox.type = 'checkbox';
+                    partCheckbox.name = 'part[]';
+                    partCheckbox.value = `${episode.episode}:${part.page}`;
+                    partCheckbox.addEventListener('change', syncEpisodeCheckbox);
+                    partLabel.append(partCheckbox, document.createTextNode(`P${part.page} - ${part.part}`));
+                    partsElement.appendChild(partLabel);
+                }
+                episode.partsRendered = true;
+                if (episode.selectAllRequested) {
+                    partsElement.querySelectorAll('.p-item').forEach(box => box.checked = true);
+                }
+                syncEpisodeCheckbox();
+            }
+
+            async function setEpisodeExpanded(expanded) {
+                partsElement.classList.toggle('hidden', !expanded);
+                toggleButton.textContent = expanded ? '-' : '+';
+                toggleButton.setAttribute('aria-expanded', String(expanded));
+                if (!expanded) {
+                    return false;
+                }
+                if (episode.detailsLoaded) {
+                    if (!episode.partsRendered) {
+                        renderEpisodeParts();
+                    }
+                    return true;
+                }
+
+                partsElement.textContent = '正在获取分P详情...';
+                try {
+                    await ensureEpisodeDetails(episode);
+                    renderEpisodeParts();
+                    return true;
+                } catch (error) {
+                    partsElement.textContent = `获取失败：${error.message}，收起后重新展开可重试`;
+                    return false;
+                }
+            }
+            // 批量搜索后展开每个分P
+            episode.expandAfterBulkSearch = () => {
+                partsElement.classList.remove('hidden');
+                toggleButton.textContent = '-';
+                toggleButton.setAttribute('aria-expanded', 'true');
+                if (episode.detailsLoaded) {
+                    renderEpisodeParts();
+                } else {
+                    partsElement.textContent = `获取失败：${episode.detailsError?.message || '详情不可用'}，收起后重新展开可重试`;
+                }
+            };
+
+            toggleButton.addEventListener('click', () => {
+                setEpisodeExpanded(partsElement.classList.contains('hidden'));
+            });
+
+            episodeElement.append(episodeHeading, partsElement);
+            fragment.appendChild(episodeElement);
+        }
+
+        $multiPartSelectorInner.appendChild(fragment);
+
+        $searchAllCollectionDetails.classList.remove('hidden');
+        $searchAllCollectionDetails.onclick = async () => {
+            if ($searchAllCollectionDetails.disabled) {
+                return;
+            }
+
+            $searchAllCollectionDetails.disabled = true;
+            let completed = 0;
+            $searchAllCollectionDetails.textContent = `正在搜索详情 ${completed}/${episodes.length}`;
+            const results = await Promise.allSettled(episodes.map(async episode => {
+                await ensureEpisodeDetails(episode);
+                completed++;
+                $searchAllCollectionDetails.textContent = `正在搜索详情 ${completed}/${episodes.length}`;
+            }));
+            // 所有分P搜索完成后展开
+            episodes.forEach(episode => episode.expandAfterBulkSearch());
+            const failedCount = results.filter(result => result.status === 'rejected').length;
+            $searchAllCollectionDetails.disabled = false;
+            $searchAllCollectionDetails.textContent = '搜索全部详情';
+            if (failedCount > 0) {
+                alert(`${failedCount} 个合集视频详情获取失败，可展开对应 E 重试`);
+            }
+        };
+    }
+
     function clearMultipart() {
         $multiPartSelectorInner.innerHTML = '';
     }
@@ -203,15 +422,25 @@ function selectInfo() {
     // 分P视频全选与取消全选
     function selectAllPart() {
         document.querySelectorAll(".p-item").forEach(box => box.checked = true);
+        document.querySelectorAll('.e-item').forEach(box => {
+            box.checked = true;
+            box.dispatchEvent(new Event('change'));
+        });
     }
 
     function ignoreAllPart() {
         document.querySelectorAll(".p-item").forEach(box => box.checked = false);
+        document.querySelectorAll('.e-item').forEach(box => {
+            box.checked = false;
+            box.indeterminate = false;
+        });
     }
 
     function collectionSearch(videoData) {
         const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
         const season = videoData?.ugc_season;
+        $searchAllCollectionDetails.classList.add('hidden');
+        $searchAllCollectionDetails.onclick = null;
 
         if (!season) {
             // 没有合集的视频不显示 搜索合集按钮
@@ -239,17 +468,31 @@ function selectInfo() {
                 return;
             }
 
+            const episodes = archives.map((item, index) => ({
+                episode: index + 1,
+                title: item.title,
+                bvid: item.bvid,
+                aid: item.aid,
+                duration: Number(item.duration) || 0,
+                coverUrl: item.pic,
+                archive: item,
+                pages: [],
+                detailsLoaded: false,
+                partsRendered: false,
+                selectAllRequested: false,
+                loadingPromise: null
+            }));
+
             clearMultipart();
             showMultipartSelector();
-            addMultipart(archives.map((item, index) => ({
-                page: index + 1,
-                part: item.title
-            })));
+            activeCollectionEpisodes = episodes;
+            addCollection(episodes);
 
             window.dispatchEvent(new CustomEvent('season-data-loaded', {
                 detail: {
                     sourceVideo: videoData,
-                    seasonData: seasondata.data
+                    seasonData: seasondata.data,
+                    episodes
                 }
             }));
         };
@@ -259,6 +502,9 @@ function selectInfo() {
         const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
         $searchCollectionBtn.classList.add('hidden');
         $searchCollectionBtn.onclick = null;
+        $searchAllCollectionDetails.classList.add('hidden');
+        $searchAllCollectionDetails.onclick = null;
+        activeCollectionEpisodes = [];
     }
 
 
@@ -268,6 +514,7 @@ function selectInfo() {
         enableConfirmBtn,
         showMultipartSelector,
         addMultipart,
+        addCollection,
         clearMultipart,
         updateMeta,
         updateThumbnail,

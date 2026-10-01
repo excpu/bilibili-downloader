@@ -144,7 +144,8 @@ module.exports = function registerInformationIpc(mainWindow) {
             await auth.ensureBuvidCredentials();
             const wbiKeys = await getWbiKeys();
             const params = {
-                bvid: bvid
+                bvid: bvid,
+                web_location: 1315873,
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/web-interface/wbi/view?${wbiQuery}`;
@@ -180,7 +181,9 @@ module.exports = function registerInformationIpc(mainWindow) {
                 bvid: bvid,
                 cid: cid,
                 fnval: 4048,
+                fnver: 0,
                 fourk: 1,
+                web_location: 1315873,
                 gaia_source: 'view-card'
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);

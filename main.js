@@ -25,8 +25,11 @@ const aria2args = [
     // 额外速度配置
     '--timeout=10',
     '--connect-timeout=10',
-    '--max-tries=0',
+    // max-tries 原先为 0（无限重试），导致下载失败时 aria2 一直重试而永远不会进入 error 状态，
+    // 使上层误以为下载仍在正常进行，最终可能拿到不完整的文件去合并。改为有限次数，确保错误能被及时暴露。
+    '--max-tries=15',
     '--retry-wait=10',
+    '--max-file-not-found=3',
     '--http-accept-gzip=true',
     '--content-disposition-default-utf8=true',
     // 磁盘配置

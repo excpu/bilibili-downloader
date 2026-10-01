@@ -98,14 +98,29 @@ function getVideoInfo() {
 
 let currentVideoIdentity = null;
 
+function buildCollectionParts(episodes) {
+    return episodes.flatMap(episode => episode.pages.map(page => ({
+        selectionId: `${episode.episode}:${page.page}`,
+        episode: episode.episode,
+        episodeTitle: episode.title,
+        page: page.page,
+        part: page.part,
+        bvid: page.bvid,
+        aid: page.aid,
+        cid: page.cid,
+        duration: page.duration,
+        coverUrl: page.coverUrl
+    })));
+}
+
 // 处理合集数据
 window.addEventListener('season-data-loaded', (event) => {
     const detail = event.detail || {};
     const seasonData = detail.seasonData || {};
     const sourceVideo = detail.sourceVideo || {};
-    const archives = Array.isArray(seasonData.archives) ? seasonData.archives : [];
+    const episodes = Array.isArray(detail.episodes) ? detail.episodes : [];
 
-    if (archives.length < 1) {
+    if (episodes.length < 1) {
         return;
     }
 
@@ -116,15 +131,7 @@ window.addEventListener('season-data-loaded', (event) => {
         bvid: sourceVideo.bvid,
         cid: null,
         title: seasonTitle,
-        p: archives.map((item, index) => ({
-            page: index + 1,
-            part: item.title,
-            bvid: item.bvid,
-            aid: item.aid,
-            cid: null,
-            duration: Number(item.duration) || 0,
-            coverUrl: item.pic
-        })),
+        p: buildCollectionParts(episodes),
         danmu: false,
         coverUrl: seasonCover,
         duration: 0,
@@ -135,11 +142,18 @@ window.addEventListener('season-data-loaded', (event) => {
     infoSection.updateThumbnail(seasonCover);
 });
 
+window.addEventListener('collection-episode-details-loaded', (event) => {
+    if (!currentVideoIdentity?.isCollection) {
+        return;
+    }
+    currentVideoIdentity.p = buildCollectionParts(event.detail?.episodes || []);
+});
+
 function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
     console.log('视频CID:', cid);
+    currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration };
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
-        currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration };
         // 渲染音频流和视频流
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;

@@ -72,6 +72,8 @@ function getVideoInfo() {
         infoSection.updateMeta(videoInfo.data.owner.name);
         // 更新缩略图
         infoSection.updateThumbnail(videoInfo.data.pic);
+        // 判断视频是否有合集，若有合集显示合集搜索按钮
+        infoSection.collectionSearch(videoInfo.data);
         // 清空之前的分P选项
         infoSection.clearMultipart();
         // 检查是否分P视频
@@ -86,9 +88,6 @@ function getVideoInfo() {
             multiPartVideo = true;
         } else {
             // 非分P隐藏分P选择器，直接获取视频流信息
-            // 非分P视频支持搜索合集，暂不支持合集和分P嵌套的情况
-            // 判断视频是否有合集，若有合集显示合集搜索按钮
-            infoSection.collectionSearch(videoInfo.data);
             infoSection.hideMultipartSelector();
             getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, [], videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = false;

@@ -4,8 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频预览</title>
+    <link rel="stylesheet" href="web_player.css">
+    <link rel="icon" href="icon.png">
+    <script src="./artplayer-5.3.0/artplayer.js"></script>
+    <script src="./artplayer-plugin-danmuku-5.2.0/artplayer-plugin-danmuku.js"></script>
 </head>
 <body>
-    
+    <header class="preview-topbar">
+        <div class="topbar-brand">
+            <span class="topbar-badge">▶</span>
+            <span class="topbar-title" id="previewTitle">视频预览</span>
+        </div>
+    </header>
+
+    <main class="preview-main">
+        <div class="preview-player-container"></div>
+        <div class="preview-status" id="previewStatus">正在加载视频信息...</div>
+    </main>
+
+    <script src="web_player.js"></script>
 </body>
 </html>

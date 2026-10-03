@@ -1,0 +1,270 @@
+:root {
+    --bg: #f8fafc;
+    /* 浅色背景 */
+    --panel: #ffffff;
+    /* 面板底色 */
+    --muted: #64748b;
+    /* 次级文字 */
+    --text: #1e293b;
+    /* 主文字 */
+    --brand: #0078ff;
+    /* 品牌色 */
+    --brand-2: #40a0ff;
+    /* 渐变二 */
+    --ok: #27ae60;
+    --warn: #f39c12;
+    --err: #e74c3c;
+    --stroke: rgba(0, 0, 0, 0.08);
+    /* 边框色 */
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    --radius: 12px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, PingFang SC, Microsoft YaHei, sans-serif;
+    background: radial-gradient(circle at 50% -120px, rgba(64, 160, 255, 0.08) 0%, transparent 480px), var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    letter-spacing: .2px;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    padding: 0 160px 0 24px;
+    border-bottom: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    -webkit-app-region: drag;
+    user-select: none;
+}
+
+html[data-platform="darwin"] .topbar {
+    padding-left: 88px;
+    padding-right: 24px;
+}
+
+html[data-platform="linux"] .topbar {
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+}
+
+.brand-badge {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    font-size: .85rem;
+    box-shadow: 0 2px 6px rgba(0, 120, 255, 0.25);
+}
+
+/* 下载图标：箭头用 clip-path 一体绘制，避免旋转位移导致错位；托盘用弧形边框绘制 */
+.download-icon {
+    width: 12px;
+    height: 11px;
+    margin-top: -3px;
+    background: #fff;
+    clip-path: polygon(35% 0%, 65% 0%, 65% 45%, 100% 45%, 50% 100%, 0% 45%, 35% 45%);
+}
+
+.brand-badge::after {
+    content: "";
+    position: absolute;
+    left: 44.5%;
+    bottom: 6px;
+    width: 16px;
+    height: 6px;
+    margin-left: -8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+.brand-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.3px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: .95rem;
+}
+
+.pill {
+    padding: 6px 14px;
+    border: 1px solid var(--stroke);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    font-size: 0.88rem;
+    transition: all 0.2s ease;
+    -webkit-app-region: no-drag;
+}
+
+.pill.clickable {
+    cursor: pointer;
+}
+
+.pill.clickable:hover {
+    background: rgba(0, 120, 255, 0.08);
+    border-color: var(--brand-2);
+    color: var(--brand);
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #eee;
+    color: #666;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    border: 1px solid var(--stroke);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-app-region: no-drag;
+}
+
+.avatar:hover {
+    border-color: var(--brand-2);
+    transform: scale(1.05);
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.btn {
+    cursor: pointer;
+    border: 1px solid var(--stroke);
+    background: #f0f0f0;
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    transition: .15s ease;
+    font-weight: 600;
+    -webkit-app-region: no-drag;
+}
+
+.btn:hover {
+    background: #e9e9e9
+}
+
+.btn.brand {
+    border: none;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+}
+
+.btn.small {
+    padding: 5px 7px;
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.container {
+    max-width: 960px;
+    margin: 28px auto 40px;
+    padding: 0 16px
+}
+
+.card {
+    background: var(--panel);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow)
+}
+
+.m-card {
+    margin-top: 20px;
+}
+
+.card-title {
+    margin-top: 5px;
+    margin-left: 5px;
+    padding-left: 0px;
+}
+
+.input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center
+}
+
+.field {
+    flex: 1;
+    position: relative
+}
+
+.field input {
+    width: 100%;
+    padding: 12px 40px 12px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke);
+    background: white;
+    color: var(--text);
+    font-size: 16px;
+}
+
+.field input:focus {
+    border-color: var(--brand);
+    outline: none;
+}
+
+.field .suffix {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 12px
+}
+
+.actions {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: .9rem
+}

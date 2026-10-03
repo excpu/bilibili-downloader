@@ -161,6 +161,38 @@ function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
 }
 
 
+// 点击封面预览当前视频：弹出独立窗口，通过传统接口获取弹幕并预览，通过视频直链播放
+// 封面上已有悬浮播放按钮样式（.thumbnail-inner），此处为其绑定预览行为
+const $videoThumbnailInner = document.querySelector('.video-info .thumbnail-inner');
+if ($videoThumbnailInner) {
+    $videoThumbnailInner.title = '点击预览视频';
+    $videoThumbnailInner.addEventListener('click', () => {
+        if (!currentVideoIdentity?.bvid) {
+            return;
+        }
+        // 合集/分P场景优先使用当前已加载的第一个分 P 的 cid
+        const cid = currentVideoIdentity.cid || currentVideoIdentity.p?.[0]?.cid;
+        if (!cid) {
+            alert('视频信息尚未加载完成，无法预览');
+            return;
+        }
+        const $qualitySelect = document.getElementById('qualitySelect');
+        const $qualitySelectAudio = document.getElementById('qualitySelectAudio');
+        const selectedVideoOption = $qualitySelect?.options?.[$qualitySelect.selectedIndex];
+        const selectedAudioOption = $qualitySelectAudio?.options?.[$qualitySelectAudio.selectedIndex];
+
+        window.electronAPI.invoke('openPreviewWindow', {
+            bvid: currentVideoIdentity.bvid,
+            cid,
+            title: currentVideoIdentity.title,
+            videoQualityId: selectedVideoOption?.dataset?.qualityId,
+            videoCodec: selectedVideoOption?.dataset?.codec,
+            audioQualityId: selectedAudioOption?.dataset?.qualityId,
+            audioCodec: selectedAudioOption?.dataset?.codec,
+        });
+    });
+}
+
 // 用户点击确认开始下载
 $downloadBtn.addEventListener('click', async () => {
     if (!downloadLock) {

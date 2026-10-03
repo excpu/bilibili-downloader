@@ -6,6 +6,7 @@ const registerDanmuIpc = require('./danmu');
 const registerCoverIpc = require('./cover');
 const registerNewWindowIpc = require('./new_window');
 const registerSettingIpc = require('./setting');
+const registerPreviewIpc = require('./preview');
 // 为 merge 窗口注册 IPC
 const registerMergeIpc = require('./merge/merge');
 
@@ -16,6 +17,7 @@ module.exports = function registerIpc(mainWindow) {
     registerCoverIpc(mainWindow);
     registerNewWindowIpc(mainWindow);
     registerSettingIpc(mainWindow);
+    registerPreviewIpc(mainWindow);
 
     // 监听模态框打开/关闭状态以动态同步原生控制按钮遮罩颜色
     ipcMain.handle('setTitleBarOverlay', (event, options) => {

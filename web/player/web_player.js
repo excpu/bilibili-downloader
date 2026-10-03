@@ -14,8 +14,10 @@ class DashAudioSynchronizer {
         this.audio.preload = 'auto';
         this.audio.src = audioUrl;
 
-        // 视频轨保持静音，声音全部由独立音频元素播放
-        this.video.muted = false;
+        // DASH 视频轨本身不含音频流，无需且不能设置 video.muted = true；
+        // 保持 art.muted = false 才能让 ArtPlayer 控制栏的音量图标与音量滑块处于正常工作状态
+        this.art.muted = false;
+        this.art.volume = 0.8;
         this.syncVolume();
 
         this._bindEvents();
@@ -171,6 +173,8 @@ async function startPreview(payload = {}) {
             playbackRate: true,
             screenshot: true,
             autoplay: true,
+            volume: 0.8, // 默认音量 80%
+            muted: false, // 明确禁用静音
             theme: '#23ade5',
             quality: qualityOptions.length > 1 ? qualityOptions : [],
             plugins: danmuUrl ? [
@@ -203,18 +207,6 @@ async function startPreview(payload = {}) {
         art.on('video:volumechange', () => {
             if (audioSync) {
                 audioSync.syncVolume();
-            }
-        });
-
-        // 清晰度切换或重新加载后，保持画面静音并继续由同步器发声
-        art.on('video:loadeddata', () => {
-            if (art?.video) {
-                art.video.muted = true;
-            }
-        });
-        art.on('restart', () => {
-            if (art?.video) {
-                art.video.muted = true;
             }
         });
 

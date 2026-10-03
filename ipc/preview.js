@@ -44,14 +44,238 @@ let previewWindow = null; // 持有引用，防止重复打开
 let proxyServer = null;
 let proxyPort = 0;
 
-// 启动本地轻量流代理服务，为 <video> 和 <audio> 请求提供正确的 Referer/UA/Range/CORS 支持，彻底避免 403 防盗链错误
+// 多线程并发预取缓冲配置
+const CHUNK_SIZE = 1024 * 1024; // 1MB 分块大小，平衡网络握手开销与秒开响应
+const CONCURRENCY = 6; // 6 个并发连接同时向 CDN 拉取分块，突破单连接限速
+const MAX_PREFETCH_AHEAD = 8; // 内存中滑动预取窗口大小（最多提前缓冲 8 个分块，约 8MB）
+
+// 媒体元数据缓存 (URL -> { totalSize, contentType })
+const mediaMetaCache = new Map();
+
+// 快速探测媒体总大小与 MIME 类型
+async function probeMediaMeta(targetUrl, headers) {
+    if (mediaMetaCache.has(targetUrl)) {
+        return mediaMetaCache.get(targetUrl);
+    }
+
+    try {
+        const probeRes = await got(targetUrl, {
+            headers: { ...headers, 'Range': 'bytes=0-0' },
+            throwHttpErrors: false,
+            decompress: false,
+            retry: 2,
+        });
+
+        let totalSize = 0;
+        const cr = probeRes.headers['content-range'];
+        if (cr) {
+            const m = cr.match(/\/(\d+)$/);
+            if (m) totalSize = parseInt(m[1], 10);
+        }
+        if (!totalSize && probeRes.headers['content-length']) {
+            totalSize = parseInt(probeRes.headers['content-length'], 10);
+        }
+
+        const meta = {
+            totalSize,
+            contentType: probeRes.headers['content-type'] || 'video/mp4',
+        };
+
+        if (totalSize > 0) {
+            mediaMetaCache.set(targetUrl, meta);
+        }
+        return meta;
+    } catch (err) {
+        console.warn('探测媒体元信息失败:', err.message);
+        return { totalSize: 0, contentType: 'video/mp4' };
+    }
+}
+
+// 降级处理：单连接直通
+function handleFallbackSingleStream(req, res, targetUrl, headers) {
+    const streamHeaders = { ...headers };
+    if (req.headers.range) {
+        streamHeaders['Range'] = req.headers.range;
+    }
+
+    try {
+        const stream = got.stream(targetUrl, {
+            headers: streamHeaders,
+            throwHttpErrors: false,
+            decompress: false,
+            retry: 1,
+        });
+
+        stream.on('response', (remoteRes) => {
+            const responseHeaders = {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                'Accept-Ranges': 'bytes',
+                'Content-Type': remoteRes.headers['content-type'] || 'video/mp4',
+            };
+            if (remoteRes.headers['content-length']) {
+                responseHeaders['Content-Length'] = remoteRes.headers['content-length'];
+            }
+            if (remoteRes.headers['content-range']) {
+                responseHeaders['Content-Range'] = remoteRes.headers['content-range'];
+            }
+            res.writeHead(remoteRes.statusCode || 200, responseHeaders);
+            stream.pipe(res);
+        });
+
+        stream.on('error', (err) => {
+            console.error('单连接直通出错:', err.message);
+            if (!res.headersSent) {
+                res.writeHead(502);
+                res.end('Bad Gateway');
+            }
+        });
+
+        req.on('close', () => stream.destroy());
+    } catch (err) {
+        if (!res.headersSent) {
+            res.writeHead(500);
+            res.end(err.message);
+        }
+    }
+}
+
+// 核心：多线程分块并发拉取与有序泵入响应流
+function handleConcurrentChunkStream(req, res, targetUrl, headers, totalSize, clientStart, clientEnd) {
+    const startChunk = Math.floor(clientStart / CHUNK_SIZE);
+    const endChunk = Math.floor(clientEnd / CHUNK_SIZE);
+
+    const activeControllers = new Map(); // chunkIndex -> AbortController
+    const chunkBuffers = new Map(); // chunkIndex -> Buffer
+    let nextChunkToWrite = startChunk;
+    let nextChunkToFetch = startChunk;
+    let isAborted = false;
+    let isWriting = false;
+
+    function cleanup() {
+        if (isAborted) return;
+        isAborted = true;
+        for (const controller of activeControllers.values()) {
+            controller.abort();
+        }
+        activeControllers.clear();
+        chunkBuffers.clear();
+    }
+
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+
+    function scheduleFetches() {
+        if (isAborted) return;
+
+        while (
+            activeControllers.size < CONCURRENCY &&
+            nextChunkToFetch <= endChunk &&
+            nextChunkToFetch < nextChunkToWrite + MAX_PREFETCH_AHEAD
+        ) {
+            const chunkIndex = nextChunkToFetch++;
+            fetchChunk(chunkIndex);
+        }
+    }
+
+    function fetchChunk(chunkIndex) {
+        if (isAborted) return;
+
+        const chunkStart = chunkIndex * CHUNK_SIZE;
+        const chunkEnd = Math.min(totalSize - 1, (chunkIndex + 1) * CHUNK_SIZE - 1);
+
+        const controller = new AbortController();
+        activeControllers.set(chunkIndex, controller);
+
+        got(targetUrl, {
+            headers: {
+                ...headers,
+                'Range': `bytes=${chunkStart}-${chunkEnd}`,
+            },
+            decompress: false,
+            throwHttpErrors: false,
+            retry: 2,
+            signal: controller.signal,
+            responseType: 'buffer',
+        }).then((response) => {
+            activeControllers.delete(chunkIndex);
+            if (isAborted) return;
+
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+                chunkBuffers.set(chunkIndex, response.body);
+                tryPumpNext();
+                scheduleFetches();
+            } else {
+                console.warn(`分块 ${chunkIndex} 响应状态码: ${response.statusCode}`);
+            }
+        }).catch((err) => {
+            activeControllers.delete(chunkIndex);
+            if (isAborted || err.name === 'AbortError') return;
+            console.warn(`分块 ${chunkIndex} 下载异常:`, err.message);
+        });
+    }
+
+    function tryPumpNext() {
+        if (isAborted || isWriting) return;
+
+        while (chunkBuffers.has(nextChunkToWrite)) {
+            const chunkIndex = nextChunkToWrite;
+            let buffer = chunkBuffers.get(chunkIndex);
+            chunkBuffers.delete(chunkIndex); // 用完立即释放内存
+
+            const chunkStart = chunkIndex * CHUNK_SIZE;
+            const chunkEnd = chunkStart + buffer.length - 1;
+
+            let sliceStart = 0;
+            if (clientStart > chunkStart) {
+                sliceStart = clientStart - chunkStart;
+            }
+
+            let sliceEnd = buffer.length;
+            if (clientEnd < chunkEnd) {
+                sliceEnd = buffer.length - (chunkEnd - clientEnd);
+            }
+
+            if (sliceStart > 0 || sliceEnd < buffer.length) {
+                buffer = buffer.subarray(sliceStart, sliceEnd);
+            }
+
+            nextChunkToWrite++;
+
+            const canContinue = res.write(buffer);
+
+            if (nextChunkToWrite > endChunk) {
+                res.end();
+                cleanup();
+                return;
+            }
+
+            if (!canContinue) {
+                isWriting = true;
+                res.once('drain', () => {
+                    isWriting = false;
+                    tryPumpNext();
+                    scheduleFetches();
+                });
+                return;
+            }
+        }
+    }
+
+    // 启动初始并发批次
+    scheduleFetches();
+}
+
+// 启动本地轻量多线程并发流代理服务
 function ensureProxyServer() {
     if (proxyServer && proxyPort > 0) {
         return Promise.resolve(proxyPort);
     }
 
     return new Promise((resolve, reject) => {
-        proxyServer = http.createServer((req, res) => {
+        proxyServer = http.createServer(async (req, res) => {
             const reqUrl = new URL(req.url, `http://127.0.0.1:${proxyPort}`);
             if (reqUrl.pathname !== '/stream') {
                 res.writeHead(404);
@@ -67,58 +291,63 @@ function ensureProxyServer() {
                 return;
             }
 
-            const headers = {
+            const baseHeaders = {
                 'Referer': bvid ? `https://www.bilibili.com/video/${bvid}/` : 'https://www.bilibili.com/',
                 'User-Agent': BROWSER_UA,
                 'Origin': 'https://www.bilibili.com',
                 'Cookie': auth.getConstructedCookie(),
             };
 
-            // 透传 Range 请求头，确保支持拖拽进度条与部分缓冲
-            if (req.headers.range) {
-                headers['Range'] = req.headers.range;
-            }
-
             try {
-                const stream = got.stream(targetUrl, {
-                    headers,
-                    throwHttpErrors: false,
-                    decompress: false, // 媒体文件不要自动解压，保证二进制流与 Range 一致
-                    retry: 1,
-                });
+                const meta = await probeMediaMeta(targetUrl, baseHeaders);
+                const totalSize = meta.totalSize;
 
-                stream.on('response', (remoteRes) => {
-                    const responseHeaders = {
+                // 如果无法探测出总大小，降级为普通单流传输
+                if (!totalSize) {
+                    handleFallbackSingleStream(req, res, targetUrl, baseHeaders);
+                    return;
+                }
+
+                let clientStart = 0;
+                let clientEnd = totalSize - 1;
+                const rangeHeader = req.headers.range;
+                if (rangeHeader) {
+                    const parts = rangeHeader.replace(/bytes=/, '').split('-');
+                    if (parts[0]) {
+                        clientStart = parseInt(parts[0], 10);
+                    }
+                    if (parts[1]) {
+                        clientEnd = parseInt(parts[1], 10);
+                    }
+                }
+
+                if (clientStart >= totalSize || clientStart > clientEnd) {
+                    res.writeHead(416, {
+                        'Content-Range': `bytes */${totalSize}`,
                         'Access-Control-Allow-Origin': '*',
-                        'Access-Control-Allow-Headers': '*',
-                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-                        'Accept-Ranges': 'bytes',
-                        'Content-Type': remoteRes.headers['content-type'] || 'video/mp4',
-                    };
-                    if (remoteRes.headers['content-length']) {
-                        responseHeaders['Content-Length'] = remoteRes.headers['content-length'];
-                    }
-                    if (remoteRes.headers['content-range']) {
-                        responseHeaders['Content-Range'] = remoteRes.headers['content-range'];
-                    }
+                    });
+                    res.end();
+                    return;
+                }
 
-                    res.writeHead(remoteRes.statusCode || 200, responseHeaders);
-                    stream.pipe(res);
+                if (clientEnd >= totalSize) {
+                    clientEnd = totalSize - 1;
+                }
+
+                const contentLength = clientEnd - clientStart + 1;
+                res.writeHead(rangeHeader ? 206 : 200, {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Accept-Ranges': 'bytes',
+                    'Content-Range': `bytes ${clientStart}-${clientEnd}/${totalSize}`,
+                    'Content-Length': contentLength,
+                    'Content-Type': meta.contentType,
                 });
 
-                stream.on('error', (err) => {
-                    console.error('代理媒体流出错:', err.message);
-                    if (!res.headersSent) {
-                        res.writeHead(502);
-                        res.end('Bad Gateway: ' + err.message);
-                    }
-                });
-
-                req.on('close', () => {
-                    stream.destroy();
-                });
+                handleConcurrentChunkStream(req, res, targetUrl, baseHeaders, totalSize, clientStart, clientEnd);
             } catch (err) {
-                console.error('代理请求初始化失败:', err);
+                console.error('代理请求分发失败:', err);
                 if (!res.headersSent) {
                     res.writeHead(500);
                     res.end(err.message);
@@ -128,7 +357,7 @@ function ensureProxyServer() {
 
         proxyServer.listen(0, '127.0.0.1', () => {
             proxyPort = proxyServer.address().port;
-            console.log(`✅ 视频预览本地代理服务已启动: 127.0.0.1:${proxyPort}`);
+            console.log(`🚀 视频预览【多线程并发缓冲引擎】已启动: 127.0.0.1:${proxyPort} (分块并发数: ${CONCURRENCY})`);
             resolve(proxyPort);
         });
 
@@ -153,6 +382,7 @@ function closeProxyServer() {
         }
         proxyServer = null;
         proxyPort = 0;
+        mediaMetaCache.clear();
     }
 }
 

@@ -37,7 +37,13 @@ function createSettingWeb() {
 
     function updateAria2ConcurrencyVisibility() {
         if ($aria2ConcurrencySetting && $downloadEngineSelect) {
-            $aria2ConcurrencySetting.hidden = $downloadEngineSelect.value !== 'aria2';
+            const engine = $downloadEngineSelect.value;
+            const isMulti = engine === 'aria2' || engine === 'node-multi';
+            $aria2ConcurrencySetting.hidden = !isMulti;
+            const $label = document.getElementById('concurrencySettingLabel') || $aria2ConcurrencySetting.querySelector('label');
+            if ($label) {
+                $label.textContent = engine === 'aria2' ? 'Aria2 并发数：' : '并发线程数：';
+            }
         }
     }
 

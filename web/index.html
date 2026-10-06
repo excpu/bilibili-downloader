@@ -180,11 +180,12 @@
                             <label for="downloadEngineSelect">选择下载引擎：</label>
                             <select id="downloadEngineSelect" class="setting-select">
                                 <option value="node">Node.js 引擎</option>
+                                <option value="node-multi">Node.JS 多线程</option>
                                 <option value="aria2">Aria2 引擎</option>
                             </select>
                         </div>
                         <div class="setting-item hidden" id="aria2ConcurrencySetting">
-                            <label for="aria2ConcurrencySelect">Aria2 并发数：</label>
+                            <label for="aria2ConcurrencySelect" id="concurrencySettingLabel">Aria2 并发数：</label>
                             <select id="aria2ConcurrencySelect" class="setting-select">
                                 <option value="2">2</option>
                                 <option value="4">4</option>

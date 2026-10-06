@@ -5,6 +5,7 @@ const Auth = require('../modules/auth');
 const { encWbi, getWbiKeys } = require('../modules/wbi');
 const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安全函数
 const { downloadFileWithGot } = require('../modules/stream_download');
+const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_download');
 const Aria2Client = require('../modules/aria2-client'); // 引入 Aria2Client 类
 const { downloadWithAria2 } = require('../modules/aria2-client');
 const Setting = require("../modules/config_setting");
@@ -16,7 +17,13 @@ let activeDownloadCount = 0;
 // 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
 const getDownloadFunction = () => {
     const engine = setting.getDownloadEngine() || 'node';
-    return engine === 'aria2' ? downloadWithAria2 : downloadFileWithGot;
+    if (engine === 'aria2') {
+        return downloadWithAria2;
+    }
+    if (engine === 'node-multi') {
+        return downloadFileWithGotMulti;
+    }
+    return downloadFileWithGot;
 };
 
 const aria2 = new Aria2Client();

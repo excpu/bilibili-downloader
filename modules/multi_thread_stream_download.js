@@ -239,7 +239,8 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
 
     const reportComplete = () => {
         if (typeof onProgress === 'function') {
-            onProgress(100, '0.00');
+            const finalSize = knownTotalLength || downloadedLength;
+            onProgress(100, '0.00', finalSize, finalSize);
         }
     };
 
@@ -377,6 +378,13 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
                         }
                     }
 
+                    if (typeof onProgress === 'function') {
+                        const percentage = knownTotalLength
+                            ? Number(Math.min(100, (downloadedLength / knownTotalLength) * 100).toFixed(2))
+                            : 0;
+                        onProgress(percentage, '0.00', downloadedLength, knownTotalLength);
+                    }
+
                     const shouldAppend = statusCode === 206 && downloadedLength > 0;
                     writer = fs.createWriteStream(tempPath, { flags: shouldAppend ? 'a' : 'w' });
 
@@ -408,7 +416,7 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
                             : 0;
 
                         if (typeof onProgress === 'function' && Number.isFinite(speed)) {
-                            onProgress(percentage, speed.toFixed(2));
+                            onProgress(percentage, speed.toFixed(2), downloadedLength, knownTotalLength);
                         }
 
                         lastTime = now;
@@ -516,7 +524,7 @@ class StreamDownload {
         // 统一处理“下载完成”的进度回调
         const reportComplete = () => {
             if (typeof onProgress === 'function') {
-                onProgress(100, '0.00');
+                onProgress(100, '0.00', totalLength, totalLength);
             }
         };
 
@@ -676,6 +684,11 @@ class StreamDownload {
         let progressTimer = null;
 
         if (typeof onProgress === 'function') {
+            const initialPercent = totalLength > 0
+                ? Number(Math.min(100, (lastReportedBytes / totalLength) * 100).toFixed(2))
+                : 0;
+            onProgress(initialPercent, '0.00', lastReportedBytes, totalLength);
+
             progressTimer = setInterval(() => {
                 const now = Date.now();
                 const timeDiff = now - lastReportedTime;
@@ -695,7 +708,7 @@ class StreamDownload {
                     ? Number(Math.min(100, (currentDownloaded / totalLength) * 100).toFixed(2))
                     : 0;
 
-                onProgress(percent, validSpeed);
+                onProgress(percent, validSpeed, currentDownloaded, totalLength);
 
                 lastReportedBytes = currentDownloaded;
                 lastReportedTime = now;

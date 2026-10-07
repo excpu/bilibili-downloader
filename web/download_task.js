@@ -40,15 +40,48 @@ class SpeedSmoother {
         this.smoothedValue = null;
     }
 }
-const speedSm = new SpeedSmoother(0.1);
+const speedSmoothers = new Map();
+const lastAvIdMap = new Map();
+
+function getSpeedSmoother(uid) {
+    if (!speedSmoothers.has(uid)) {
+        speedSmoothers.set(uid, new SpeedSmoother(0.1));
+    }
+    return speedSmoothers.get(uid);
+}
+
+function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+}
+
+function formatETA(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds === Infinity) {
+        return '--:--';
+    }
+    const s = Math.round(seconds);
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     //console.log('进度来了：', data);
     // { percent: 30, speed: 123456, name: 'xxx' }
     // 添加容错：检查对应的DOM元素是否存在
     const progressEl = document.getElementById(`progress-${data.currentUid}`);
+    const percentEl = document.getElementById(`percent-${data.currentUid}`);
     const statusEl = document.getElementById(`status-${data.currentUid}`);
     const speedEl = document.getElementById(`speed-${data.currentUid}`);
+    const sizeEl = document.getElementById(`size-${data.currentUid}`);
+    const etaEl = document.getElementById(`eta-${data.currentUid}`);
     
     if (!progressEl || !statusEl || !speedEl) {
         console.warn(`找不到对应的UI元素，uid: ${data.currentUid}`);
@@ -56,18 +89,69 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
     }
     
     progressEl.style.width = `${data.progress}%`;
+    if (percentEl) {
+        percentEl.textContent = `${data.progress}%`;
+    }
 
     if (data.avId === "audio") {
         statusEl.textContent = "下载音频中";
+        statusEl.style.color = "var(--brand)";
     } else if (data.avId === "video") {
         statusEl.textContent = "下载视频中";
+        statusEl.style.color = "var(--brand)";
+    } else if (data.avId === "converting") {
+        statusEl.textContent = "正在转码中...";
+        statusEl.style.color = "var(--warn)";
+    } else if (data.avId === "merging") {
+        statusEl.textContent = "正在合并中...";
+        statusEl.style.color = "var(--warn)";
     }
 
-    speedEl.textContent = speedSm.update(data.speed);
+    const smoother = getSpeedSmoother(data.currentUid);
+    if (lastAvIdMap.get(data.currentUid) !== data.avId) {
+        lastAvIdMap.set(data.currentUid, data.avId);
+        smoother.reset();
+    }
+
+    const smoothedSpeedStr = smoother.update(data.speed);
+    speedEl.textContent = smoothedSpeedStr;
+
+    const downloaded = Number(data.downloadedBytes) || 0;
+    const total = Number(data.totalBytes) || 0;
+
+    if (sizeEl) {
+        if (total > 0) {
+            sizeEl.textContent = `${formatBytes(downloaded)} / ${formatBytes(total)}`;
+        } else if (downloaded > 0) {
+            sizeEl.textContent = `${formatBytes(downloaded)} / --`;
+        }
+    }
+
+    if (etaEl) {
+        if (data.avId === "converting" || data.avId === "merging" || data.progress >= 100) {
+            etaEl.textContent = "00:00";
+        } else if (total > 0 && downloaded > 0) {
+            const remainingBytes = Math.max(0, total - downloaded);
+            const speedMB = parseFloat(smoothedSpeedStr);
+            const speedBytesPerSec = speedMB * 1024 * 1024;
+            if (remainingBytes <= 0) {
+                etaEl.textContent = "00:00";
+            } else if (speedBytesPerSec > 1024) {
+                const remainingSeconds = remainingBytes / speedBytesPerSec;
+                etaEl.textContent = formatETA(remainingSeconds);
+            } else {
+                etaEl.textContent = "--:--";
+            }
+        } else {
+            etaEl.textContent = "--:--";
+        }
+    }
 });
 
 window.electronAPI.on('download-finished', (data) => {
     console.log('下载完成');
+    speedSmoothers.delete(data);
+    lastAvIdMap.delete(data);
     let taskEle = document.getElementById(`task-${data}`);
     if (taskEle) {
         taskEle.remove();
@@ -176,14 +260,20 @@ function displayTasks(newTask) {
     $taskItem.className = "task";
     $taskItem.id = "task-" + newTask.uid;
 
-    const wrapper = document.createElement("div");
-
-    const titleDiv = document.createElement("div");
-    titleDiv.className = "title title-vc p-10 pl-0";
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "task-header";
 
     const titleSpan = document.createElement("span");
+    titleSpan.className = "task-title";
+    titleSpan.title = newTask.title;
     titleSpan.textContent = newTask.title;
-    titleDiv.appendChild(titleSpan);
+    headerDiv.appendChild(titleSpan);
+
+    const percentSpan = document.createElement("span");
+    percentSpan.className = "task-percent";
+    percentSpan.id = "percent-" + newTask.uid;
+    percentSpan.textContent = "0%";
+    headerDiv.appendChild(percentSpan);
 
     const progressDiv = document.createElement("div");
     progressDiv.className = "progress";
@@ -194,29 +284,72 @@ function displayTasks(newTask) {
     progressDiv.appendChild(progressBar);
 
     const metaDiv = document.createElement("div");
-    metaDiv.className = "meta mt-5";
+    metaDiv.className = "task-meta";
 
-    metaDiv.append("状态：");
-
+    // 状态项
+    const statusItem = document.createElement("div");
+    statusItem.className = "task-meta-item";
+    const statusLabel = document.createElement("span");
+    statusLabel.className = "task-meta-label";
+    statusLabel.textContent = "状态：";
     const statusSpan = document.createElement("span");
+    statusSpan.className = "task-meta-val";
     statusSpan.id = "status-" + newTask.uid;
     statusSpan.textContent = "排队中";
-    metaDiv.appendChild(statusSpan);
+    statusItem.appendChild(statusLabel);
+    statusItem.appendChild(statusSpan);
 
-    metaDiv.append(" · 速度：");
+    // 大小项
+    const sizeItem = document.createElement("div");
+    sizeItem.className = "task-meta-item";
+    const sizeLabel = document.createElement("span");
+    sizeLabel.className = "task-meta-label";
+    sizeLabel.textContent = "大小：";
+    const sizeSpan = document.createElement("span");
+    sizeSpan.className = "task-meta-val";
+    sizeSpan.id = "size-" + newTask.uid;
+    sizeSpan.textContent = "-- / --";
+    sizeItem.appendChild(sizeLabel);
+    sizeItem.appendChild(sizeSpan);
 
+    // 速度项
+    const speedItem = document.createElement("div");
+    speedItem.className = "task-meta-item";
+    const speedLabel = document.createElement("span");
+    speedLabel.className = "task-meta-label";
+    speedLabel.textContent = "速度：";
+    const speedVal = document.createElement("span");
+    speedVal.className = "task-meta-val";
     const speedSpan = document.createElement("span");
     speedSpan.id = "speed-" + newTask.uid;
     speedSpan.textContent = "0.00";
-    metaDiv.appendChild(speedSpan);
+    speedVal.appendChild(speedSpan);
+    speedVal.append(" MB/s");
+    speedItem.appendChild(speedLabel);
+    speedItem.appendChild(speedVal);
 
-    metaDiv.append(" MB/s");
+    // 预计时间项
+    const etaItem = document.createElement("div");
+    etaItem.className = "task-meta-item";
+    const etaLabel = document.createElement("span");
+    etaLabel.className = "task-meta-label";
+    etaLabel.textContent = "预计时间：";
+    const etaSpan = document.createElement("span");
+    etaSpan.className = "task-meta-val";
+    etaSpan.id = "eta-" + newTask.uid;
+    etaSpan.textContent = "--:--";
+    etaItem.appendChild(etaLabel);
+    etaItem.appendChild(etaSpan);
 
-    wrapper.appendChild(titleDiv);
-    wrapper.appendChild(progressDiv);
-    wrapper.appendChild(metaDiv);
+    metaDiv.appendChild(statusItem);
+    metaDiv.appendChild(sizeItem);
+    metaDiv.appendChild(speedItem);
+    metaDiv.appendChild(etaItem);
 
-    $taskItem.appendChild(wrapper);
+    $taskItem.appendChild(headerDiv);
+    $taskItem.appendChild(progressDiv);
+    $taskItem.appendChild(metaDiv);
+
     $tasksContainer.appendChild($taskItem);
 }
 
@@ -258,6 +391,7 @@ async function taskManager() {
         const statusEl = document.getElementById(`status-${currentTask.uid}`);
         if (statusEl) {
             statusEl.textContent = '获取CID中';
+            statusEl.style.color = 'var(--brand)';
         }
 
         const videoInfo = await window.electronAPI.invoke('getVideoInfo', currentTask.bvid);
@@ -265,7 +399,7 @@ async function taskManager() {
             alert(`获取 ${currentTask.title} 的CID失败：${videoInfo.message || '未知错误'}`);
             if (statusEl) {
                 statusEl.textContent = 'CID获取失败';
-                statusEl.style.color = 'red';
+                statusEl.style.color = 'var(--err)';
             }
             taskQuene.shift();
             globalTaskLock = false;
@@ -293,11 +427,20 @@ async function taskManager() {
         const statusEl = document.getElementById(`status-${failedUid}`);
         const speedEl = document.getElementById(`speed-${failedUid}`);
         const progressEl = document.getElementById(`progress-${failedUid}`);
+        const etaEl = document.getElementById(`eta-${failedUid}`);
+        const percentEl = document.getElementById(`percent-${failedUid}`);
         
-        if (statusEl) statusEl.textContent = "下载失败";
-        if (statusEl) statusEl.style.color = "red";
+        if (statusEl) {
+            statusEl.textContent = "下载失败";
+            statusEl.style.color = "var(--err)";
+        }
         if (speedEl) speedEl.textContent = "0.00";
-        if (progressEl) progressEl.style.background = "red";
+        if (progressEl) progressEl.style.background = "var(--err)";
+        if (etaEl) etaEl.textContent = "--:--";
+        if (percentEl) {
+            percentEl.textContent = "失败";
+            percentEl.style.color = "var(--err)";
+        }
         
         // 3秒后自动移除失败的任务UI，避免后续进度事件错误更新
         // setTimeout(() => {

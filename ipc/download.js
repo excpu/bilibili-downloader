@@ -129,9 +129,16 @@ module.exports = function registerDownloadIpc(mainWindow) {
         }
 
         // 局部通知函数，绑定当前任务的 uid
-        const notifyProgress = (progress, speed, avId) => {
+        const notifyProgress = (progress, speed, avId, downloadedBytes = 0, totalBytes = 0) => {
             if (speed === 'NaN' || isNaN(Number(speed))) return;
-            const progressInfo = { progress, speed, currentUid: uid, avId };
+            const progressInfo = {
+                progress,
+                speed,
+                currentUid: uid,
+                avId,
+                downloadedBytes: Number(downloadedBytes) || 0,
+                totalBytes: Number(totalBytes) || 0
+            };
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('download-progress', progressInfo);
             }
@@ -154,7 +161,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 applyCdnHost(videoStream.audioUrl),
                 audioPath,
                 downloadHeaders,
-                (percent, speed) => notifyProgress(percent, speed, 'audio'),
+                (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
                 undefined,
                 setting.getAria2Concurrency()
             );
@@ -162,6 +169,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             if (audioOnly) {
                 // 仅音频模式：直接转换音频为 m4a
                 console.log(`⏳ [${title}] 正在转换为 m4a 格式...`);
+                notifyProgress(100, '0.00', 'converting');
 
                 // 修复 macOS/Linux 下的执行权限问题
                 if (process.platform === 'darwin' || process.platform === 'linux') {
@@ -198,18 +206,20 @@ module.exports = function registerDownloadIpc(mainWindow) {
             } else {
                 // 音视频模式：下载视频并合并
                 console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
+                notifyProgress(0, '0.00', 'video', 0, 0);
                 const downloadFunc = getDownloadFunction();
                 await downloadFunc(
                     applyCdnHost(videoStream.videoUrl),
                     videoPath,
                     downloadHeaders,
-                    (percent, speed) => notifyProgress(percent, speed, 'video'),
+                    (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
                     undefined,
                     setting.getAria2Concurrency()
                 );
 
                 // 合并音视频
                 console.log(`⏳ [${title}] 正在合并...`);
+                notifyProgress(100, '0.00', 'merging');
                 // 1. 修复 macOS/Linux 下的执行权限问题
                 if (process.platform === 'darwin' || process.platform === 'linux') {
                     try {

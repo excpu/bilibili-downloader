@@ -46,7 +46,8 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
     // 统一处理“下载完成”的进度回调，避免多个分支重复写相同逻辑。
     const reportComplete = () => {
         if (typeof onProgress === 'function') {
-            onProgress(100, '0.00');
+            const finalSize = knownTotalLength || downloadedLength;
+            onProgress(100, '0.00', finalSize, finalSize);
         }
     };
 
@@ -187,6 +188,13 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                         }
                     }
 
+                    if (typeof onProgress === 'function') {
+                        const percentage = knownTotalLength
+                            ? Number(Math.min(100, (downloadedLength / knownTotalLength) * 100).toFixed(2))
+                            : 0;
+                        onProgress(percentage, '0.00', downloadedLength, knownTotalLength);
+                    }
+
                     if (knownTotalLength > 0 && downloadedLength >= knownTotalLength) {
                         reportComplete();
                         downloadStream.resume();
@@ -230,7 +238,7 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                             : 0;
 
                         if (typeof onProgress === 'function' && Number.isFinite(speed)) {
-                            onProgress(percentage, speed.toFixed(2));
+                            onProgress(percentage, speed.toFixed(2), downloadedLength, knownTotalLength);
                         }
 
                         lastTime = now;

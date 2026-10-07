@@ -183,6 +183,17 @@ class Aria2Client {
                             return;
                         }
 
+                        if (typeof onProgress === 'function') {
+                            onProgress({
+                                gid,
+                                status: status.status,
+                                percent: 100,
+                                completedSize: total > 0 ? total : completed,
+                                totalSize: total > 0 ? total : completed,
+                                speed: 0
+                            });
+                        }
+
                         resolve({ gid, path: filePath });
                     } else if (status.status === 'error') {
                         clearInterval(timer);
@@ -239,11 +250,11 @@ async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRet
         // 调用下载，使用包装的 onProgress 回调
         await client.download(url, { dir, out, headers, concurrency }, (progress) => {
             // 将 aria2 的进度格式转换为 stream_download 的格式
-            // stream_download: onProgress(percentage, speedMBs)
-            // aria2: onProgress({ percent, speed(B/s), ... })
+            // stream_download: onProgress(percentage, speedMBs, downloadedBytes, totalBytes)
+            // aria2: onProgress({ percent, speed(B/s), completedSize, totalSize, ... })
             if (typeof onProgress === 'function') {
                 const speedMBs = (progress.speed / 1024 / 1024).toFixed(2);
-                onProgress(progress.percent, speedMBs);
+                onProgress(progress.percent, speedMBs, progress.completedSize, progress.totalSize);
             }
         });
     } finally {

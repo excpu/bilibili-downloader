@@ -147,17 +147,117 @@
 }
 
 .task {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
     border: 1px solid var(--stroke);
     border-radius: 8px;
     background: #fff;
+    container-type: inline-size;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.task:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .task+.task {
-    margin-top: 10px
+    margin-top: 10px;
+}
+
+.task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.task-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.task-percent {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    min-width: 48px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.task-meta {
+    display: grid;
+    grid-template-columns: 0.9fr 1.35fr 1fr 1fr;
+    gap: 8px 16px;
+    align-items: center;
+    margin-top: 2px;
+    font-size: 0.83rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+@container (max-width: 640px) {
+    .task-meta {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 12px;
+    }
+}
+
+@container (max-width: 360px) {
+    .task-meta {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}
+
+@media (max-width: 720px) {
+    .task-meta {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 12px;
+    }
+}
+
+@media (max-width: 440px) {
+    .task-meta {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}
+
+.task-meta-item {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.task-meta-label {
+    color: var(--muted);
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.task-meta-val {
+    color: var(--text);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .progress {
@@ -172,7 +272,7 @@
     height: 100%;
     width: 0%;
     background: linear-gradient(90deg, var(--brand), var(--brand-2));
-    transition: 410ms linear;
+    transition: 300ms linear;
 }
 
 .meta {

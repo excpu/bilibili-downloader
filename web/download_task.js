@@ -43,6 +43,10 @@ class SpeedSmoother {
 const speedSmoothers = new Map();
 const lastAvIdMap = new Map();
 
+
+const lastTextUpdateTimeMap = new Map();
+const TEXT_UPDATE_INTERVAL_MS = 1000; // 文字类信息（大小、速度、百分比、预计时间）节流为每 1 秒更新一次，避免频繁跳动
+
 function getSpeedSmoother(uid) {
     if (!speedSmoothers.has(uid)) {
         speedSmoothers.set(uid, new SpeedSmoother(0.1));
@@ -50,6 +54,7 @@ function getSpeedSmoother(uid) {
     return speedSmoothers.get(uid);
 }
 
+// 格式化字节大小函数
 function formatBytes(bytes) {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -58,6 +63,7 @@ function formatBytes(bytes) {
     return `${value.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
 }
 
+// 格式化预计剩余时间（ETA）函数
 function formatETA(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0 || seconds === Infinity) {
         return '--:--';
@@ -88,9 +94,13 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
         return;
     }
     
+    // 进度条保持高频实时更新（保留小数精度，平滑动画）
     progressEl.style.width = `${data.progress}%`;
-    if (percentEl) {
-        percentEl.textContent = `${data.progress}%`;
+
+    const avIdChanged = lastAvIdMap.get(data.currentUid) !== data.avId;
+    if (avIdChanged) {
+        lastAvIdMap.set(data.currentUid, data.avId);
+        getSpeedSmoother(data.currentUid).reset();
     }
 
     if (data.avId === "audio") {
@@ -107,43 +117,57 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
         statusEl.style.color = "var(--warn)";
     }
 
+    // 每次高频数据到达时，持续平滑速度采样
     const smoother = getSpeedSmoother(data.currentUid);
-    if (lastAvIdMap.get(data.currentUid) !== data.avId) {
-        lastAvIdMap.set(data.currentUid, data.avId);
-        smoother.reset();
-    }
-
     const smoothedSpeedStr = smoother.update(data.speed);
-    speedEl.textContent = smoothedSpeedStr;
 
-    const downloaded = Number(data.downloadedBytes) || 0;
-    const total = Number(data.totalBytes) || 0;
+    // 文字类信息（大小、速度、整数百分比、预计时间）节流更新，避免过快刷新造成视觉疲劳与跳动
+    const now = Date.now();
+    const lastUpdate = lastTextUpdateTimeMap.get(data.currentUid) || 0;
+    const isSpecialState = data.avId === "converting" || data.avId === "merging" || data.progress >= 100;
+    const shouldUpdateText = avIdChanged || isSpecialState || (now - lastUpdate >= TEXT_UPDATE_INTERVAL_MS);
 
-    if (sizeEl) {
-        if (total > 0) {
-            sizeEl.textContent = `${formatBytes(downloaded)} / ${formatBytes(total)}`;
-        } else if (downloaded > 0) {
-            sizeEl.textContent = `${formatBytes(downloaded)} / --`;
+    if (shouldUpdateText) {
+        lastTextUpdateTimeMap.set(data.currentUid, now);
+
+        if (percentEl) {
+            const intPercent = data.progress >= 100 ? 100 : Math.floor(Number(data.progress) || 0);
+            percentEl.textContent = `${intPercent}%`;
         }
-    }
 
-    if (etaEl) {
-        if (data.avId === "converting" || data.avId === "merging" || data.progress >= 100) {
-            etaEl.textContent = "00:00";
-        } else if (total > 0 && downloaded > 0) {
-            const remainingBytes = Math.max(0, total - downloaded);
-            const speedMB = parseFloat(smoothedSpeedStr);
-            const speedBytesPerSec = speedMB * 1024 * 1024;
-            if (remainingBytes <= 0) {
+        speedEl.textContent = smoothedSpeedStr;
+
+        const downloaded = Number(data.downloadedBytes) || 0;
+        const total = Number(data.totalBytes) || 0;
+
+        if (sizeEl) {
+            if (total > 0) {
+                sizeEl.textContent = `${formatBytes(downloaded)} / ${formatBytes(total)}`;
+            } else if (downloaded > 0) {
+                sizeEl.textContent = `${formatBytes(downloaded)} / --`;
+            } else {
+                sizeEl.textContent = '-- / --';
+            }
+        }
+
+        if (etaEl) {
+            if (data.avId === "converting" || data.avId === "merging" || data.progress >= 100) {
                 etaEl.textContent = "00:00";
-            } else if (speedBytesPerSec > 1024) {
-                const remainingSeconds = remainingBytes / speedBytesPerSec;
-                etaEl.textContent = formatETA(remainingSeconds);
+            } else if (total > 0 && downloaded > 0) {
+                const remainingBytes = Math.max(0, total - downloaded);
+                const speedMB = parseFloat(smoothedSpeedStr);
+                const speedBytesPerSec = speedMB * 1024 * 1024;
+                if (remainingBytes <= 0) {
+                    etaEl.textContent = "00:00";
+                } else if (speedBytesPerSec > 1024) {
+                    const remainingSeconds = remainingBytes / speedBytesPerSec;
+                    etaEl.textContent = formatETA(remainingSeconds);
+                } else {
+                    etaEl.textContent = "--:--";
+                }
             } else {
                 etaEl.textContent = "--:--";
             }
-        } else {
-            etaEl.textContent = "--:--";
         }
     }
 });
@@ -152,6 +176,7 @@ window.electronAPI.on('download-finished', (data) => {
     console.log('下载完成');
     speedSmoothers.delete(data);
     lastAvIdMap.delete(data);
+    lastTextUpdateTimeMap.delete(data);
     let taskEle = document.getElementById(`task-${data}`);
     if (taskEle) {
         taskEle.remove();

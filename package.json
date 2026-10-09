@@ -7,7 +7,9 @@
         "build": "electron-builder"
     },
     "keywords": [
-        "bilibili"
+        "bilibili",
+        "downloader",
+        "video"
     ],
     "author": {
         "name": "Ran",

@@ -124,7 +124,9 @@ module.exports = function registerInformationIpc(mainWindow) {
                 // 提取 SESSDATA 和 bili_jct
                 const sessdata = cookieData['SESSDATA'] || '';
                 const biliJct = cookieData['bili_jct'] || '';
-                auth.updateLoginInfo(sessdata, biliJct);
+                const DedeUserID = cookieData['DedeUserID'] || '';
+                const DedeUserID__ckMd5 = cookieData['DedeUserID__ckMd5'] || '';
+                auth.updateLoginInfo(sessdata, biliJct, DedeUserID, DedeUserID__ckMd5);
                 await auth.ensureBuvidCredentials(true);
                 auth.updateTicket(); // 更新票据
                 return { success: true };

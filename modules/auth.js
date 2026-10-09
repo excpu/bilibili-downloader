@@ -33,6 +33,8 @@ class Auth {
                     buvid3: '',
                     buvid4: '',
                     b_nut: '',
+                    DedeUserID: '',
+                    DedeUserID__ckMd5: '',
                     buvidRefreshAt: 0,
                     ticketExpiry: Date.now()
                 };
@@ -67,10 +69,12 @@ class Auth {
         this.save(data);
     }
 
-    updateLoginInfo(SESSDATA, bili_jct) {
+    updateLoginInfo(SESSDATA, bili_jct, DedeUserID, DedeUserID__ckMd5) {
         const data = this.load() || {};
         data.SESSDATA = SESSDATA;
         data.bili_jct = bili_jct;
+        data.DedeUserID = DedeUserID;
+        data.DedeUserID__ckMd5 = DedeUserID__ckMd5;
         data.loginStatus = true;
         this.save(data);
     }
@@ -241,6 +245,11 @@ class Auth {
             cookieParts.push(`buvid3=${data.buvid3}`);
             cookieParts.push(`buvid4=${data.buvid4}`);
             cookieParts.push(`b_nut=${data.b_nut}`);
+        }
+        // DedeUserID / DedeUserID__ckMd5 也需要携带 (适用于重新登录用户)
+        if (isValidCookieValue(data.DedeUserID) && isValidCookieValue(data.DedeUserID__ckMd5)) {
+            cookieParts.push(`DedeUserID=${data.DedeUserID}`);
+            cookieParts.push(`DedeUserID__ckMd5=${data.DedeUserID__ckMd5}`);
         }
 
         //console.log('请求拼接:', cookieParts.join('; '));

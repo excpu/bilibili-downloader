@@ -2,4 +2,4 @@
 
 function showVideoBox(){
     $videoInfoSection.classList.remove('hidden');
-}
+}6

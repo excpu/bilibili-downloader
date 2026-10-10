@@ -157,6 +157,13 @@ function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;
 
+        const subtitlePage = p[0];
+        const subtitleBvid = subtitlePage?.bvid || bvid;
+        const subtitleCid = subtitlePage?.cid || cid;
+        infoSection.getSubtitleInfo(subtitleBvid, subtitleCid).catch((error) => {
+            console.error('获取字幕信息失败:', error);
+            alert(`获取字幕信息失败：${error.message}`);
+        });
     });
 }
 
@@ -340,6 +347,5 @@ document.getElementById('refreshLoginQr').addEventListener('click', () => {
     console.log('刷新登录二维码');
     requestLoginQr();
 });
-
 
 

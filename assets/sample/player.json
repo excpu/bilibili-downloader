@@ -1,0 +1,170 @@
+{
+    "code": 0,
+    "message": "OK",
+    "ttl": 1,
+    "data": {
+        "aid": 774534563,
+        "bvid": "BVdemodemo",
+        "allow_bp": false,
+        "no_share": false,
+        "cid": 234452,
+        "max_limit": 1000,
+        "page_no": 1,
+        "has_next": false,
+        "ip_info": {
+            "ip": "127.0.0.1",
+            "zone_ip": "172.16.1.1",
+            "zone_id": 14565,
+            "country": "美国",
+            "province": "新泽西州",
+            "city": "爱迪生"
+        },
+        "login_mid": 269407962,
+        "login_mid_hash": "a1d0654e",
+        "is_owner": false,
+        "name": "示例用户名",
+        "permission": "10000,1001",
+        "level_info": {
+            "current_level": 5,
+            "current_min": 10800,
+            "current_exp": 26668,
+            "next_exp": 28890,
+            "level_up": 1662694032
+        },
+        "vip": {
+            "type": 2,
+            "status": 1,
+            "due_date": 1861113600000,
+            "vip_pay_type": 1,
+            "theme_type": 0,
+            "label": {
+                "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+                "text": "年度大会员",
+                "label_theme": "annual_vip",
+                "text_color": "#FFFFFF",
+                "bg_style": 1,
+                "bg_color": "#FB7299",
+                "border_color": "",
+                "use_img_label": true,
+                "img_label_uri_hans": "",
+                "img_label_uri_hant": "",
+                "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/6234b0574demod19ed98b49458b68.png",
+                "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e3692demo1e22a4d5/VEW8fCC0hg.png",
+                "label_id": 65,
+                "label_goto": {
+                    "mobile": "https://big.bilibili.com/mobile/index?navhide=1\u0026from_spmid=vipicon",
+                    "pc_web": "https://account.bilibili.com/big?from_spmid=vipicon"
+                },
+                "img_label_uri_i18n": "",
+                "img_label_uri_i18n_static": "",
+                "label_type": 1
+            },
+            "avatar_subscript": 1,
+            "nickname_color": "#FB7299",
+            "role": 3,
+            "avatar_subscript_url": "",
+            "tv_vip_status": 0,
+            "tv_vip_pay_type": 0,
+            "tv_due_date": 1626451200,
+            "avatar_icon": {
+                "icon_type": 3,
+                "icon_resource": {
+                    "type": 1,
+                    "url": "http://i0.hdslb.com/bfs/vip/dbe2demo023010bce03b3.png@80w_80h_1c.webp"
+                }
+            },
+            "ott_info": {
+                "vip_type": 1,
+                "pay_type": 0,
+                "pay_channel_id": "",
+                "status": 0,
+                "overdue_time": 1626451200
+            },
+            "super_vip": {
+                "is_super_vip": false
+            }
+        },
+        "answer_status": 0,
+        "block_time": 0,
+        "role": "0",
+        "last_play_time": 9000,
+        "last_play_cid": 234452,
+        "now_time": 1791595703,
+        "online_count": 1,
+        "need_login_subtitle": false,
+        "subtitle": {
+            "allow_submit": false,
+            "lan": "",
+            "lan_doc": "",
+            "subtitles": [
+                {
+                    "id": 21223425070189054208,
+                    "lan": "ai-zh",
+                    "lan_doc": "中文",
+                    "is_lock": false,
+                    "subtitle_url": "//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/11741182296577042605874311d56f6de663ded3cc3ab0e8a9b5389405?auth_key=179demo-0-e9c96ed7a97acbe7fad6783ddafb0468",
+                    "subtitle_url_v2": "//subtitle.bilibili.com/S%13%1BP.%1D%28%29X%2CR%5Ej%1F%25w%0E%02H%5EHO4%14%7B4%08K@%3C%7B%00M%0B%0A%1AM%08%056N6$%0C0\u0026%02%1E%01%09%0E%1A2V~%15B%5C%17BQYBQ%09%7B%19%5E%5Cr%1DVR%5CT%5EVZ%5DXYvp%1Eo6%0BM%18J%18%102J%2CGF%09DC%0CS%11Q%5D%7B%1DQUr%1FU?auth_key=demo0468",
+                    "type": 1,
+                    "id_str": "21223425070189054208",
+                    "ai_type": 0,
+                    "ai_status": 2
+                }
+            ],
+            "subtitle_position": null,
+            "font_size_type": 0
+        },
+        "player_icon": {
+            "ctime": 1769670810
+        },
+        "view_points": [],
+        "preview_toast": "为创作付费，购买观看完整视频|购买观看",
+        "options": {
+            "is_360": false,
+            "without_vip": false
+        },
+        "guide_attention": [],
+        "jump_card": [],
+        "operation_card": [],
+        "online_switch": {
+            "enable_gray_dash_playback": "500",
+            "new_broadcast": "1",
+            "realtime_dm": "1",
+            "subtitle_submit_switch": "1"
+        },
+        "fawkes": {
+            "config_version": 39052,
+            "ff_version": 21289
+        },
+        "show_switch": {
+            "long_progress": false
+        },
+        "bgm_info": {
+            "music_id": "MA456110818635855948",
+            "music_title": "发现《Mines (Star Lumpy)》",
+            "jump_url": "https://music.bilibili.com/h5/music-detail?music_id=MA456110818635855948\u0026cid=42235874311\u0026aid=1174234822965770\u0026na_close_hide=1"
+        },
+        "toast_block": false,
+        "is_upower_exclusive": false,
+        "is_upower_play": false,
+        "is_ugc_pay_preview": false,
+        "elec_high_level": {
+            "privilege_type": 0,
+            "title": "",
+            "sub_title": "",
+            "show_button": false,
+            "button_text": "",
+            "jump_url": "",
+            "intro": "",
+            "new": false,
+            "question_text": "",
+            "qa_title": ""
+        },
+        "disable_show_up_info": false,
+        "is_upower_exclusive_with_qa": false,
+        "arc_aigc": null,
+        "self_visible": null,
+        "script_pace_exp": "0",
+        "asr_language": "",
+        "ocr_language": ""
+    }
+}

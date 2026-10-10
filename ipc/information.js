@@ -367,4 +367,50 @@ module.exports = function registerInformationIpc(mainWindow) {
             };
         }
     });
+    // 播放器配置信息接口 (获取字幕)
+    ipcMain.handle('getPlayerConfig', async (event, bvid, cid) => {
+        try {
+            const url = 'https://api.bilibili.com/x/player/wbi/v2';
+            await auth.ensureBuvidCredentials();
+            const wbiKeys = await getWbiKeys();
+            const params = {
+                bvid: bvid,
+                cid: cid,
+                web_location: 1315873,
+            };
+            const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
+            const credentialCookie = auth.getConstructedCookie();
+            const response = await got.get(`${url}?${wbiQuery}`, {
+                headers: {
+                    'Referer': `https://www.bilibili.com/video/${bvid}/`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.1',
+                    'Accept': 'application/json',
+                    'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+                    'Cache-Control': 'no-cache',
+                    'Origin': 'https://www.bilibili.com',
+                    'Cookie': credentialCookie // 登录验证
+                },
+                responseType: 'json',
+                http2: true
+            });
+            const data = response.body || {};
+            if (data.code !== 0) {
+                return {
+                    success: false,
+                    message: data.message || '获取播放器配置信息失败',
+                    data
+                };
+            }
+            return {
+                success: true,
+                data
+            };
+        } catch (error) {
+            console.error('获取播放器配置信息失败:', error.message);
+            return {
+                success: false,
+                message: `获取播放器配置信息失败: ${error.message}`
+            };
+        }
+    });
 }

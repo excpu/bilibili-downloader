@@ -1,6 +1,27 @@
 /* 设置弹出框样式 */
 
 /* 设置分区 */
+.setting-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.setting-tab {
+    border-radius: 6px 6px 0 0;
+    opacity: 0.75;
+}
+
+.setting-tab.active {
+    opacity: 1;
+    border-bottom: 2px solid var(--brand);
+}
+
+.setting-tab-panel.hidden {
+    display: none;
+}
+
 .setting-section {
     /* margin-bottom: 24px;
     padding-bottom: 24px; */
@@ -68,6 +89,19 @@
     font-weight: 500;
     color: var(--text-secondary, rgba(0, 0, 0, 0.6));
     display: block;
+}
+
+.setting-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+    font-size: 13px;
+}
+
+.setting-checkbox input {
+    margin: 0;
 }
 
 /* 路径输入组 */
@@ -162,4 +196,13 @@
     .setting-select {
         width: 100%;
     }
+}
+
+/* 解决设置上部分空过大问题 */
+#settingModelBody {
+    padding-top: 0;
+}
+
+#settingModelHeader {
+    padding-bottom: 5px;
 }

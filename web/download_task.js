@@ -208,6 +208,7 @@ function manageDownloadStart() {
     // 音频同理：避免不同视频返回的可用流不一致时直接失败。
     const audioQualityId = audioOption ? parseInt(audioOption.dataset.qualityId || String(audioIndex)) : audioIndex;
     const audioCodec = audioOption ? (audioOption.dataset.codec || '') : '';
+    const subtitleLanguage = document.getElementById('qualitySelectSubtitle')?.value || '';
     currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
     currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
@@ -246,6 +247,7 @@ function manageDownloadStart() {
                 videoCodec,
                 audioQualityId,
                 audioCodec,
+                subtitleLanguage,
                 danmu: currentVideoIdentity.danmu,
                 cover: currentVideoIdentity.cover,
                 coverUrl: partInfo.coverUrl || currentVideoIdentity.coverUrl,
@@ -268,6 +270,7 @@ function manageDownloadStart() {
             videoCodec,
             audioQualityId,
             audioCodec,
+            subtitleLanguage,
             danmu: currentVideoIdentity.danmu,
             cover: currentVideoIdentity.cover,
             coverUrl: currentVideoIdentity.coverUrl,
@@ -441,6 +444,35 @@ async function taskManager() {
 
     const result = await window.electronAPI.invoke('downloadTarget', currentTask);
     if (result.success) {
+        if (currentTask.subtitleLanguage) {
+            try {
+                const playerConfig = await window.electronAPI.invoke('getPlayerConfig', currentTask.bvid, currentTask.cid);
+                if (!playerConfig?.success) {
+                    model.showErrorMessage(`获取 ${currentTask.title} 的字幕信息失败：${playerConfig?.message || '未知错误'}`);
+                } else {
+                    const subtitles = playerConfig.data?.data?.subtitle?.subtitles || [];
+                    const subtitle = subtitles.find(item =>
+                        String(item.lan || item.id || '') === currentTask.subtitleLanguage
+                    );
+                    if (subtitle?.subtitle_url) {
+                        const subtitleResult = await window.electronAPI.invoke('downloadSubtitle', {
+                            subtitleUrl: subtitle.subtitle_url,
+                            language: subtitle.lan || currentTask.subtitleLanguage,
+                            title: currentTask.title
+                        });
+                        if (subtitleResult?.success) {
+                            model.showSuccessMessage(`字幕下载完成：${currentTask.title}`);
+                        } else {
+                            model.showErrorMessage(`字幕下载失败：${currentTask.title}，${subtitleResult?.message || '未知错误'}`);
+                        }
+                    } else if (subtitle) {
+                        model.showErrorMessage(`字幕下载失败：${currentTask.title}，字幕地址缺失`);
+                    }
+                }
+            } catch (error) {
+                model.showErrorMessage(`字幕下载失败：${currentTask.title}，${error.message || '未知错误'}`);
+            }
+        }
         // 下载成功
         await downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid);
         await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid);

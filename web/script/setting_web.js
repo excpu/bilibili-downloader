@@ -9,6 +9,10 @@ function createSettingWeb() {
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
     const $cdnSelect = document.getElementById('cdnSelect');
+    const $subtitleFormatSelect = document.getElementById('subtitleFormatSelect');
+    const $assSubtitleSettings = document.getElementById('assSubtitleSettings');
+    const $subtitleAppendLanguage = document.getElementById('subtitleAppendLanguage');
+    const $assOptionInputs = [...document.querySelectorAll('[data-ass-option]')];
     
     async function openSetting() {
         settingModel.classList.remove('hidden');
@@ -19,6 +23,8 @@ function createSettingWeb() {
         await loadAria2Concurrency();
         await loadDanmuDownloadMethod();
         await loadCdnList();
+        await loadSubtitleSettings();
+        selectSettingTab('basicSettingsTab');
     }
 
     function closeSetting() {
@@ -103,6 +109,69 @@ function createSettingWeb() {
 
         $cdnSelect.value = cdnHost || '';
     }
+
+    function updateAssSettingsVisibility() {
+        $assSubtitleSettings.classList.toggle('hidden', $subtitleFormatSelect.value !== 'ass');
+    }
+
+    async function loadSubtitleSettings() {
+        const settings = await window.electronAPI.invoke('getSubtitleSettings');
+        if (!settings) return;
+
+        $subtitleFormatSelect.value = settings.format || 'srt';
+        $subtitleAppendLanguage.checked = settings.appendLanguage === true;
+        for (const input of $assOptionInputs) {
+            const value = settings.assOptions?.[input.dataset.assOption];
+            if (input.type === 'checkbox') {
+                input.checked = value === true;
+            } else if (value !== undefined && value !== null) {
+                input.value = String(value);
+            }
+        }
+        updateAssSettingsVisibility();
+    }
+
+    function getSubtitleSettingsFromForm() {
+        const assOptions = {};
+        for (const input of $assOptionInputs) {
+            assOptions[input.dataset.assOption] = input.type === 'checkbox'
+                ? input.checked
+                : input.type === 'number'
+                    ? Number(input.value)
+                    : input.value;
+        }
+        return {
+            format: $subtitleFormatSelect.value,
+            appendLanguage: $subtitleAppendLanguage.checked,
+            assOptions
+        };
+    }
+
+    function saveSubtitleSettings() {
+        return window.electronAPI.invoke('setSubtitleSettings', getSubtitleSettingsFromForm());
+    }
+
+    function selectSettingTab(tabId) {
+        document.querySelectorAll('[data-setting-tab]').forEach(button => {
+            const isActive = button.dataset.settingTab === tabId;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+        });
+        document.querySelectorAll('.setting-tab-panel').forEach(panel => {
+            panel.classList.toggle('hidden', panel.id !== tabId);
+        });
+    }
+
+    document.querySelectorAll('[data-setting-tab]').forEach(button => {
+        button.addEventListener('click', () => selectSettingTab(button.dataset.settingTab));
+    });
+
+    $subtitleFormatSelect.addEventListener('change', () => {
+        updateAssSettingsVisibility();
+        saveSubtitleSettings();
+    });
+    $subtitleAppendLanguage.addEventListener('change', saveSubtitleSettings);
+    $assOptionInputs.forEach(input => input.addEventListener('change', saveSubtitleSettings));
 
     async function selectDownloadPath() {
         const selectedPath = await window.electronAPI.invoke('selectDownloadPath');

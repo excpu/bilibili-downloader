@@ -68,5 +68,9 @@ module.exports = function registerSettingIpc(mainWindow) {
         setting.updateCdnHost(cdnHost);
     });
 
-    
+    ipcMain.handle('getSubtitleSettings', () => setting.getSubtitleSettings());
+
+    ipcMain.handle('setSubtitleSettings', (event, subtitleSettings) =>
+        setting.updateSubtitleSettings(subtitleSettings)
+    );
 }

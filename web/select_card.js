@@ -507,6 +507,44 @@ function selectInfo() {
         activeCollectionEpisodes = [];
     }
 
+    async function getSubtitleInfo(bvid, cid) {
+        const $subtitleSelection = document.getElementById('subtitleSelection');
+        const $qualitySelectSubtitle = document.getElementById('qualitySelectSubtitle');
+        $subtitleSelection.classList.add('hidden');
+        $qualitySelectSubtitle.replaceChildren();
+
+        const playerConfig = await window.electronAPI.invoke('getPlayerConfig', bvid, cid);
+        const subtitles = playerConfig?.success
+            ? playerConfig.data?.data?.subtitle?.subtitles
+            : null;
+        if (!playerConfig?.success) {
+            throw new Error(playerConfig?.message || '获取字幕信息失败');
+        }
+
+        if (!Array.isArray(subtitles) || subtitles.length === 0) {
+            $subtitleSelection.classList.add('hidden');
+            return;
+        }
+
+        const noSubtitleOption = document.createElement('option');
+        noSubtitleOption.value = '';
+        noSubtitleOption.textContent = '不下载字幕';
+        $qualitySelectSubtitle.appendChild(noSubtitleOption);
+
+        subtitles.forEach((subtitle, index) => {
+            const option = document.createElement('option');
+            option.value = String(subtitle.lan || subtitle.id || index);
+            const label = subtitle.lan_doc || subtitle.lan || `字幕 ${index + 1}`;
+            const isAiSubtitle = String(subtitle.lan || '').toLowerCase().startsWith('ai-');
+            option.textContent = isAiSubtitle ? `${label}（AI）` : label;
+            $qualitySelectSubtitle.appendChild(option);
+        });
+
+        $subtitleSelection.classList.remove('hidden');
+        console.log('获取到字幕列表:', subtitles);
+        return playerConfig;
+    }
+
 
     return {
         updateTitle,
@@ -525,6 +563,7 @@ function selectInfo() {
         selectAllPart,
         ignoreAllPart,
         collectionSearch,
-        hideCollectionSearch
+        hideCollectionSearch,
+        getSubtitleInfo
     }
 }

@@ -70,6 +70,10 @@
                         <label for="qualitySelectAudio">首选音频质量：</label>
                         <select id="qualitySelectAudio"></select>
                     </div>
+                    <div class="quality-selection hidden" id="subtitleSelection">
+                        <label for="qualitySelectSubtitle">首选字幕：</label>
+                        <select id="qualitySelectSubtitle"></select>
+                    </div>
                     <div class="quality-selection">
                         <input type="checkbox" id="downloadDanmuCheckbox">
                         <label class="clickable" id="downloadDanmuLabel" onclick="independentDownload.downloadDanmu()">下载弹幕</label>
@@ -100,23 +104,7 @@
         <!-- 下载任务展示 -->
         <section class="card m-card">
             <h2 class="card-title">下载任务</h2>
-            <div id="tasksContainer" aria-live="polite">
-                <!-- <div class="task">
-                    <div class="task-header">
-                        <span class="task-title" title="清朝老片">清朝老片</span>
-                        <span class="task-percent">72%</span>
-                    </div>
-                    <div class="progress">
-                        <i style="width:72%"></i>
-                    </div>
-                    <div class="task-meta">
-                        <div class="task-meta-item"><span class="task-meta-label">状态：</span><span class="task-meta-val">下载视频中</span></div>
-                        <div class="task-meta-item"><span class="task-meta-label">大小：</span><span class="task-meta-val">12.50 MB / 45.20 MB</span></div>
-                        <div class="task-meta-item"><span class="task-meta-label">速度：</span><span class="task-meta-val">3.20 MB/s</span></div>
-                        <div class="task-meta-item"><span class="task-meta-label">预计时间：</span><span class="task-meta-val">00:10</span></div>
-                    </div>
-                </div> -->
-            </div>
+            <div id="tasksContainer" aria-live="polite"></div>
         </section>
 
         <!-- 弹出框容器 -->
@@ -137,74 +125,165 @@
         <!-- 设置弹出框 -->
         <div class="model hidden" id="settingModel">
             <div class="model-content">
-                <div class="model-header">
+                <div class="model-header" id="settingModelHeader">
                     <span id="settingModelTitle">设置</span>
                     <button class="btn small" id="settingModelCloseBtn">关闭</button>
                 </div>
                 <div class="model-body" id="settingModelBody">
-                    <!-- 用户信息部分 -->
-                    <div class="setting-section">
-                        <h3 class="setting-section-title">用户信息</h3>
-                        <div class="user-info">
-                            <img id="settingUserAvatar" class="user-avatar" src="./assets/compressed-loading-placeholder.jpg" alt="用户头像" />
-                            <div class="user-details">
-                                <div class="user-name" id="settingUserName">未登录</div>
-                                <button class="btn small" id="logoutBtn">退出登录</button>
+                    <div class="setting-tabs" role="tablist" aria-label="设置分类">
+                        <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
+                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
+                    </div>
+                    <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab" aria-labelledby="basicSettingsTabButton">
+                        <!-- 用户信息部分 -->
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">用户信息</h3>
+                            <div class="user-info">
+                                <img id="settingUserAvatar" class="user-avatar" src="./assets/compressed-loading-placeholder.jpg" alt="用户头像" />
+                                <div class="user-details">
+                                    <div class="user-name" id="settingUserName">未登录</div>
+                                    <button class="btn small" id="logoutBtn">退出登录</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 下载目录部分 -->
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">下载设置</h3>
+                            <div class="setting-item">
+                                <label for="downloadPathInput">下载目录：</label>
+                                <div class="path-input-group">
+                                    <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..." readonly />
+                                    <button class="btn small" id="selectDownloadPathBtn">浏览</button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmuDownloadMethodSelect">弹幕下载方式：</label>
+                                <select id="danmuDownloadMethodSelect" class="setting-select">
+                                    <option value="traditional">传统接口</option>
+                                    <option value="protobuf">protobuf 接口</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 下载引擎部分 -->
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">下载引擎</h3>
+                            <div class="setting-item">
+                                <label for="downloadEngineSelect">选择下载引擎：</label>
+                                <select id="downloadEngineSelect" class="setting-select">
+                                    <option value="node">Node.js 引擎</option>
+                                    <option value="node-multi">Node.JS 多线程</option>
+                                    <option value="aria2">Aria2 引擎</option>
+                                </select>
+                            </div>
+                            <div class="setting-item hidden" id="aria2ConcurrencySetting">
+                                <label for="aria2ConcurrencySelect" id="concurrencySettingLabel">Aria2 并发数：</label>
+                                <select id="aria2ConcurrencySelect" class="setting-select">
+                                    <option value="2">2</option>
+                                    <option value="4">4</option>
+                                    <option value="8">8</option>
+                                    <option value="16">16</option>
+                                    <option value="32">32</option>
+                                    <option value="64">64</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- CDN 选择部分 -->
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">CDN 选择</h3>
+                            <div class="setting-item">
+                                <label for="cdnSelect">下载 CDN：</label>
+                                <select id="cdnSelect" class="setting-select">
+                                    <option value="">默认（不替换）</option>
+                                </select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 下载目录部分 -->
-                    <div class="setting-section">
-                        <h3 class="setting-section-title">下载设置</h3>
-                        <div class="setting-item">
-                            <label for="downloadPathInput">下载目录：</label>
-                            <div class="path-input-group">
-                                <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..." readonly />
-                                <button class="btn small" id="selectDownloadPathBtn">浏览</button>
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="subtitleSettingsTab" aria-labelledby="subtitleSettingsTabButton">
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">字幕保存</h3>
+                            <div class="setting-item">
+                                <label for="subtitleFormatSelect">字幕格式：</label>
+                                <select id="subtitleFormatSelect" class="setting-select">
+                                    <option value="srt">SRT</option>
+                                    <option value="ass">ASS</option>
+                                </select>
                             </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="subtitleAppendLanguage">
+                                <span>在字幕文件名后添加语言标志</span>
+                            </label>
                         </div>
-                        <div class="setting-item">
-                            <label for="danmuDownloadMethodSelect">弹幕下载方式：</label>
-                            <select id="danmuDownloadMethodSelect" class="setting-select">
-                                <option value="traditional">传统接口</option>
-                                <option value="protobuf">protobuf 接口</option>
-                            </select>
-                        </div>
-                    </div>
 
-                    <!-- 下载引擎部分 -->
-                    <div class="setting-section">
-                        <h3 class="setting-section-title">下载引擎</h3>
-                        <div class="setting-item">
-                            <label for="downloadEngineSelect">选择下载引擎：</label>
-                            <select id="downloadEngineSelect" class="setting-select">
-                                <option value="node">Node.js 引擎</option>
-                                <option value="node-multi">Node.JS 多线程</option>
-                                <option value="aria2">Aria2 引擎</option>
-                            </select>
-                        </div>
-                        <div class="setting-item hidden" id="aria2ConcurrencySetting">
-                            <label for="aria2ConcurrencySelect" id="concurrencySettingLabel">Aria2 并发数：</label>
-                            <select id="aria2ConcurrencySelect" class="setting-select">
-                                <option value="2">2</option>
-                                <option value="4">4</option>
-                                <option value="8">8</option>
-                                <option value="16">16</option>
-                                <option value="32">32</option>
-                                <option value="64">64</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- CDN 选择部分 -->
-                    <div class="setting-section">
-                        <h3 class="setting-section-title">CDN 选择</h3>
-                        <div class="setting-item">
-                            <label for="cdnSelect">下载 CDN：</label>
-                            <select id="cdnSelect" class="setting-select">
-                                <option value="">默认（不替换）</option>
-                            </select>
+                        <div class="setting-section hidden" id="assSubtitleSettings">
+                            <h3 class="setting-section-title">ASS 字幕设置</h3>
+                            <div class="setting-item">
+                                <label for="assTitle">字幕标题：</label>
+                                <input class="setting-select" type="text" id="assTitle" data-ass-option="title">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assPlayResX">画面宽度：</label>
+                                <input class="setting-select" type="number" id="assPlayResX" data-ass-option="playResX" min="1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assPlayResY">画面高度：</label>
+                                <input class="setting-select" type="number" id="assPlayResY" data-ass-option="playResY" min="1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assFontName">字体：</label>
+                                <input class="setting-select" type="text" id="assFontName" data-ass-option="fontName">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assFontSize">字号：</label>
+                                <input class="setting-select" type="number" id="assFontSize" data-ass-option="fontSize" min="1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assPrimaryColor">文字颜色：</label>
+                                <input class="setting-select" type="color" id="assPrimaryColor" data-ass-option="primaryColor">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assOutlineColor">描边颜色：</label>
+                                <input class="setting-select" type="color" id="assOutlineColor" data-ass-option="outlineColor">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assBackColor">阴影颜色：</label>
+                                <input class="setting-select" type="color" id="assBackColor" data-ass-option="backColor">
+                            </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="assBold" data-ass-option="bold">
+                                <span>文字加粗</span>
+                            </label>
+                            <div class="setting-item">
+                                <label for="assOutline">描边宽度：</label>
+                                <input class="setting-select" type="number" id="assOutline" data-ass-option="outline" min="0" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assShadow">阴影深度：</label>
+                                <input class="setting-select" type="number" id="assShadow" data-ass-option="shadow" min="0" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assAlignment">对齐方式：</label>
+                                <select class="setting-select" id="assAlignment" data-ass-option="alignment">
+                                    <option value="1">左下</option><option value="2">居中下</option><option value="3">右下</option>
+                                    <option value="4">左中</option><option value="5">居中</option><option value="6">右中</option>
+                                    <option value="7">左上</option><option value="8">居中上</option><option value="9">右上</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="assMarginL">左边距：</label>
+                                <input class="setting-select" type="number" id="assMarginL" data-ass-option="marginL" min="0">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assMarginR">右边距：</label>
+                                <input class="setting-select" type="number" id="assMarginR" data-ass-option="marginR" min="0">
+                            </div>
+                            <div class="setting-item">
+                                <label for="assMarginV">垂直边距：</label>
+                                <input class="setting-select" type="number" id="assMarginV" data-ass-option="marginV" min="0">
+                            </div>
                         </div>
                     </div>
 

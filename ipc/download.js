@@ -9,6 +9,7 @@ const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_dow
 const Aria2Client = require('../modules/aria2-client'); // 引入 Aria2Client 类
 const { downloadWithAria2 } = require('../modules/aria2-client');
 const Setting = require("../modules/config_setting");
+const subtitleJsonConverter = require('../modules/sub_json_converter');
 const setting = new Setting();
 setting.load(); // 加载设置数据
 
@@ -62,6 +63,54 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
 }
 
 module.exports = function registerDownloadIpc(mainWindow) {
+    ipcMain.handle('downloadSubtitle', async (event, payload) => {
+        try {
+            const subtitleUrl = String(payload?.subtitleUrl || '');
+            if (!subtitleUrl) {
+                return { success: false, message: '字幕下载地址为空' };
+            }
+
+            const normalizedUrl = subtitleUrl.startsWith('//')
+                ? `https:${subtitleUrl}`
+                : subtitleUrl;
+            const parsedUrl = new URL(normalizedUrl);
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+                return { success: false, message: '字幕下载地址协议无效' };
+            }
+
+            const response = await fetch(parsedUrl);
+            if (!response.ok) {
+                return { success: false, message: `字幕请求失败：HTTP ${response.status}` };
+            }
+
+            const subtitleData = await response.json();
+            const subtitleSettings = setting.getSubtitleSettings();
+            const isAss = subtitleSettings.format === 'ass';
+            const subtitleContent = isAss
+                ? subtitleJsonConverter.jsonToAss(subtitleData, subtitleSettings.assOptions)
+                : subtitleJsonConverter.jsonToSrt(subtitleData);
+            if (!subtitleContent) {
+                return { success: false, message: '字幕内容为空或格式无效' };
+            }
+
+            const title = sanitizePath(String(payload.title || 'subtitle'));
+            const language = sanitizePath(String(payload.language || 'subtitle'));
+            const fileName = subtitleSettings.appendLanguage ? `${title}_${language}` : title;
+            const saveSubtitle = isAss
+                ? subtitleJsonConverter.saveAssToFile
+                : subtitleJsonConverter.saveSrtToFile;
+            const filePath = await saveSubtitle(
+                subtitleContent,
+                setting.getDownloadPath(),
+                `${fileName}.${isAss ? 'ass' : 'srt'}`
+            );
+            return { success: true, filePath };
+        } catch (error) {
+            console.error('下载字幕失败:', error.message);
+            return { success: false, message: `下载字幕失败：${error.message}` };
+        }
+    });
+
     // 添加下载任务 (新增支持多视频并发)
     ipcMain.handle('downloadTarget', async (event, payload) => {
         let {

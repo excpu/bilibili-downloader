@@ -3,33 +3,33 @@
     "message": "OK",
     "ttl": 1,
     "data": {
-        "aid": 774534563,
-        "bvid": "BVdemodemo",
+        "aid": 1000001,
+        "bvid": "BV1MOCK00001",
         "allow_bp": false,
         "no_share": false,
-        "cid": 234452,
+        "cid": 2000001,
         "max_limit": 1000,
         "page_no": 1,
         "has_next": false,
         "ip_info": {
-            "ip": "127.0.0.1",
-            "zone_ip": "172.16.1.1",
-            "zone_id": 14565,
-            "country": "美国",
-            "province": "新泽西州",
-            "city": "爱迪生"
+            "ip": "192.0.2.1",
+            "zone_ip": "192.0.2.2",
+            "zone_id": 0,
+            "country": "示例地区",
+            "province": "示例地区",
+            "city": "示例地区"
         },
-        "login_mid": 269407962,
-        "login_mid_hash": "a1d0654e",
+        "login_mid": 3000001,
+        "login_mid_hash": "mock-user-hash",
         "is_owner": false,
-        "name": "示例用户名",
-        "permission": "10000,1001",
+        "name": "示例名称",
+        "permission": "mock-permission",
         "level_info": {
-            "current_level": 5,
-            "current_min": 10800,
-            "current_exp": 26668,
-            "next_exp": 28890,
-            "level_up": 1662694032
+            "current_level": 1,
+            "current_min": 0,
+            "current_exp": 0,
+            "next_exp": 100,
+            "level_up": 0
         },
         "vip": {
             "type": 2,
@@ -38,7 +38,7 @@
             "vip_pay_type": 1,
             "theme_type": 0,
             "label": {
-                "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+                "path": "https://example.invalid/mock/path",
                 "text": "年度大会员",
                 "label_theme": "annual_vip",
                 "text_color": "#FFFFFF",
@@ -48,12 +48,12 @@
                 "use_img_label": true,
                 "img_label_uri_hans": "",
                 "img_label_uri_hant": "",
-                "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/6234b0574demod19ed98b49458b68.png",
-                "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e3692demo1e22a4d5/VEW8fCC0hg.png",
-                "label_id": 65,
+                "img_label_uri_hans_static": "https://example.invalid/mock/img_label_uri_hans_static",
+                "img_label_uri_hant_static": "https://example.invalid/mock/img_label_uri_hant_static",
+                "label_id": 6000001,
                 "label_goto": {
-                    "mobile": "https://big.bilibili.com/mobile/index?navhide=1\u0026from_spmid=vipicon",
-                    "pc_web": "https://account.bilibili.com/big?from_spmid=vipicon"
+                    "mobile": "https://example.invalid/mock/mobile",
+                    "pc_web": "https://example.invalid/mock/pc_web"
                 },
                 "img_label_uri_i18n": "",
                 "img_label_uri_i18n_static": "",
@@ -70,13 +70,13 @@
                 "icon_type": 3,
                 "icon_resource": {
                     "type": 1,
-                    "url": "http://i0.hdslb.com/bfs/vip/dbe2demo023010bce03b3.png@80w_80h_1c.webp"
+                    "url": "https://example.invalid/mock/url"
                 }
             },
             "ott_info": {
                 "vip_type": 1,
                 "pay_type": 0,
-                "pay_channel_id": "",
+                "pay_channel_id": "mock-id-001",
                 "status": 0,
                 "overdue_time": 1626451200
             },
@@ -87,25 +87,25 @@
         "answer_status": 0,
         "block_time": 0,
         "role": "0",
-        "last_play_time": 9000,
-        "last_play_cid": 234452,
-        "now_time": 1791595703,
-        "online_count": 1,
+        "last_play_time": 0,
+        "last_play_cid": 2000001,
+        "now_time": 1700000000,
+        "online_count": 0,
         "need_login_subtitle": false,
         "subtitle": {
             "allow_submit": false,
             "lan": "",
-            "lan_doc": "",
+            "lan_doc": "示例语言",
             "subtitles": [
                 {
-                    "id": 21223425070189054208,
+                    "id": 4000001,
                     "lan": "ai-zh",
-                    "lan_doc": "中文",
+                    "lan_doc": "示例语言",
                     "is_lock": false,
-                    "subtitle_url": "//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/11741182296577042605874311d56f6de663ded3cc3ab0e8a9b5389405?auth_key=179demo-0-e9c96ed7a97acbe7fad6783ddafb0468",
-                    "subtitle_url_v2": "//subtitle.bilibili.com/S%13%1BP.%1D%28%29X%2CR%5Ej%1F%25w%0E%02H%5EHO4%14%7B4%08K@%3C%7B%00M%0B%0A%1AM%08%056N6$%0C0\u0026%02%1E%01%09%0E%1A2V~%15B%5C%17BQYBQ%09%7B%19%5E%5Cr%1DVR%5CT%5EVZ%5DXYvp%1Eo6%0BM%18J%18%102J%2CGF%09DC%0CS%11Q%5D%7B%1DQUr%1FU?auth_key=demo0468",
+                    "subtitle_url": "https://example.invalid/mock/subtitle_url",
+                    "subtitle_url_v2": "https://example.invalid/mock/subtitle_url_v2",
                     "type": 1,
-                    "id_str": "21223425070189054208",
+                    "id_str": "4000001",
                     "ai_type": 0,
                     "ai_status": 2
                 }
@@ -139,9 +139,9 @@
             "long_progress": false
         },
         "bgm_info": {
-            "music_id": "MA456110818635855948",
-            "music_title": "发现《Mines (Star Lumpy)》",
-            "jump_url": "https://music.bilibili.com/h5/music-detail?music_id=MA456110818635855948\u0026cid=42235874311\u0026aid=1174234822965770\u0026na_close_hide=1"
+            "music_id": "mock-music-001",
+            "music_title": "示例音乐标题",
+            "jump_url": "https://example.invalid/mock/jump_url"
         },
         "toast_block": false,
         "is_upower_exclusive": false,
@@ -149,7 +149,7 @@
         "is_ugc_pay_preview": false,
         "elec_high_level": {
             "privilege_type": 0,
-            "title": "",
+            "title": "示例视频标题",
             "sub_title": "",
             "show_button": false,
             "button_text": "",

@@ -204,6 +204,12 @@ html[data-platform="linux"] .topbar {
     font-size: 12px;
 }
 
+.btn.tiny {
+    padding: 2px;
+    font-weight: normal;
+    font-size: 9px;
+}
+
 .container {
     max-width: 960px;
     margin: 28px auto 40px;

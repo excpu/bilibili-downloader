@@ -70,7 +70,7 @@ const BASE_RETRY_DELAY_MS = 1000;                // 指数退避起始延迟 1s
 const MAX_RETRY_DELAY_MS = 10000;                // 指数退避最大延迟 10s
 const DEFAULT_MAX_CHUNK_RETRIES = 15;            // 恶劣网络下单分片最大重试次数
 const MAX_GLOBAL_CONSECUTIVE_FAILURES = 50;      // 全局连续失败上限（确定彻底不可用再报错）
-const MIN_CHUNK_SIZE = 512 * 1024;               // 单分片最小 512KB（避免过碎连接开销）
+const MIN_CHUNK_SIZE = 2048 * 1024;               // 单分片最小 2MB（避免过碎连接开销）
 const MAX_CHUNK_SIZE = 16 * 1024 * 1024;         // 单分片最大 16MB
 
 // 辅助睡眠函数

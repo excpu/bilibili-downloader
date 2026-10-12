@@ -85,6 +85,25 @@
     cursor: pointer;
 }
 
+.subtitle-selection-controls {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+
+#subtitleSelection:not(.hidden) {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+
+#subtitleSelection > label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 /* 覆盖的播放按钮 */
 .video-info .thumbnail-inner::before {
     content: '';

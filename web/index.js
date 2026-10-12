@@ -130,6 +130,11 @@ window.addEventListener('season-data-loaded', (event) => {
         bvid: sourceVideo.bvid,
         cid: null,
         title: seasonTitle,
+        subtitleBvid: sourceVideo.bvid,
+        subtitleCid: sourceVideo.pages?.[0]?.cid || sourceVideo.cid,
+        subtitleTitle: sourceVideo.pages?.length > 1
+            ? `P${sourceVideo.pages[0].page} - ${sourceVideo.title} - ${sourceVideo.pages[0].part}`
+            : sourceVideo.title || seasonTitle,
         p: buildCollectionParts(episodes),
         danmu: false,
         coverUrl: seasonCover,
@@ -150,22 +155,87 @@ window.addEventListener('collection-episode-details-loaded', (event) => {
 
 function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
     console.log('视频CID:', cid);
-    currentVideoIdentity = { bvid, cid, title, p, danmu: false, coverUrl, duration };
+    const subtitlePage = p[0];
+    const subtitleBvid = subtitlePage?.bvid || bvid;
+    const subtitleCid = subtitlePage?.cid || cid;
+    currentVideoIdentity = {
+        bvid,
+        cid,
+        title,
+        subtitleBvid,
+        subtitleCid,
+        subtitleTitle: p.length > 1
+            ? `P${p[0].page} - ${title} - ${p[0].part}`
+            : title,
+        p,
+        danmu: false,
+        coverUrl,
+        duration
+    };
     window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
         console.log('获取到视频流信息:', streamInfo);
         // 渲染音频流和视频流
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;
 
-        const subtitlePage = p[0];
-        const subtitleBvid = subtitlePage?.bvid || bvid;
-        const subtitleCid = subtitlePage?.cid || cid;
         infoSection.getSubtitleInfo(subtitleBvid, subtitleCid).catch((error) => {
             console.error('获取字幕信息失败:', error);
             alert(`获取字幕信息失败：${error.message}`);
         });
     });
 }
+
+const $downloadSelectedSubtitleBtn = document.getElementById('downloadSelectedSubtitleBtn');
+$downloadSelectedSubtitleBtn.addEventListener('click', async () => {
+    const subtitleLanguage = document.getElementById('qualitySelectSubtitle').value;
+    if (!subtitleLanguage) {
+        model.showInfoMessage('请先选择要下载的字幕');
+        return;
+    }
+    if (!currentVideoIdentity?.subtitleBvid || !currentVideoIdentity?.subtitleCid) {
+        model.showErrorMessage('视频字幕信息尚未加载完成');
+        return;
+    }
+
+    const subtitleIdentity = {
+        bvid: currentVideoIdentity.subtitleBvid,
+        cid: currentVideoIdentity.subtitleCid,
+        title: currentVideoIdentity.subtitleTitle || currentVideoIdentity.title
+    };
+    $downloadSelectedSubtitleBtn.disabled = true;
+    try {
+        const playerConfig = await window.electronAPI.invoke(
+            'getPlayerConfig',
+            subtitleIdentity.bvid,
+            subtitleIdentity.cid
+        );
+        if (!playerConfig?.success) {
+            throw new Error(playerConfig?.message || '获取字幕信息失败');
+        }
+
+        const subtitles = playerConfig.data?.data?.subtitle?.subtitles || [];
+        const subtitle = subtitles.find((item, index) =>
+            String(item.lan || item.id || index) === subtitleLanguage
+        );
+        if (!subtitle?.subtitle_url) {
+            throw new Error(subtitle ? '字幕地址缺失' : '当前视频没有匹配的字幕');
+        }
+
+        const result = await window.electronAPI.invoke('downloadSubtitle', {
+            subtitleUrl: subtitle.subtitle_url,
+            language: subtitle.lan || subtitleLanguage,
+            title: subtitleIdentity.title
+        });
+        if (!result?.success) {
+            throw new Error(result?.message || '未知错误');
+        }
+        model.showSuccessMessage('字幕下载完成');
+    } catch (error) {
+        model.showErrorMessage(`字幕下载失败：${error.message || '未知错误'}`);
+    } finally {
+        $downloadSelectedSubtitleBtn.disabled = false;
+    }
+});
 
 
 // 点击封面预览当前视频：弹出独立窗口，通过传统接口获取弹幕并预览，通过视频直链播放
@@ -347,5 +417,3 @@ document.getElementById('refreshLoginQr').addEventListener('click', () => {
     console.log('刷新登录二维码');
     requestLoginQr();
 });
-
-

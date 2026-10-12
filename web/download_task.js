@@ -461,7 +461,7 @@ async function taskManager() {
                             title: currentTask.title
                         });
                         if (subtitleResult?.success) {
-                            model.showSuccessMessage(`字幕下载完成：${currentTask.title}`);
+                            model.showSuccessMessage(`字幕下载完成`);
                         } else {
                             model.showErrorMessage(`字幕下载失败：${currentTask.title}，${subtitleResult?.message || '未知错误'}`);
                         }

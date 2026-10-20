@@ -717,7 +717,10 @@ class StreamDownload {
         };
 
         // 7. 进度统计定时器（每 200ms 计算总体下载速度与百分比）
+        // 速度按“网络接收字节”统计（实时、不受写盘聚合影响）；百分比/已下载量按已落盘字节统计（可靠、可断点续传）
+        const netStats = { bytes: 0 };
         let lastReportedBytes = chunks.reduce((sum, c) => sum + c.downloaded, 0);
+        let lastNetBytes = 0;
         let lastReportedTime = Date.now();
         let progressTimer = null;
 
@@ -733,10 +736,8 @@ class StreamDownload {
                 if (timeDiff <= 0) return;
 
                 const currentDownloaded = chunks.reduce((sum, c) => sum + c.downloaded, 0);
-                const bytesDiff = currentDownloaded - lastReportedBytes;
-                const speedMBs = timeDiff > 0
-                    ? ((bytesDiff / (1024 * 1024)) / (timeDiff / 1000))
-                    : 0;
+                const netDiff = netStats.bytes - lastNetBytes;
+                const speedMBs = (netDiff / (1024 * 1024)) / (timeDiff / 1000);
 
                 const validSpeed = (Number.isFinite(speedMBs) && speedMBs >= 0)
                     ? speedMBs.toFixed(2)
@@ -749,6 +750,7 @@ class StreamDownload {
                 onProgress(percent, validSpeed, currentDownloaded, totalLength);
 
                 lastReportedBytes = currentDownloaded;
+                lastNetBytes = netStats.bytes;
                 lastReportedTime = now;
             }, 200);
         }
@@ -775,6 +777,7 @@ class StreamDownload {
             deadline,
             agents,
             signal,
+            netStats,
             stallTimeoutMs,
             connectTimeoutMs
         };
@@ -1204,6 +1207,7 @@ class StreamDownload {
                     const data = buf.length > allowed ? buf.subarray(0, allowed) : buf;
                     pendingBuffers.push(data);
                     pendingBytes += data.length;
+                    if (context.netStats) context.netStats.bytes += data.length;
                     currentWriteOffset += data.length;
 
                     // 采样分片速度，供再分段时判断最慢分片

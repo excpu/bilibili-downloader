@@ -404,6 +404,93 @@ async function downloadCover(cover, coverUrl, title, uid) {
     }
 }
 
+// 取消后的收尾：移除 UI、出队并继续下一个任务
+function finishCancelledTask(task) {
+    removeTaskUi(task.uid);
+    taskQuene = taskQuene.filter(item => item.uid !== task.uid);
+    globalTaskLock = false;
+    taskManager();
+}
+
+function removeTaskUi(uid) {
+    speedSmoothers.delete(uid);
+    lastAvIdMap.delete(uid);
+    lastTextUpdateTimeMap.delete(uid);
+    document.getElementById(`task-${uid}`)?.remove();
+}
+
+function cancelTask(uid) {
+    const task = taskQuene.find(item => item.uid === uid);
+    if (!task) return;
+    const isCurrent = globalTaskLock && taskQuene[0] === task;
+    if (!isCurrent) {
+        taskQuene = taskQuene.filter(item => item.uid !== uid);
+        removeTaskUi(uid);
+        $taskCount.innerText = taskQuene.length;
+        return;
+    }
+    task.cancelled = true;
+    const statusEl = document.getElementById(`status-${uid}`);
+    if (statusEl) {
+        statusEl.textContent = '正在取消...';
+        statusEl.style.color = 'var(--warn)';
+    }
+    window.electronAPI.invoke('cancelDownload', uid);
+}
+
+// 任务右键菜单
+const $taskContextMenu = document.createElement('div');
+$taskContextMenu.className = 'task-context-menu';
+$taskContextMenu.style.cssText = 'position:fixed;display:none;z-index:9999;min-width:110px;padding:4px;'
+    + 'background:var(--panel, #fff);color:var(--text, #222);border:1px solid var(--border, #ccc);'
+    + 'border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.25);font-size:13px;';
+const $cancelMenuItem = document.createElement('div');
+$cancelMenuItem.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:4px;color:var(--err, #d33);';
+$cancelMenuItem.addEventListener('mouseenter', () => { $cancelMenuItem.style.background = 'rgba(128,128,128,.2)'; });
+$cancelMenuItem.addEventListener('mouseleave', () => { $cancelMenuItem.style.background = ''; });
+$taskContextMenu.appendChild($cancelMenuItem);
+document.body.appendChild($taskContextMenu);
+
+let contextMenuUid = null;
+const hideTaskContextMenu = () => {
+    $taskContextMenu.style.display = 'none';
+    contextMenuUid = null;
+};
+
+$cancelMenuItem.addEventListener('click', () => {
+    const uid = contextMenuUid;
+    hideTaskContextMenu();
+    if (uid) cancelTask(uid);
+});
+
+document.addEventListener('contextmenu', (event) => {
+    const taskEl = event.target.closest?.('.task');
+    if (!taskEl || !taskEl.id.startsWith('task-')) {
+        hideTaskContextMenu();
+        return;
+    }
+    const uid = taskEl.id.slice('task-'.length);
+    const task = taskQuene.find(item => item.uid === uid);
+    if (!task || task.cancelled) {
+        hideTaskContextMenu();
+        return;
+    }
+    event.preventDefault();
+    contextMenuUid = uid;
+    const isCurrent = globalTaskLock && taskQuene[0] === task;
+    $cancelMenuItem.textContent = isCurrent ? '取消下载' : '取消任务';
+    $taskContextMenu.style.display = 'block';
+    const x = Math.min(event.clientX, window.innerWidth - $taskContextMenu.offsetWidth - 4);
+    const y = Math.min(event.clientY, window.innerHeight - $taskContextMenu.offsetHeight - 4);
+    $taskContextMenu.style.left = `${Math.max(0, x)}px`;
+    $taskContextMenu.style.top = `${Math.max(0, y)}px`;
+});
+document.addEventListener('click', hideTaskContextMenu);
+window.addEventListener('blur', hideTaskContextMenu);
+window.addEventListener('resize', hideTaskContextMenu);
+
+// 右键菜单逻辑结束
+
 async function taskManager() {
     $taskCount.innerText = taskQuene.length;
     if (taskQuene.length < 1) {
@@ -423,6 +510,10 @@ async function taskManager() {
         }
 
         const videoInfo = await window.electronAPI.invoke('getVideoInfo', currentTask.bvid);
+        if (currentTask.cancelled) {
+            finishCancelledTask(currentTask);
+            return;
+        }
         if (!videoInfo.success || !videoInfo.data || !videoInfo.data.cid) {
             alert(`获取 ${currentTask.title} 的CID失败：${videoInfo.message || '未知错误'}`);
             if (statusEl) {
@@ -443,6 +534,10 @@ async function taskManager() {
     }
 
     const result = await window.electronAPI.invoke('downloadTarget', currentTask);
+    if (!result.success && (result.cancelled || currentTask.cancelled)) {
+        finishCancelledTask(currentTask);
+        return;
+    }
     if (result.success) {
         if (currentTask.subtitleLanguage) {
             try {

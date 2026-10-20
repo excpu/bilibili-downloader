@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const fs = require('fs');
+const { createCancelError } = require('./download_cancel');
 
 class Aria2Client {
     /**
@@ -123,7 +124,35 @@ class Aria2Client {
 
         // 4. 开启轮询，监控下载进度
         return new Promise((resolve, reject) => {
-            const timer = setInterval(async () => {
+            const signal = options.signal;
+            let timer = null;
+            const onAbort = () => {
+                clearInterval(timer);
+                // forceRemove 是异步生效的：aria2 会在任务真正停止后才释放文件并写入 .aria2 控制文件，
+                // 必须等任务进入 removed 状态再返回，否则调用方清理后文件又会被重新生成。
+                (async () => {
+                    try {
+                        await this.request('aria2.forceRemove', [gid]);
+                        for (let i = 0; i < 50; i++) {
+                            const st = await this.request('aria2.tellStatus', [gid, ['status']]).catch(() => null);
+                            if (!st || st.status === 'removed' || st.status === 'error' || st.status === 'complete') break;
+                            await new Promise(res => setTimeout(res, 100));
+                        }
+                        await this.request('aria2.removeDownloadResult', [gid]).catch(() => {});
+                    } catch {
+                        // 忽略：任务可能已经结束
+                    }
+                    reject(createCancelError());
+                })();
+            };
+            if (signal) {
+                if (signal.aborted) {
+                    onAbort();
+                    return;
+                }
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+            timer = setInterval(async () => {
                 try {
                     const status = await this.request('aria2.tellStatus', [
                         gid,
@@ -230,7 +259,7 @@ class Aria2Client {
  * @param {number} concurrency - aria2 单任务并发连接数
  * @returns {Promise<void>}
  */
-async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRetries = 4, concurrency = 8) {
+async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRetries = 4, concurrency = 8, signal = null) {
     const path = require('path');
     
     // 从 destPath 提取目录和文件名
@@ -248,7 +277,7 @@ async function downloadWithAria2(url, destPath, headers = {}, onProgress, maxRet
         await client.connect();
         
         // 调用下载，使用包装的 onProgress 回调
-        await client.download(url, { dir, out, headers, concurrency }, (progress) => {
+        await client.download(url, { dir, out, headers, concurrency, signal }, (progress) => {
             // 将 aria2 的进度格式转换为 stream_download 的格式
             // stream_download: onProgress(percentage, speedMBs, downloadedBytes, totalBytes)
             // aria2: onProgress({ percent, speed(B/s), completedSize, totalSize, ... })

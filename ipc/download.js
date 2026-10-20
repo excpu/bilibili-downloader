@@ -8,12 +8,29 @@ const { downloadFileWithGot } = require('../modules/stream_download');
 const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_download');
 const Aria2Client = require('../modules/aria2-client'); // 引入 Aria2Client 类
 const { downloadWithAria2 } = require('../modules/aria2-client');
+const { createCancelError, isCancelError } = require('../modules/download_cancel');
 const Setting = require("../modules/config_setting");
 const subtitleJsonConverter = require('../modules/sub_json_converter');
 const setting = new Setting();
 setting.load(); // 加载设置数据
 
 let activeDownloadCount = 0;
+const downloadControllers = new Map(); // uid -> AbortController
+
+// 取消后删除下载残留文件，文件可能被释放得稍慢，失败时短暂重试
+async function removeFilesWithRetry(filePaths) {
+    for (const filePath of filePaths) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+            try {
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                break;
+            } catch (err) {
+                if (attempt === 9) console.warn(`⚠️ 清理文件失败: ${filePath}`, err.message);
+                else await new Promise(res => setTimeout(res, 300));
+            }
+        }
+    }
+}
 
 // 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
 const getDownloadFunction = () => {
@@ -63,6 +80,12 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
 }
 
 module.exports = function registerDownloadIpc(mainWindow) {
+    ipcMain.handle('cancelDownload', (event, uid) => {
+        const controller = downloadControllers.get(uid);
+        if (!controller) return { success: false };
+        controller.abort();
+        return { success: true };
+    });
     ipcMain.handle('downloadSubtitle', async (event, payload) => {
         try {
             const subtitleUrl = String(payload?.subtitleUrl || '');
@@ -127,6 +150,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
         } = payload;
         title = sanitizePath(title);
         const downloadDir = setting.getDownloadPath();
+        const controller = new AbortController();
+        const signal = controller.signal;
+        downloadControllers.set(uid, controller);
 
         if (!fs.existsSync(downloadDir)) {
             fs.mkdirSync(downloadDir, { recursive: true });
@@ -140,7 +166,12 @@ module.exports = function registerDownloadIpc(mainWindow) {
             videoQualityId,
             videoCodec
         });
+        if (signal.aborted) {
+            downloadControllers.delete(uid);
+            return { success: false, cancelled: true, message: '下载已取消' };
+        }
         if (!videoStream.success) {
+            downloadControllers.delete(uid);
             console.error(`❌ [${title}] 获取视频流失败: ${videoStream.message}`);
             return { success: false, message: videoStream.message };
         }
@@ -202,6 +233,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
         };
 
         activeDownloadCount += 1;
+        let mergeStarted = false;
         try {
             // 串行下载：等待音频下载完成后，再开始视频下载
             console.log(`⏳ [${title}] 开始下载音频...`);
@@ -212,13 +244,15 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 downloadHeaders,
                 (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
                 undefined,
-                setting.getAria2Concurrency()
+                setting.getAria2Concurrency(),
+                signal
             );
 
             if (audioOnly) {
                 // 仅音频模式：直接转换音频为 m4a
                 console.log(`⏳ [${title}] 正在转换为 m4a 格式...`);
                 notifyProgress(100, '0.00', 'converting');
+                mergeStarted = true;
 
                 // 修复 macOS/Linux 下的执行权限问题
                 if (process.platform === 'darwin' || process.platform === 'linux') {
@@ -238,9 +272,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 ];
 
                 try {
-                    await execFileAsync(ffmpeg, ffmpegArgs);
+                    await execFileAsync(ffmpeg, ffmpegArgs, { signal });
                     console.log(`✅ [${title}] 转换为 m4a 完成`);
                 } catch (err) {
+                    if (signal.aborted) throw createCancelError();
                     console.error(`❌ [${title}] 转换为 m4a 出错`);
                     console.error('err.message:', err.message);
                     console.error('err.stderr:', err.stderr);
@@ -263,12 +298,14 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     downloadHeaders,
                     (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
                     undefined,
-                    setting.getAria2Concurrency()
+                    setting.getAria2Concurrency(),
+                    signal
                 );
 
                 // 合并音视频
                 console.log(`⏳ [${title}] 正在合并...`);
                 notifyProgress(100, '0.00', 'merging');
+                mergeStarted = true;
                 // 1. 修复 macOS/Linux 下的执行权限问题
                 if (process.platform === 'darwin' || process.platform === 'linux') {
                     try {
@@ -290,9 +327,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
                 // 合并音视频
                 try {
-                    await execFileAsync(ffmpeg, ffmpegArgs);
+                    await execFileAsync(ffmpeg, ffmpegArgs, { signal });
                     console.log(`✅ [${title}] 转换完成`);
                 } catch (err) {
+                    if (signal.aborted) throw createCancelError();
                     console.error(`❌ [${title}] 合并出错`);
                     console.error('err.message:', err.message);
                     console.error('err.stderr:', err.stderr);
@@ -307,15 +345,28 @@ module.exports = function registerDownloadIpc(mainWindow) {
             }
 
         } catch (err) {
+            if (isCancelError(err) || signal.aborted) {
+                console.log(`🛑 [${title}] 下载已取消，清理文件`);
+                const partialPaths = [videoPath, audioPath, ...(mergeStarted ? [outputPath, m4aOutputPath] : [])].flatMap(p => [
+                    p, `${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`
+                ]);
+                await removeFilesWithRetry(partialPaths);
+                return { success: false, cancelled: true, message: '下载已取消' };
+            }
             console.error(`❌ [${title}] 出错：`, err);
             return {
                 success: false,
                 message: err?.message ? `下载或合并出错: ${err.message}` : '下载或合并出错'
             };
         } finally {
+            downloadControllers.delete(uid);
             // 清理临时 m4s 文件
-            if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-            if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+            try {
+                if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+                if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+            } catch (cleanupErr) {
+                console.warn('⚠️ 清理临时文件失败:', cleanupErr.message);
+            }
             activeDownloadCount -= 1;
         }
 

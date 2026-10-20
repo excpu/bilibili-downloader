@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const got = require('got');
+const { createCancelError, isCancelError } = require('./download_cancel');
 
 // 构造“本地残留分片不可继续使用”的统一错误对象，供外层捕获后清理并重下。
 function createStalePartialFileError(destPath) {
@@ -30,7 +31,7 @@ function isNonRetriableError(err) {
 // 2. 进度/速度回调
 // 3. 卡住超时检测
 // 4. 外层自定义指数退避重试
-async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetries = 4) {
+async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetries = 4, _concurrency, signal) {
     if (!url || !destPath) {
         throw new Error('下载参数不完整：url 或保存路径为空');
     }
@@ -53,6 +54,8 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
 
     while (retries >= 0) {
         try {
+            // 下载取消事件监听
+            if (signal?.aborted) throw createCancelError();
             if (Date.now() >= deadline) {
                 throw new Error('下载链接已超过 1 小时 50 分钟有效期，停止重试并退出');
             }
@@ -94,10 +97,15 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                     }
                 };
 
+                // 下载取消
+                const onAbort = () => downloadStream.destroy(createCancelError());
+
                 const finish = (error = null) => {
                     if (settled) return;
                     settled = true;
                     clearStallCheckTimer();
+                    // 移除下载取消事件监听
+                    signal?.removeEventListener('abort', onAbort);
 
                     if (error) {
                         reject(error);
@@ -125,6 +133,8 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                         limit: 0
                     }
                 });
+                // 下载取消
+                signal?.addEventListener('abort', onAbort, { once: true });
 
                 // 定时检查是否长时间没有收到数据，避免连接假死一直挂住。
                 stallCheckTimer = setInterval(() => {
@@ -257,6 +267,9 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
 
             return;
         } catch (err) {
+            // 下载取消
+            if (isCancelError(err) || signal?.aborted) throw isCancelError(err) ? err : createCancelError();
+
             // 本地分片文件无效时，先删掉旧文件，再立即进入下一轮重试。
             if (err.code === 'STALE_PARTIAL_FILE') {
                 if (fs.existsSync(destPath)) {

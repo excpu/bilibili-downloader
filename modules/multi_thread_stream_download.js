@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const { Writable, pipeline } = require('stream');
 const got = require('got');
+const { createCancelError, isCancelError } = require('./download_cancel');
 
 // 创建专用 HTTP 1.1 Agent 实例池，实现真正的多 TCP 连接并发加速下载
 function createHttpAgents(concurrency) {
@@ -72,10 +73,24 @@ const DEFAULT_MAX_CHUNK_RETRIES = 15;            // 恶劣网络下单分片最�
 const MAX_GLOBAL_CONSECUTIVE_FAILURES = 50;      // 全局连续失败上限（确定彻底不可用再报错）
 const MIN_CHUNK_SIZE = 2048 * 1024;               // 单分片最小 2MB（避免过碎连接开销）
 const MAX_CHUNK_SIZE = 16 * 1024 * 1024;         // 单分片最大 16MB
+const MIN_STEAL_SIZE = 1024 * 1024;              // 在途分片剩余不足 1MB 时不再切分
+const MIN_STEAL_ETA_SECONDS = 1.5;               // 预计 1.5 秒内能下完的分片不再切分
+const SPEED_SAMPLE_INTERVAL_MS = 500;            // 分片速度采样间隔
+const WRITE_FLUSH_BYTES = 1024 * 1024;           // 写盘聚合：累计 1MB 再落盘
+const WRITE_FLUSH_INTERVAL_MS = 500;             // 写盘聚合：最长 0.5 秒必须落盘一次，保证进度与断点及时
 
 // 辅助睡眠函数
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms, signal = null) {
+    return new Promise(resolve => {
+        if (signal?.aborted) return resolve();
+        const timer = setTimeout(done, ms);
+        function done() {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', done);
+            resolve();
+        }
+        signal?.addEventListener('abort', done, { once: true });
+    });
 }
 
 // 判断两个 URL 是否指向同一个底层资源（支持因时效重签名前后 query 变化的情况）
@@ -231,7 +246,7 @@ async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null) {
  * 单流流式下载降级方案（当服务端不支持 Range、文件极小或多线程无法切片时触发）
  * 采用 HTTP 1.1 单连接，同样具备卡死检测、断点续传与高韧性指数退避重试能力
  */
-async function downloadSingleStream(url, destPath, tempPath, initialTotalLength, headers, onProgress, deadline, maxRetries = 15, agents = null) {
+async function downloadSingleStream(url, destPath, tempPath, initialTotalLength, headers, onProgress, deadline, maxRetries = 15, agents = null, signal = null) {
     let retries = maxRetries;
     let knownTotalLength = initialTotalLength || 0;
     let lastDownloadedLength = 0;
@@ -245,6 +260,7 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
     };
 
     while (retries >= 0) {
+        if (signal?.aborted) throw createCancelError();
         if (Date.now() >= deadline) {
             const err = new Error('下载链接已超过有效期，停止重试并退出');
             err.unrecoverable = true;
@@ -293,10 +309,13 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
                     }
                 };
 
+                const onAbort = () => finish(createCancelError());
+
                 const finish = (error = null) => {
                     if (settled) return;
                     settled = true;
                     clearTimers();
+                    signal?.removeEventListener('abort', onAbort);
 
                     if (downloadStream && !downloadStream.destroyed) {
                         try { downloadStream.destroy(); } catch {}
@@ -328,6 +347,8 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
                     throwHttpErrors: false,
                     retry: { limit: 0 }
                 });
+
+                signal?.addEventListener('abort', onAbort, { once: true });
 
                 stallCheckTimer = setInterval(() => {
                     if (!settled && Date.now() - lastActivityTime > STALL_TIMEOUT_MS) {
@@ -440,6 +461,7 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
             reportComplete();
             return;
         } catch (err) {
+            if (isCancelError(err)) throw err;
             if (isUnrecoverableError(err)) {
                 throw new Error(`单流下载遇到不可恢复错误: ${err.message}`);
             }
@@ -493,6 +515,14 @@ class StreamDownload {
         }
 
         const mergedOptions = { ...this.options, ...options };
+        const extSignal = mergedOptions.signal || null;
+        // 内部统一的中止控制器：外部取消、致命错误、降级单流都通过它终止所有在途分片请求与退避等待
+        const ctl = new AbortController();
+        const signal = ctl.signal;
+        if (extSignal) {
+            if (extSignal.aborted) ctl.abort();
+            else extSignal.addEventListener('abort', () => ctl.abort(), { once: true });
+        }
         const headers = mergedOptions.headers || {};
         const maxRetries = typeof mergedOptions.maxRetries === 'number' && mergedOptions.maxRetries > 0
             ? mergedOptions.maxRetries
@@ -530,7 +560,14 @@ class StreamDownload {
 
         // 1. 探测链接与 Range 支持情况
         console.log(`🔍 [StreamDownload] 正在探测链接属性并检测分片支持...`);
-        const probeResult = await probeUrl(url, headers, 6, deadline, agents);
+        const probeResult = await probeUrl(url, headers, 6, deadline, agents).catch((err) => {
+            destroyHttpAgents(agents);
+            throw err;
+        });
+        if (signal?.aborted) {
+            destroyHttpAgents(agents);
+            throw createCancelError();
+        }
         const { acceptsRanges, totalLength } = probeResult;
 
         // 2. 检查最终目标文件是否已经完整存在
@@ -559,7 +596,8 @@ class StreamDownload {
                     onProgress,
                     deadline,
                     maxRetries,
-                    agents
+                    agents,
+                    signal
                 );
             } finally {
                 destroyHttpAgents(agents);
@@ -717,6 +755,10 @@ class StreamDownload {
 
         // 8. 多线程工作池执行
         let fatalError = null;
+        const failFast = (err) => {
+            fatalError = fatalError || err;
+            ctl.abort();
+        };
         let globalConsecutiveFailures = 0;
         const effectiveConcurrency = Math.min(concurrency, chunks.length);
         const stallTimeoutMs = typeof mergedOptions.stallTimeoutMs === 'number' && mergedOptions.stallTimeoutMs > 0
@@ -732,11 +774,68 @@ class StreamDownload {
             tempPath,
             deadline,
             agents,
+            signal,
             stallTimeoutMs,
             connectTimeoutMs
         };
 
         console.log(`🚀 [StreamDownload] 启动 HTTP/1.1 多连接流下载，连接数/线程数: ${effectiveConcurrency}，总分片数: ${chunks.length}，文件总大小: ${(totalLength / (1024 * 1024)).toFixed(2)} MB`);
+
+        // 动态再分段：没有待下载分片时，挑“预计剩余耗时”最长的在途分片，从中点切开，空闲线程接管后半段（类似 IDM）
+        let nextChunkId = chunks.reduce((max, c) => Math.max(max, c.id), -1) + 1;
+        const stealFromSlowestChunk = () => {
+            const now = Date.now();
+            const active = chunks.filter(c => !c.completed && c.inFlight);
+            if (active.length === 0) return null;
+
+            // 估算分片当前速度（B/s）：最近无数据时按空闲时长衰减，刚启动尚无样本的分片使用其他分片均值
+            const measured = (c) => {
+                const idleMs = Math.max(1, now - (c.sampleTime || now));
+                const pending = (c.sampleBytes || 0) * 1000 / idleMs;
+                if (!c.speed) return pending > 0 ? pending : null;
+                return idleMs > 1000 ? Math.min(c.speed, pending) : c.speed;
+            };
+            const known = active.map(measured).filter(s => s !== null && s > 0);
+            const avgSpeed = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0;
+            const speedOf = (c) => {
+                const s = measured(c);
+                if (s !== null && s > 0) return Math.max(s, 1024);
+                const age = now - (c.sampleTime || now);
+                // 刚启动的分片给予宽限期；超过宽限仍无数据视为几乎停滞
+                return age < 3000 && avgSpeed > 0 ? avgSpeed : 1024;
+            };
+
+            let target = null;
+            let targetEta = 0;
+            let targetRemaining = 0;
+            for (const c of active) {
+                const remaining = c.end - (c.start + c.downloaded) + 1;
+                if (remaining < MIN_STEAL_SIZE) continue;
+                const eta = remaining / speedOf(c);
+                if (eta > targetEta) {
+                    target = c;
+                    targetEta = eta;
+                    targetRemaining = remaining;
+                }
+            }
+            // 预计很快就能下完的分片不值得再拆，新建连接的开销反而更大
+            if (!target || targetEta < MIN_STEAL_ETA_SECONDS) return null;
+
+            const splitStart = target.start + target.downloaded + Math.ceil(targetRemaining / 2);
+            const stolen = {
+                id: nextChunkId++,
+                start: splitStart,
+                end: target.end,
+                downloaded: 0,
+                completed: false,
+                inFlight: true,
+                retries: 0
+            };
+            target.end = splitStart - 1;
+            chunks.splice(chunks.indexOf(target) + 1, 0, stolen);
+            triggerSaveState(false);
+            return stolen;
+        };
 
         const claimNextChunk = () => {
             for (const chunk of chunks) {
@@ -745,7 +844,7 @@ class StreamDownload {
                     return chunk;
                 }
             }
-            return null;
+            return stealFromSlowestChunk();
         };
 
         const allChunksCompleted = () => {
@@ -758,7 +857,7 @@ class StreamDownload {
                 if (!chunk) {
                     if (allChunksCompleted()) break;
                     // 暂无空闲分片，稍等其他线程
-                    await sleep(200);
+                    await sleep(200, signal);
                     continue;
                 }
 
@@ -772,15 +871,21 @@ class StreamDownload {
                         globalConsecutiveFailures = 0;
                         triggerSaveState(false);
                     } catch (err) {
+                        if (signal.aborted) {
+                            fatalError = fatalError || createCancelError();
+                            chunk.inFlight = false;
+                            throw fatalError;
+                        }
+
                         // 检查是否需要直接降级单流模式
                         if (err.code === 'FALLBACK_TO_SINGLE_STREAM') {
-                            fatalError = err;
+                            failFast(err);
                             throw err;
                         }
 
                         // 检查不可恢复错误
                         if (isUnrecoverableError(err)) {
-                            fatalError = err;
+                            failFast(err);
                             chunk.inFlight = false;
                             throw err;
                         }
@@ -799,7 +904,7 @@ class StreamDownload {
                         if (chunk.retries >= maxRetries) {
                             const chunkErr = new Error(`分片 #${chunk.id} 连续重试 ${maxRetries} 次失败，确定网络异常或链接失效: ${err.message}`);
                             chunkErr.unrecoverable = true;
-                            fatalError = chunkErr;
+                            failFast(chunkErr);
                             chunk.inFlight = false;
                             throw chunkErr;
                         }
@@ -808,7 +913,7 @@ class StreamDownload {
                         if (globalConsecutiveFailures >= MAX_GLOBAL_CONSECUTIVE_FAILURES) {
                             const globalErr = new Error(`多线程下载连续失败 ${MAX_GLOBAL_CONSECUTIVE_FAILURES} 次，确定网络连接已彻底断开或失效`);
                             globalErr.unrecoverable = true;
-                            fatalError = globalErr;
+                            failFast(globalErr);
                             chunk.inFlight = false;
                             throw globalErr;
                         }
@@ -818,18 +923,26 @@ class StreamDownload {
                             BASE_RETRY_DELAY_MS * Math.pow(1.5, Math.min(chunk.retries, 6)) + Math.random() * 800,
                             MAX_RETRY_DELAY_MS
                         );
-                        await sleep(delay);
+                        await sleep(delay, signal);
                     }
                 }
             }
         };
+
+        // 外部取消触发时，若尚无其他错误则记为取消
+        const onAbort = () => {
+            fatalError = fatalError || createCancelError();
+        };
+        if (signal.aborted) onAbort();
+        else signal.addEventListener('abort', onAbort, { once: true });
 
         try {
             const workers = [];
             for (let i = 0; i < effectiveConcurrency; i++) {
                 workers.push(workerLoop(i));
             }
-            await Promise.all(workers);
+            // 等待所有 worker 彻底退出（在途请求已中止）后再处理错误或降级，避免旧流继续写文件
+            await Promise.allSettled(workers);
 
             if (fatalError) {
                 throw fatalError;
@@ -873,6 +986,14 @@ class StreamDownload {
             // 如果遇到需要降级单流模式的场景
             if (err.code === 'FALLBACK_TO_SINGLE_STREAM') {
                 console.warn(`⚠️ [StreamDownload] 检测到服务端无法维持多线程 Range 请求，平滑降级为单流高韧性下载...`);
+                if (progressTimer) {
+                    clearInterval(progressTimer);
+                    progressTimer = null;
+                }
+                if (saveStateTimeout) {
+                    clearTimeout(saveStateTimeout);
+                    saveStateTimeout = null;
+                }
                 if (fileHandle) {
                     try { await fileHandle.close(); } catch {}
                     fileHandle = null;
@@ -892,12 +1013,14 @@ class StreamDownload {
                     onProgress,
                     deadline,
                     maxRetries,
-                    agents
+                    agents,
+                    extSignal
                 );
             }
 
             throw err;
         } finally {
+            signal.removeEventListener('abort', onAbort);
             destroyHttpAgents(agents);
             if (progressTimer) {
                 clearInterval(progressTimer);
@@ -927,8 +1050,10 @@ class StreamDownload {
             return Promise.resolve();
         }
 
-        const expectedBytes = toByte - fromByte + 1;
         let receivedInStream = 0;
+        chunk.speed = 0;
+        chunk.sampleBytes = 0;
+        chunk.sampleTime = Date.now();
 
         const reqHeaders = {
             ...headers,
@@ -943,7 +1068,17 @@ class StreamDownload {
             let stallTimer = null;
             let downloadStream = null;
 
+            const onAbort = () => finish(createCancelError());
+            if (context.signal) {
+                if (context.signal.aborted) {
+                    reject(createCancelError());
+                    return;
+                }
+                context.signal.addEventListener('abort', onAbort, { once: true });
+            }
+
             const cleanup = () => {
+                context.signal?.removeEventListener('abort', onAbort);
                 if (stallTimer) {
                     clearInterval(stallTimer);
                     stallTimer = null;
@@ -1031,24 +1166,68 @@ class StreamDownload {
             });
 
             // 自定义可写流，使用底层 FileHandle 的绝对位置写入，具备完美背压管控
-            let currentWriteOffset = fromByte;
+            // 小块网络数据先聚合，累计到 WRITE_FLUSH_BYTES 或超过 WRITE_FLUSH_INTERVAL_MS 再一次性落盘，减少写入调用次数
+            let currentWriteOffset = fromByte; // 已接收（含缓冲中）的末尾偏移
+            let pendingBuffers = [];
+            let pendingBytes = 0;
+            let pendingPos = fromByte; // 缓冲区首字节对应的文件偏移
+            let lastFlushTime = Date.now();
+
+            const flushPending = async () => {
+                if (pendingBytes === 0) return;
+                const pos = pendingPos;
+                const merged = pendingBuffers.length === 1 ? pendingBuffers[0] : Buffer.concat(pendingBuffers, pendingBytes);
+                pendingBuffers = [];
+                pendingBytes = 0;
+                pendingPos = pos + merged.length;
+                // 分片尾部可能在缓冲期间被空闲线程接管，只写入仍属于本分片的部分
+                const writeLen = Math.min(merged.length, chunk.end + 1 - pos);
+                if (writeLen <= 0) return;
+                await fileHandle.write(merged, 0, writeLen, pos);
+                chunk.downloaded += writeLen;
+                receivedInStream += writeLen;
+                lastFlushTime = Date.now();
+            };
+
             const writable = new Writable({
                 highWaterMark: 1024 * 1024,
                 write(buf, encoding, cb) {
-                    lastActivityTime = Date.now();
+                    const now = Date.now();
+                    lastActivityTime = now;
                     const pos = currentWriteOffset;
-                    currentWriteOffset += buf.length;
+                    // 分片尾部已被接管（chunk.end 缩小）：落盘已缓冲数据，丢弃超出部分并结束本流
+                    const allowed = chunk.end + 1 - pos;
+                    if (allowed <= 0) {
+                        flushPending().then(() => { cb(); finish(); }, cb);
+                        return;
+                    }
+                    const data = buf.length > allowed ? buf.subarray(0, allowed) : buf;
+                    pendingBuffers.push(data);
+                    pendingBytes += data.length;
+                    currentWriteOffset += data.length;
 
-                    fileHandle.write(buf, 0, buf.length, pos)
-                        .then(() => {
-                            chunk.downloaded += buf.length;
-                            receivedInStream += buf.length;
+                    // 采样分片速度，供再分段时判断最慢分片
+                    chunk.sampleBytes = (chunk.sampleBytes || 0) + data.length;
+                    const sampleSpan = now - chunk.sampleTime;
+                    if (sampleSpan >= SPEED_SAMPLE_INTERVAL_MS) {
+                        const instant = chunk.sampleBytes * 1000 / sampleSpan;
+                        chunk.speed = chunk.speed ? 0.6 * instant + 0.4 * chunk.speed : instant;
+                        chunk.sampleBytes = 0;
+                        chunk.sampleTime = now;
+                    }
+
+                    const reachedEnd = currentWriteOffset > chunk.end;
+                    if (reachedEnd || pendingBytes >= WRITE_FLUSH_BYTES || now - lastFlushTime >= WRITE_FLUSH_INTERVAL_MS) {
+                        flushPending().then(() => {
                             cb();
-                        })
-                        .catch((writeErr) => {
-                            currentWriteOffset -= buf.length;
-                            cb(writeErr);
-                        });
+                            if (currentWriteOffset > chunk.end) finish();
+                        }, cb);
+                    } else {
+                        cb();
+                    }
+                },
+                final(cb) {
+                    flushPending().then(() => cb(), cb);
                 }
             });
 
@@ -1064,10 +1243,10 @@ class StreamDownload {
                     }
                     finish(err);
                 } else {
-                    if (receivedInStream < expectedBytes) {
-                        finish(new Error(`分片 [${chunk.id}] 数据流过早关闭，接收 ${receivedInStream}/${expectedBytes} 字节`));
+                    const currentExpected = chunk.end - fromByte + 1;
+                    if (receivedInStream < currentExpected) {
+                        finish(new Error(`分片 [${chunk.id}] 数据流过早关闭，接收 ${receivedInStream}/${currentExpected} 字节`));
                     } else {
-                        chunk.completed = true;
                         finish();
                     }
                 }
@@ -1148,7 +1327,7 @@ class StreamDownload {
  * @param {number} [concurrency] - 并发线程数（不传则读取系统设置）
  * @returns {Promise<void>}
  */
-async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress = null, maxRetries = 15, concurrency = null) {
+async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress = null, maxRetries = 15, concurrency = null, signal = null) {
     if (typeof headers === 'function') {
         concurrency = typeof maxRetries === 'number' ? maxRetries : null;
         maxRetries = typeof onProgress === 'number' ? onProgress : 15;
@@ -1165,7 +1344,7 @@ async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress 
     return downloader.download(
         url,
         destPath,
-        { headers, maxRetries, concurrency },
+        { headers, maxRetries, concurrency, signal },
         onProgress
     );
 }

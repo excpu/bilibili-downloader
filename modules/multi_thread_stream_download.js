@@ -524,6 +524,7 @@ class StreamDownload {
             else extSignal.addEventListener('abort', () => ctl.abort(), { once: true });
         }
         const headers = mergedOptions.headers || {};
+        const resumeEnabled = mergedOptions.resume !== false;
         const maxRetries = typeof mergedOptions.maxRetries === 'number' && mergedOptions.maxRetries > 0
             ? mergedOptions.maxRetries
             : DEFAULT_MAX_CHUNK_RETRIES;
@@ -583,9 +584,11 @@ class StreamDownload {
             } catch {}
         }
 
-        // 3. 若服务端不支持 Range，或无法获取总大小，或文件极小，降级为单流高韧性下载
-        if (!acceptsRanges || !totalLength || totalLength <= MIN_CHUNK_SIZE) {
-            console.log(`ℹ️ [StreamDownload] 服务端未启用 Range 分片或文件较小 (${totalLength} 字节)，转入高韧性单流模式`);
+        // 3. 若服务端不支持 Range，或无法获取总大小，或文件极小，或并发数为 1，降级为单流高韧性下载
+        if (!acceptsRanges || !totalLength || totalLength <= MIN_CHUNK_SIZE || concurrency === 1) {
+            console.log(concurrency === 1
+                ? `ℹ️ [StreamDownload] 并发数为 1，转入高韧性单流模式（不切片）`
+                : `ℹ️ [StreamDownload] 服务端未启用 Range 分片或文件较小 (${totalLength} 字节)，转入高韧性单流模式`);
             try {
                 return await downloadSingleStream(
                     url,
@@ -605,7 +608,7 @@ class StreamDownload {
         }
 
         // 4. 多线程分片规划与状态恢复
-        let chunks = this._tryRestoreState(statePath, tempPath, url, totalLength);
+        let chunks = resumeEnabled ? this._tryRestoreState(statePath, tempPath, url, totalLength) : null;
         if (!chunks) {
             // 清理可能存在的不一致旧临时文件
             if (fs.existsSync(tempPath)) {
@@ -667,6 +670,7 @@ class StreamDownload {
         let saveStateTimeout = null;
 
         const doSaveState = async () => {
+            if (!resumeEnabled) return;
             if (isSavingState) {
                 pendingSaveState = true;
                 return;
@@ -1021,6 +1025,33 @@ class StreamDownload {
                 );
             }
 
+            // 失败时立即落盘最新断点，供重试时续传
+            if (!isCancelError(err)) {
+                if (!resumeEnabled) {
+                    if (fileHandle) {
+                        try { await fileHandle.close(); } catch {}
+                        fileHandle = null;
+                    }
+                    try { fs.unlinkSync(tempPath); } catch {}
+                    try { fs.unlinkSync(statePath); } catch {}
+                    throw err;
+                }
+                try { if (fileHandle) await fileHandle.sync(); } catch {}
+                try {
+                    fs.writeFileSync(statePath, JSON.stringify({
+                        url,
+                        totalLength,
+                        updatedAt: Date.now(),
+                        chunks: chunks.map(c => ({
+                            id: c.id,
+                            start: c.start,
+                            end: c.end,
+                            downloaded: c.downloaded,
+                            completed: c.completed
+                        }))
+                    }), 'utf8');
+                } catch {}
+            }
             throw err;
         } finally {
             signal.removeEventListener('abort', onAbort);
@@ -1331,7 +1362,7 @@ class StreamDownload {
  * @param {number} [concurrency] - 并发线程数（不传则读取系统设置）
  * @returns {Promise<void>}
  */
-async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress = null, maxRetries = 15, concurrency = null, signal = null) {
+async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress = null, maxRetries = 15, concurrency = null, signal = null, extra = {}) {
     if (typeof headers === 'function') {
         concurrency = typeof maxRetries === 'number' ? maxRetries : null;
         maxRetries = typeof onProgress === 'number' ? onProgress : 15;
@@ -1348,7 +1379,7 @@ async function downloadFileWithGotMulti(url, destPath, headers = {}, onProgress 
     return downloader.download(
         url,
         destPath,
-        { headers, maxRetries, concurrency, signal },
+        { headers, maxRetries, concurrency, signal, resume: extra?.resume !== false },
         onProgress
     );
 }

@@ -80,6 +80,15 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
 }
 
 module.exports = function registerDownloadIpc(mainWindow) {
+    ipcMain.handle('cleanupFailedDownload', async (event, title) => {
+        const dir = setting.getDownloadPath();
+        const base = path.join(dir, sanitizePath(String(title || '')));
+        const targets = [`${base}_video.m4s`, `${base}_audio.m4s`].flatMap(p => [
+            p, `${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`
+        ]);
+        await removeFilesWithRetry(targets);
+        return { success: true };
+    });
     ipcMain.handle('cancelDownload', (event, uid) => {
         const controller = downloadControllers.get(uid);
         if (!controller) return { success: false };
@@ -194,8 +203,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const audioOnly = parseInt(videoIndex) === -1;
 
         // 新任务开始前清理上次异常退出残留的临时文件，避免一开始就命中 416
-        const tempPathsToClean = [audioPath];
-        if (!audioOnly) tempPathsToClean.push(videoPath);
+        const isMultiEngine = (setting.getDownloadEngine() || 'node') === 'node-multi' && setting.getNodeResumeEnabled();
+        const resuming = isMultiEngine && payload.resume === true;
+        const tempPathsToClean = resuming ? [] : [audioPath];
+        if (!audioOnly && !resuming) tempPathsToClean.push(videoPath);
         if (audioOnly && fs.existsSync(m4aOutputPath)) tempPathsToClean.push(m4aOutputPath);
 
         for (const tempPath of tempPathsToClean) {
@@ -234,6 +245,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
         activeDownloadCount += 1;
         let mergeStarted = false;
+        let keepPartial = false;
         try {
             // 串行下载：等待音频下载完成后，再开始视频下载
             console.log(`⏳ [${title}] 开始下载音频...`);
@@ -245,7 +257,8 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
                 undefined,
                 setting.getAria2Concurrency(),
-                signal
+                signal,
+                { resume: isMultiEngine }
             );
 
             if (audioOnly) {
@@ -299,7 +312,8 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
                     undefined,
                     setting.getAria2Concurrency(),
-                    signal
+                    signal,
+                    { resume: isMultiEngine }
                 );
 
                 // 合并音视频
@@ -354,6 +368,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 return { success: false, cancelled: true, message: '下载已取消' };
             }
             console.error(`❌ [${title}] 出错：`, err);
+            keepPartial = isMultiEngine;
+            if (!keepPartial) {
+                await removeFilesWithRetry([videoPath, audioPath].flatMap(p => [`${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`]));
+            }
             return {
                 success: false,
                 message: err?.message ? `下载或合并出错: ${err.message}` : '下载或合并出错'
@@ -362,8 +380,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
             downloadControllers.delete(uid);
             // 清理临时 m4s 文件
             try {
-                if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-                if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                if (!keepPartial) {
+                    if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+                    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                }
             } catch (cleanupErr) {
                 console.warn('⚠️ 清理临时文件失败:', cleanupErr.message);
             }

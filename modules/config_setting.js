@@ -2,8 +2,8 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const ARIA2_CONCURRENCY_VALUES = [2, 4, 8, 16, 32, 64];
-const DEFAULT_ARIA2_CONCURRENCY = 8;
+const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
+const DEFAULT_ARIA2_CONCURRENCY = 2;
 const DEFAULT_SUBTITLE_SETTINGS = {
     format: 'srt',
     appendLanguage: false,
@@ -33,7 +33,7 @@ class Setting {
         this.defaultDownloadPath = app.getPath('downloads');
         this.defaultData = {
             downloadInFolder: false,  // 是否在下载目录中创建子文件夹
-            downloadEngine: "node", // 下载引擎，默认使用node got，也可以选择aria2
+            downloadEngine: "node-multi", // 下载引擎，node aria2 node-multi
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
@@ -78,6 +78,17 @@ class Setting {
     getDownloadEngine() {
         const data = this.load();
         return data ? data.downloadEngine : this.defaultData.downloadEngine;
+    }
+
+    updateNodeResumeEnabled(enabled) {
+        const data = this.load() || {};
+        data.nodeResumeEnabled = Boolean(enabled);
+        this.save(data);
+    }
+
+    getNodeResumeEnabled() {
+        const data = this.load() || {};
+        return data.nodeResumeEnabled !== false;
     }
 
     updateAria2Concurrency(concurrency) {

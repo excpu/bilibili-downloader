@@ -135,6 +135,7 @@
                 <div class="model-body" id="settingModelBody">
                     <div class="setting-tabs" role="tablist" aria-label="设置分类">
                         <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
+                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
                         <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
                     </div>
                     <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab" aria-labelledby="basicSettingsTabButton">
@@ -169,7 +170,19 @@
                             </div>
                         </div>
 
-                        <!-- 下载引擎部分 -->
+                        <!-- CDN 选择部分 -->
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">CDN 选择</h3>
+                            <div class="setting-item">
+                                <label for="cdnSelect">下载 CDN：</label>
+                                <select id="cdnSelect" class="setting-select">
+                                    <option value="">默认（不替换）</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="engineSettingsTab" aria-labelledby="engineSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">下载引擎</h3>
                             <div class="setting-item">
@@ -183,6 +196,7 @@
                             <div class="setting-item hidden" id="aria2ConcurrencySetting">
                                 <label for="aria2ConcurrencySelect" id="concurrencySettingLabel">Aria2 并发数：</label>
                                 <select id="aria2ConcurrencySelect" class="setting-select">
+                                    <option value="1">1</option>
                                     <option value="2">2</option>
                                     <option value="4">4</option>
                                     <option value="8">8</option>
@@ -191,17 +205,10 @@
                                     <option value="64">64</option>
                                 </select>
                             </div>
-                        </div>
-
-                        <!-- CDN 选择部分 -->
-                        <div class="setting-section">
-                            <h3 class="setting-section-title">CDN 选择</h3>
-                            <div class="setting-item">
-                                <label for="cdnSelect">下载 CDN：</label>
-                                <select id="cdnSelect" class="setting-select">
-                                    <option value="">默认（不替换）</option>
-                                </select>
-                            </div>
+                            <label class="setting-checkbox hidden" id="nodeResumeSetting">
+                                <input type="checkbox" id="nodeResumeCheckbox">
+                                <span>启用 Node.JS 断点续传（失败后可重试）</span>
+                            </label>
                         </div>
                     </div>
 

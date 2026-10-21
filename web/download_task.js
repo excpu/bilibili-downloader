@@ -448,8 +448,52 @@ const $cancelMenuItem = document.createElement('div');
 $cancelMenuItem.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:4px;color:var(--err, #d33);';
 $cancelMenuItem.addEventListener('mouseenter', () => { $cancelMenuItem.style.background = 'rgba(128,128,128,.2)'; });
 $cancelMenuItem.addEventListener('mouseleave', () => { $cancelMenuItem.style.background = ''; });
+const $retryMenuItem = document.createElement('div');
+$retryMenuItem.textContent = '重试';
+$retryMenuItem.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:4px;display:none;';
+$retryMenuItem.addEventListener('mouseenter', () => { $retryMenuItem.style.background = 'rgba(128,128,128,.2)'; });
+$retryMenuItem.addEventListener('mouseleave', () => { $retryMenuItem.style.background = ''; });
+$taskContextMenu.appendChild($retryMenuItem);
 $taskContextMenu.appendChild($cancelMenuItem);
 document.body.appendChild($taskContextMenu);
+
+// 失败的任务：uid -> task，保留 UI，供右键重试或删除
+const failedTasks = new Map();
+
+function markTaskFailed(task) {
+    failedTasks.set(task.uid, task);
+}
+
+function retryFailedTask(uid) {
+    const task = failedTasks.get(uid);
+    if (!task) return;
+    failedTasks.delete(uid);
+    task.resume = true;
+    task.cancelled = false;
+    task.needFetchCid = !task.cid;
+    const progressEl = document.getElementById(`progress-${uid}`);
+    const percentEl = document.getElementById(`percent-${uid}`);
+    const statusEl = document.getElementById(`status-${uid}`);
+    if (progressEl) progressEl.style.background = '';
+    if (percentEl) {
+        percentEl.style.color = '';
+        percentEl.textContent = '0%';
+    }
+    if (statusEl) {
+        statusEl.textContent = '等待重试';
+        statusEl.style.color = '';
+    }
+    taskQuene.push(task);
+    taskManager();
+}
+
+async function deleteFailedTask(uid) {
+    const task = failedTasks.get(uid);
+    if (!task) return;
+    failedTasks.delete(uid);
+    removeTaskUi(uid);
+    await window.electronAPI.invoke('cleanupFailedDownload', task.title);
+}
 
 let contextMenuUid = null;
 const hideTaskContextMenu = () => {
@@ -457,31 +501,49 @@ const hideTaskContextMenu = () => {
     contextMenuUid = null;
 };
 
+$retryMenuItem.addEventListener('click', () => {
+    const uid = contextMenuUid;
+    hideTaskContextMenu();
+    if (uid) retryFailedTask(uid);
+});
+
 $cancelMenuItem.addEventListener('click', () => {
     const uid = contextMenuUid;
     hideTaskContextMenu();
-    if (uid) cancelTask(uid);
+    if (!uid) return;
+    if (failedTasks.has(uid)) deleteFailedTask(uid);
+    else cancelTask(uid);
 });
 
-document.addEventListener('contextmenu', (event) => {
+document.addEventListener('contextmenu', async (event) => {
     const taskEl = event.target.closest?.('.task');
     if (!taskEl || !taskEl.id.startsWith('task-')) {
         hideTaskContextMenu();
         return;
     }
     const uid = taskEl.id.slice('task-'.length);
-    const task = taskQuene.find(item => item.uid === uid);
+    const failedTask = failedTasks.get(uid);
+    const task = failedTask || taskQuene.find(item => item.uid === uid);
     if (!task || task.cancelled) {
         hideTaskContextMenu();
         return;
     }
     event.preventDefault();
+    const { clientX, clientY } = event;
+    if (failedTask) {
+        const engine = await window.electronAPI.invoke('getDownloadEngine');
+        const resumeEnabled = await window.electronAPI.invoke('getNodeResumeEnabled');
+        $retryMenuItem.style.display = engine === 'node-multi' && resumeEnabled ? 'block' : 'none';
+        $cancelMenuItem.textContent = '删除';
+    } else {
+        $retryMenuItem.style.display = 'none';
+        const isCurrent = globalTaskLock && taskQuene[0] === task;
+        $cancelMenuItem.textContent = isCurrent ? '取消下载' : '取消任务';
+    }
     contextMenuUid = uid;
-    const isCurrent = globalTaskLock && taskQuene[0] === task;
-    $cancelMenuItem.textContent = isCurrent ? '取消下载' : '取消任务';
     $taskContextMenu.style.display = 'block';
-    const x = Math.min(event.clientX, window.innerWidth - $taskContextMenu.offsetWidth - 4);
-    const y = Math.min(event.clientY, window.innerHeight - $taskContextMenu.offsetHeight - 4);
+    const x = Math.min(clientX, window.innerWidth - $taskContextMenu.offsetWidth - 4);
+    const y = Math.min(clientY, window.innerHeight - $taskContextMenu.offsetHeight - 4);
     $taskContextMenu.style.left = `${Math.max(0, x)}px`;
     $taskContextMenu.style.top = `${Math.max(0, y)}px`;
 });
@@ -520,6 +582,7 @@ async function taskManager() {
                 statusEl.textContent = 'CID获取失败';
                 statusEl.style.color = 'var(--err)';
             }
+            markTaskFailed(currentTask);
             taskQuene.shift();
             globalTaskLock = false;
             taskManager();
@@ -593,6 +656,8 @@ async function taskManager() {
             percentEl.textContent = "失败";
             percentEl.style.color = "var(--err)";
         }
+        
+        markTaskFailed(currentTask);
         
         // 3秒后自动移除失败的任务UI，避免后续进度事件错误更新
         // setTimeout(() => {

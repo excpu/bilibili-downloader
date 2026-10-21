@@ -5,6 +5,7 @@ function createSettingWeb() {
     const $downloadEngineSelect = document.getElementById('downloadEngineSelect');
     const $aria2ConcurrencySetting = document.getElementById('aria2ConcurrencySetting');
     const $aria2ConcurrencySelect = document.getElementById('aria2ConcurrencySelect');
+    const $nodeResumeCheckbox = document.getElementById('nodeResumeCheckbox');
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
@@ -46,6 +47,8 @@ function createSettingWeb() {
             const engine = $downloadEngineSelect.value;
             const isMulti = engine === 'aria2' || engine === 'node-multi';
             $aria2ConcurrencySetting.hidden = !isMulti;
+            const $resume = document.getElementById('nodeResumeSetting');
+            if ($resume) $resume.classList.toggle('hidden', engine !== 'node-multi');
             const $label = document.getElementById('concurrencySettingLabel') || $aria2ConcurrencySetting.querySelector('label');
             if ($label) {
                 $label.textContent = engine === 'aria2' ? 'Aria2 并发数：' : '并发线程数：';
@@ -57,6 +60,9 @@ function createSettingWeb() {
         const downloadEngine = await window.electronAPI.invoke('getDownloadEngine');
         if (downloadEngine && $downloadEngineSelect) {
             $downloadEngineSelect.value = downloadEngine;
+        }
+        if ($nodeResumeCheckbox) {
+            $nodeResumeCheckbox.checked = await window.electronAPI.invoke('getNodeResumeEnabled');
         }
         updateAria2ConcurrencyVisibility();
     }
@@ -190,6 +196,12 @@ function createSettingWeb() {
     if ($aria2ConcurrencySelect) {
         $aria2ConcurrencySelect.addEventListener('change', (event) => {
             window.electronAPI.invoke('setAria2Concurrency', event.target.value);
+        });
+    }
+
+    if ($nodeResumeCheckbox) {
+        $nodeResumeCheckbox.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setNodeResumeEnabled', event.target.checked);
         });
     }
 

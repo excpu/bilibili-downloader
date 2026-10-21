@@ -14,6 +14,10 @@ module.exports = function registerSettingIpc(mainWindow) {
         setting.updateDownloadEngine(engine);
     });
 
+    ipcMain.handle('getNodeResumeEnabled', () => setting.getNodeResumeEnabled());
+    ipcMain.handle('setNodeResumeEnabled', (event, enabled) => {
+        setting.updateNodeResumeEnabled(enabled);
+    });
     ipcMain.handle('getAria2Concurrency', () => {
         return setting.getAria2Concurrency();
     });

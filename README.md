@@ -1,4 +1,8 @@
 # bilibili-downloader  B站视频下载器
+
+## 2026.10.21 WE HAVE A PROBLEM
+v1.0.3 以前的版本有已知的中间人攻击风险，请勿继续使用
+
 开箱即用的 BiliBili 下载器  
 本项目是一个基于 Node.js 和 Electron 构建的跨平台BiliBili下载工具，支持所有主流操作系统。
 ![主界面展示](images/image-4.png)

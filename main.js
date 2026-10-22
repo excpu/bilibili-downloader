@@ -136,6 +136,52 @@ function createWindow() {
             win.close();
         }
     });
+
+    // 拦截全局 Chromium 网络栈的 TLS 握手校验
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+        const { hostname, certificate } = request;
+
+        // 如果握手阶段未收到有效证书，直接回退 Chromium 默认处理
+        if (!certificate) {
+            callback(-3);
+            return;
+        }
+
+        // 受损证书的特征关键词
+        const BLOCKED_ISSUERS = [
+            'EM DV TLS CA - G3B',
+            'EM DV TLS CA - G3C',
+            'EM OV TLS CA - G3B',
+            'EM OV TLS CA - G3C',
+            'EM EV TLS CA - G3B',
+            'EM EV TLS CA - G3C',
+            'emSign Root TLS CA - G3',
+            'AAA Certificate Services'
+        ];
+
+        // 沿证书链逐级向上遍历核查
+        let isCompromised = false;
+        let currentCert = certificate;
+
+        while (currentCert) {
+            const issuer = currentCert.issuerName || currentCert.issuer?.commonName || '';
+            if (BLOCKED_ISSUERS.some(blocked => issuer.includes(blocked))) {
+                isCompromised = true;
+                break;
+            }
+            currentCert = currentCert.issuerCert;
+        }
+
+        if (isCompromised) {
+            console.warn(`[Security] 成功拦截受损 eMudhra 证书连接: ${hostname}`);
+            // -202 映射至 Chromium 的 net::ERR_CERT_REVOKED (证书已吊销)
+            callback(-202);
+            return;
+        }
+
+        // -3 代表委托 Chromium 内置校验逻辑处理后续结果
+        callback(-3);
+    });
 }
 
 app.whenReady().then(createWindow);

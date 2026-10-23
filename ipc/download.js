@@ -80,9 +80,9 @@ if (app.isPackaged && ffmpeg.includes('app.asar')) {
 }
 
 module.exports = function registerDownloadIpc(mainWindow) {
-    ipcMain.handle('cleanupFailedDownload', async (event, title) => {
-        const dir = setting.getDownloadPath();
-        const base = path.join(dir, sanitizePath(String(title || '')));
+    ipcMain.handle('cleanupFailedDownload', async (event, payload) => {
+        const dir = setting.resolveDownloadDir(payload?.folderNames);
+        const base = path.join(dir, sanitizePath(String(payload?.title || '')));
         const targets = [`${base}_video.m4s`, `${base}_audio.m4s`].flatMap(p => [
             p, `${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`
         ]);
@@ -133,7 +133,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 : subtitleJsonConverter.saveSrtToFile;
             const filePath = await saveSubtitle(
                 subtitleContent,
-                setting.getDownloadPath(),
+                setting.resolveDownloadDir(payload.folderNames),
                 `${fileName}.${isAss ? 'ass' : 'srt'}`
             );
             return { success: true, filePath };
@@ -158,7 +158,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             videoCodec
         } = payload;
         title = sanitizePath(title);
-        const downloadDir = setting.getDownloadPath();
+        const downloadDir = setting.resolveDownloadDir(payload.folderNames);
         const controller = new AbortController();
         const signal = controller.signal;
         downloadControllers.set(uid, controller);

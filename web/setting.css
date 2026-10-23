@@ -104,6 +104,11 @@
     margin: 0;
 }
 
+/* 需显式覆盖上面的 display: flex，否则 .hidden 无法生效 */
+.setting-checkbox.hidden {
+    display: none;
+}
+
 /* 路径输入组 */
 .path-input-group {
     display: flex;

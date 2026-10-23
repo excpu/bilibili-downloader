@@ -169,6 +169,14 @@
                                     <option value="protobuf">protobuf 接口</option>
                                 </select>
                             </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="downloadInFolderCheckbox">
+                                <span>在下载目录新建与视频同名的文件夹，所有下载文件放入其中</span>
+                            </label>
+                            <label class="setting-checkbox hidden" id="downloadFolderNestingSetting">
+                                <input type="checkbox" id="downloadFolderNestingCheckbox">
+                                <span>启用文件夹嵌套：分P视频按分P标题分层，合集按视频标题分层</span>
+                            </label>
                         </div>
 
                         <!-- CDN 选择部分 -->
@@ -432,6 +440,7 @@
     </main>
     <div class="spacer"></div>
     <script src="bv_enc.js"></script>
+    <script src="folder_structure.js"></script>
     <script src="independent_download.js"></script>
     <script src="select_card.js"></script>
     <script src="model.js"></script>

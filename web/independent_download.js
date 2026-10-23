@@ -28,10 +28,11 @@ function createIndependentDownload() {
 
         setDanmuDownloadLock(true);
 
-        window.electronAPI.invoke('downloadDanmu', { cid, title, duration, standalone: true })
-            .finally(() => {
-                setDanmuDownloadLock(false);
-            });
+        folderStructure.forIdentity(videoEle, cid).then(folderNames =>
+            window.electronAPI.invoke('downloadDanmu', { cid, title, duration, standalone: true, folderNames })
+        ).finally(() => {
+            setDanmuDownloadLock(false);
+        });
     }
     function downloadCover(videoEle = currentVideoIdentity) {
         if (!videoEle.coverUrl) {
@@ -40,7 +41,9 @@ function createIndependentDownload() {
         }
         const coverUrl = videoEle.coverUrl;
         const title = videoEle.title;
-        window.electronAPI.invoke('downloadCover', { url: coverUrl, title });
+        folderStructure.forIdentity(videoEle, videoEle.cid).then(folderNames =>
+            window.electronAPI.invoke('downloadCover', { url: coverUrl, title, folderNames })
+        );
     }
     return {
         downloadDanmu,

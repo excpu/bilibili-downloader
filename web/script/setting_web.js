@@ -9,6 +9,9 @@ function createSettingWeb() {
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
+    const $downloadInFolderCheckbox = document.getElementById('downloadInFolderCheckbox');
+    const $downloadFolderNestingSetting = document.getElementById('downloadFolderNestingSetting');
+    const $downloadFolderNestingCheckbox = document.getElementById('downloadFolderNestingCheckbox');
     const $cdnSelect = document.getElementById('cdnSelect');
     const $subtitleFormatSelect = document.getElementById('subtitleFormatSelect');
     const $assSubtitleSettings = document.getElementById('assSubtitleSettings');
@@ -25,6 +28,7 @@ function createSettingWeb() {
         showUname(globalUserInfo ? globalUserInfo.data.uname : '未登录');
         showAvatar(globalUserInfo ? globalUserInfo.data.face : 'https://static.hdslb.com/images/akari.jpg');
         await loadDownloadPath();
+        await loadFolderSettings();
         await loadDownloadEngine();
         await loadAria2Concurrency();
         await loadDanmuDownloadMethod();
@@ -92,6 +96,26 @@ function createSettingWeb() {
         if (downloadPath && $downloadPathInput) {
             $downloadPathInput.value = downloadPath;
         }
+    }
+
+    // 嵌套开关仅在勾选"创建文件夹"时显示
+    function updateNestingVisibility() {
+        if (!$downloadFolderNestingSetting || !$downloadInFolderCheckbox) return;
+        $downloadFolderNestingSetting.classList.toggle('hidden', !$downloadInFolderCheckbox.checked);
+    }
+
+    async function loadFolderSettings() {
+        const [inFolder, nesting] = await Promise.all([
+            window.electronAPI.invoke('getDownloadInFolder'),
+            window.electronAPI.invoke('getDownloadFolderNesting')
+        ]);
+        if ($downloadInFolderCheckbox) {
+            $downloadInFolderCheckbox.checked = inFolder === true;
+        }
+        if ($downloadFolderNestingCheckbox) {
+            $downloadFolderNestingCheckbox.checked = nesting === true;
+        }
+        updateNestingVisibility();
     }
 
     async function loadCdnList() {
@@ -291,6 +315,19 @@ function createSettingWeb() {
 
     if ($selectDownloadPathBtn) {
         $selectDownloadPathBtn.addEventListener('click', selectDownloadPath);
+    }
+
+    if ($downloadInFolderCheckbox) {
+        $downloadInFolderCheckbox.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setDownloadInFolder', event.target.checked);
+            updateNestingVisibility();
+        });
+    }
+
+    if ($downloadFolderNestingCheckbox) {
+        $downloadFolderNestingCheckbox.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setDownloadFolderNesting', event.target.checked);
+        });
     }
 
     if ($cdnSelect) {

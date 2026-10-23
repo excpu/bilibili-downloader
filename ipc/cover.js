@@ -13,7 +13,7 @@ setting.load();
 module.exports = function registerCoverIpc(mainWindow) {
     ipcMain.handle('downloadCover', async (event, payload) => {
         const { url, title } = payload;
-        const downloadDir = setting.getDownloadPath();
+        const downloadDir = setting.resolveDownloadDir(payload.folderNames);
 
         if (!fs.existsSync(downloadDir)) {
             fs.mkdirSync(downloadDir, { recursive: true });

@@ -81,8 +81,8 @@ app.commandLine.appendSwitch('log-level', '3') // 只输出错误日志，减少
 function createWindow() {
     let allowClose = false;
     const win = new BrowserWindow({
-        width: 1200,
-        height: 900,
+        width: 1000,
+        height: 700,
         minWidth: 730,
         minHeight: 520,
         icon: path.join(__dirname, 'assets/icon/icon.png'),

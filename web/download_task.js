@@ -189,13 +189,18 @@ let taskQuene = [];
 let globalTaskLock = false;
 
 // taskQuene 子项格式
-//{uid,bvid,cid,title,videoIndex,audioIndex,videoQualityId,videoCodec,audioQualityId,audioCodec}
+//{uid,bvid,cid,title,folderNames,videoIndex,audioIndex,videoQualityId,videoCodec,audioQualityId,audioCodec}
 
 function manageDownloadStart() {
     if (!currentVideoIdentity) {
         alert('请先获取视频信息');
         return;
     }
+    // 文件夹层级依赖设置项，异步读取后再创建任务
+    return addTasksToQueue();
+}
+
+async function addTasksToQueue() {
     const $qualitySelect = document.getElementById('qualitySelect');
     const videoIndex = parseInt($qualitySelect.value);
     const videoOption = $qualitySelect.options[$qualitySelect.selectedIndex];
@@ -209,6 +214,11 @@ function manageDownloadStart() {
     const audioQualityId = audioOption ? parseInt(audioOption.dataset.qualityId || String(audioIndex)) : audioIndex;
     const audioCodec = audioOption ? (audioOption.dataset.codec || '') : '';
     const subtitleLanguage = document.getElementById('qualitySelectSubtitle')?.value || '';
+    // 文件夹设置只需读取一次，多个任务复用
+    const folderFlags = await folderStructure.getFolderFlags();
+    const layerNames = folderFlags.inFolder
+        ? (partInfo) => folderStructure.buildLayerNames(currentVideoIdentity, partInfo)
+        : () => [];
     currentVideoIdentity.danmu = $downloadDanmuCheckbox.checked;
     currentVideoIdentity.cover = $downloadCoverCheckbox.checked;
     // 如果是多P视频，生成多个下载任务
@@ -234,12 +244,14 @@ function manageDownloadStart() {
             const taskTitle = currentVideoIdentity.isCollection
                 ? `E${partInfo.episode}P${partInfo.page} - ${partInfo.episodeTitle} - ${partInfo.part}`
                 : `P${partInfo.page} - ${currentVideoIdentity.title} - ${partInfo.part}`;
+            const folderNames = layerNames(partInfo);
 
             const videoEle = {
                 uid,
                 bvid: taskBvid,
                 cid: taskCid,
                 title: taskTitle,
+                folderNames,
                 duration: Number(partInfo.duration) || Number(currentVideoIdentity.duration) || 0,
                 videoIndex,
                 audioIndex,
@@ -258,11 +270,13 @@ function manageDownloadStart() {
         }
     } else {
         const uid = `${Date.now()}${Math.round(Math.random() * 1000)}`;
+        const folderNames = layerNames(null);
         const videoEle = {
             uid,
             bvid: currentVideoIdentity.bvid,
             cid: currentVideoIdentity.cid,
             title: currentVideoIdentity.title,
+            folderNames,
             duration: currentVideoIdentity.duration,
             videoIndex,
             audioIndex,
@@ -383,9 +397,9 @@ function displayTasks(newTask) {
 
 
 // Call弹幕下载
-async function downloadDanmu(cid, title, duration, danmu, uid) {
+async function downloadDanmu(cid, title, duration, danmu, uid, folderNames) {
     if (danmu) {
-        await window.electronAPI.invoke('downloadDanmu', { cid, title, duration });
+        await window.electronAPI.invoke('downloadDanmu', { cid, title, duration, folderNames });
         //document.getElementById(`status-${uid}`).innerText = "下载弹幕完成";
         console.log('弹幕下载完成');
     } else {
@@ -394,9 +408,9 @@ async function downloadDanmu(cid, title, duration, danmu, uid) {
     }
 }
 // Call 封面下载
-async function downloadCover(cover, coverUrl, title, uid) {
+async function downloadCover(cover, coverUrl, title, uid, folderNames) {
     if (cover && coverUrl) {
-        await window.electronAPI.invoke('downloadCover', { url: coverUrl, title });
+        await window.electronAPI.invoke('downloadCover', { url: coverUrl, title, folderNames });
         console.log('封面下载完成');
     } else {
         // 如果没有封面，直接返回
@@ -492,7 +506,10 @@ async function deleteFailedTask(uid) {
     if (!task) return;
     failedTasks.delete(uid);
     removeTaskUi(uid);
-    await window.electronAPI.invoke('cleanupFailedDownload', task.title);
+    await window.electronAPI.invoke('cleanupFailedDownload', {
+        title: task.title,
+        folderNames: task.folderNames || []
+    });
 }
 
 let contextMenuUid = null;
@@ -616,7 +633,8 @@ async function taskManager() {
                         const subtitleResult = await window.electronAPI.invoke('downloadSubtitle', {
                             subtitleUrl: subtitle.subtitle_url,
                             language: subtitle.lan || currentTask.subtitleLanguage,
-                            title: currentTask.title
+                            title: currentTask.title,
+                            folderNames: currentTask.folderNames || []
                         });
                         if (subtitleResult?.success) {
                             model.showSuccessMessage(`字幕下载完成`);
@@ -632,8 +650,8 @@ async function taskManager() {
             }
         }
         // 下载成功
-        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid);
-        await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid);
+        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid, currentTask.folderNames);
+        await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid, currentTask.folderNames);
     } else {
         alert(`下载 ${currentTask.title} 失败：${result.message}`);
         // 在UI上标记下载失败，并移除该任务UI（防止进度显示混乱）

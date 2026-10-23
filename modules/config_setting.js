@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { DEFAULT_OPTIONS: DEFAULT_DANMAKU_ASS_OPTIONS } = require('./xml2ass');
+const { sanitizePath } = require('./sanitize_path');
 
 const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
 const DEFAULT_ARIA2_CONCURRENCY = 2;
@@ -43,7 +44,8 @@ class Setting {
         this.settingFilePath = path.join(app.getPath('userData'), 'config.json');
         this.defaultDownloadPath = app.getPath('downloads');
         this.defaultData = {
-            downloadInFolder: false,  // 是否在下载目录中创建子文件夹
+            downloadInFolder: false,  // 是否在下载目录中创建与视频/集合同名的子文件夹
+            downloadFolderNesting: false,  // 是否启用文件夹嵌套（分P、合集分层保存）
             downloadEngine: "node-multi", // 下载引擎，node aria2 node-multi
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
@@ -135,6 +137,55 @@ class Setting {
         const data = this.load() || {};
         data.downloadPath = downloadPath;
         this.save(data);
+    }
+
+    updateDownloadInFolder(enabled) {
+        const data = this.load() || {};
+        data.downloadInFolder = Boolean(enabled);
+        this.save(data);
+    }
+
+    getDownloadInFolder() {
+        const data = this.load() || {};
+        return data.downloadInFolder === true;
+    }
+
+    updateDownloadFolderNesting(enabled) {
+        const data = this.load() || {};
+        data.downloadFolderNesting = Boolean(enabled);
+        this.save(data);
+    }
+
+    getDownloadFolderNesting() {
+        const data = this.load() || {};
+        return data.downloadFolderNesting === true;
+    }
+
+    /**
+     * 根据下载目录与文件夹设置，解析出本次下载实际使用的目录。
+     * folderNames 由渲染进程按"外层在前、内层在后"的顺序给出（如 [合集名, 视频名, 分P名]）：
+     * - 未勾选创建文件夹：始终返回下载目录本身（保持原有行为）
+     * - 勾选创建文件夹、未勾选嵌套：只使用第一层文件夹，所有文件放入同一目录
+     * - 两者都勾选：按完整层级创建嵌套目录
+     * @param {string|string[]} folderNames 文件夹名称层级
+     * @returns {string} 实际下载目录
+     */
+    resolveDownloadDir(folderNames = []) {
+        const baseDir = this.getDownloadPath();
+        if (!this.getDownloadInFolder()) {
+            return baseDir;
+        }
+
+        const names = (Array.isArray(folderNames) ? folderNames : [folderNames])
+            .filter(item => typeof item === 'string' && item.trim().length > 0)
+            .map(item => sanitizePath(item.trim()));
+
+        if (names.length === 0) {
+            return baseDir;
+        }
+
+        const chain = this.getDownloadFolderNesting() ? names : names.slice(0, 1);
+        return path.join(baseDir, ...chain);
     }
 
     getDownloadPath() {

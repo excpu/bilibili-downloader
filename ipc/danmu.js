@@ -60,7 +60,7 @@ async function downloadProtobufDanmu(cid, title, duration, downloadDir) {
 module.exports = function registerDanmuIpc(mainWindow) {
     ipcMain.handle('downloadDanmu', async (event, payload) => {
         const { cid, title, duration, standalone } = payload;
-        const downloadDir = setting.getDownloadPath();
+        const downloadDir = setting.resolveDownloadDir(payload.folderNames);
         const danmuDownloadMethod = setting.getDanmuDownloadMethod();
         const danmakuSettings = setting.getDanmakuSettings();
         // 直接下载弹幕走独立开关 convertStandalone，任务下载走 convertToAss
@@ -94,7 +94,7 @@ module.exports = function registerDanmuIpc(mainWindow) {
 
     ipcMain.handle('downloadDanmuProtobuf', async (event, payload) => {
         const { cid, title, duration } = payload;
-        const downloadDir = setting.getDownloadPath();
+        const downloadDir = setting.resolveDownloadDir(payload.folderNames);
         const convertEnabled = setting.getDanmakuSettings().convertToAss;
 
         try {

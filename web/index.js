@@ -102,6 +102,7 @@ function buildCollectionParts(episodes) {
         selectionId: `${episode.episode}:${page.page}`,
         episode: episode.episode,
         episodeTitle: episode.title,
+        pageCount: episode.pages.length,
         page: page.page,
         part: page.part,
         bvid: page.bvid,
@@ -224,7 +225,11 @@ $downloadSelectedSubtitleBtn.addEventListener('click', async () => {
         const result = await window.electronAPI.invoke('downloadSubtitle', {
             subtitleUrl: subtitle.subtitle_url,
             language: subtitle.lan || subtitleLanguage,
-            title: subtitleIdentity.title
+            title: subtitleIdentity.title,
+            folderNames: await folderStructure.forIdentity(
+                currentVideoIdentity,
+                subtitleIdentity.cid
+            )
         });
         if (!result?.success) {
             throw new Error(result?.message || '未知错误');

@@ -43,6 +43,16 @@ module.exports = function registerSettingIpc(mainWindow) {
         return setting.getDownloadPath();
     });
 
+    ipcMain.handle('getDownloadInFolder', () => setting.getDownloadInFolder());
+    ipcMain.handle('setDownloadInFolder', (event, enabled) => {
+        setting.updateDownloadInFolder(enabled);
+    });
+
+    ipcMain.handle('getDownloadFolderNesting', () => setting.getDownloadFolderNesting());
+    ipcMain.handle('setDownloadFolderNesting', (event, enabled) => {
+        setting.updateDownloadFolderNesting(enabled);
+    });
+
     ipcMain.handle('selectDownloadPath', async (event) => {
         const senderWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
         const result = await dialog.showOpenDialog(senderWindow, {

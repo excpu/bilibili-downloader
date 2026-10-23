@@ -28,7 +28,7 @@ function createIndependentDownload() {
 
         setDanmuDownloadLock(true);
 
-        window.electronAPI.invoke('downloadDanmu', { cid, title, duration })
+        window.electronAPI.invoke('downloadDanmu', { cid, title, duration, standalone: true })
             .finally(() => {
                 setDanmuDownloadLock(false);
             });

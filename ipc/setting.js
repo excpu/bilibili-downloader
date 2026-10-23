@@ -77,4 +77,10 @@ module.exports = function registerSettingIpc(mainWindow) {
     ipcMain.handle('setSubtitleSettings', (event, subtitleSettings) =>
         setting.updateSubtitleSettings(subtitleSettings)
     );
+
+    ipcMain.handle('getDanmakuSettings', () => setting.getDanmakuSettings());
+
+    ipcMain.handle('setDanmakuSettings', (event, danmakuSettings) =>
+        setting.updateDanmakuSettings(danmakuSettings)
+    );
 }

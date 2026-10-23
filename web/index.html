@@ -137,6 +137,7 @@
                         <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
                         <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
                         <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
+                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton" data-setting-tab="danmakuSettingsTab">弹幕</button>
                     </div>
                     <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab" aria-labelledby="basicSettingsTabButton">
                         <!-- 用户信息部分 -->
@@ -293,6 +294,128 @@
                             <div class="setting-item">
                                 <label for="assMarginV">垂直边距：</label>
                                 <input class="setting-select" type="number" id="assMarginV" data-ass-option="marginV" min="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="danmakuSettingsTab" aria-labelledby="danmakuSettingsTabButton">
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">弹幕转换</h3>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuConvertToAss">
+                                <span>将 XML 弹幕转换为 ASS</span>
+                            </label>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuConvertStandalone">
+                                <span>直接下载弹幕时也转换为 ASS</span>
+                            </label>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuKeepXml">
+                                <span>转换为 ASS 后保留原始 XML 文件</span>
+                            </label>
+                        </div>
+
+                        <div class="setting-section hidden" id="danmakuAssSettings">
+                            <h3 class="setting-section-title">ASS 弹幕设置</h3>
+                            <div class="setting-item">
+                                <label for="danmakuResX">画面宽度：</label>
+                                <input class="setting-select" type="number" id="danmakuResX" data-danmaku-option="resX" min="1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuResY">画面高度：</label>
+                                <input class="setting-select" type="number" id="danmakuResY" data-danmaku-option="resY" min="1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuFontName">字体：</label>
+                                <input class="setting-select" type="text" id="danmakuFontName" data-danmaku-option="fontName">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuFontSize">基准字号：</label>
+                                <input class="setting-select" type="number" id="danmakuFontSize" data-danmaku-option="fontSize" min="1">
+                            </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuScaleFontSize" data-danmaku-option="scaleFontSize">
+                                <span>按 XML 原始字号等比缩放</span>
+                            </label>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuBold" data-danmaku-option="bold">
+                                <span>文字加粗</span>
+                            </label>
+                            <div class="setting-item">
+                                <label for="danmakuOpacity">不透明度 (0~1)：</label>
+                                <input class="setting-select" type="number" id="danmakuOpacity" data-danmaku-option="opacity" min="0" max="1" step="0.05">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuOutlineWidth">描边宽度：</label>
+                                <input class="setting-select" type="number" id="danmakuOutlineWidth" data-danmaku-option="outlineWidth" min="0" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuShadowDepth">阴影深度：</label>
+                                <input class="setting-select" type="number" id="danmakuShadowDepth" data-danmaku-option="shadowDepth" min="0" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuLineSpacing">轨道行间距：</label>
+                                <input class="setting-select" type="number" id="danmakuLineSpacing" data-danmaku-option="lineSpacing" min="0">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuMarginTop">顶部留白：</label>
+                                <input class="setting-select" type="number" id="danmakuMarginTop" data-danmaku-option="marginTop" min="0">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuMarginBottom">底部留白：</label>
+                                <input class="setting-select" type="number" id="danmakuMarginBottom" data-danmaku-option="marginBottom" min="0">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuScrollArea">滚动区域占比 (0~1)：</label>
+                                <input class="setting-select" type="number" id="danmakuScrollArea" data-danmaku-option="scrollArea" min="0.01" max="1" step="0.05">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuFixedArea">固定区域占比 (0~1)：</label>
+                                <input class="setting-select" type="number" id="danmakuFixedArea" data-danmaku-option="fixedArea" min="0.01" max="1" step="0.05">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuScrollDuration">滚动耗时（秒）：</label>
+                                <input class="setting-select" type="number" id="danmakuScrollDuration" data-danmaku-option="scrollDuration" min="0.1" step="0.5">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuFixedDuration">固定停留（秒）：</label>
+                                <input class="setting-select" type="number" id="danmakuFixedDuration" data-danmaku-option="fixedDuration" min="0.1" step="0.5">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuHorizontalPadding">同轨安全间距：</label>
+                                <input class="setting-select" type="number" id="danmakuHorizontalPadding" data-danmaku-option="horizontalPadding" min="0">
+                            </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuAllowOverlap" data-danmaku-option="allowOverlap">
+                                <span>轨道全满时允许重叠（否则丢弃）</span>
+                            </label>
+                            <div class="setting-item">
+                                <label for="danmakuMaxOverlapOffset">最大延后入轨（秒）：</label>
+                                <input class="setting-select" type="number" id="danmakuMaxOverlapOffset" data-danmaku-option="maxOverlapOffset" min="0" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuTimeOffset">全局时间偏移（秒）：</label>
+                                <input class="setting-select" type="number" id="danmakuTimeOffset" data-danmaku-option="timeOffset" step="0.1">
+                            </div>
+                            <div class="setting-item">
+                                <label for="danmakuBlockModes">屏蔽模式（逗号分隔）：</label>
+                                <input class="setting-select" type="text" id="danmakuBlockModes" data-danmaku-option="blockModes" placeholder="如 4,5；留空表示不屏蔽">
+                            </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuBlockColor" data-danmaku-option="blockColor">
+                                <span>屏蔽所有非白色弹幕</span>
+                            </label>
+                            <div class="setting-item">
+                                <label for="danmakuBlockRegex">正则屏蔽词：</label>
+                                <input class="setting-select" type="text" id="danmakuBlockRegex" data-danmaku-option="blockRegex" placeholder="如 剧透|打卡；留空表示不启用">
+                            </div>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="danmakuDeduplicate" data-danmaku-option="deduplicate">
+                                <span>合并短时间内的重复刷屏弹幕</span>
+                            </label>
+                            <div class="setting-item">
+                                <label for="danmakuDeduplicateWindow">重复判定时间窗口（秒）：</label>
+                                <input class="setting-select" type="number" id="danmakuDeduplicateWindow" data-danmaku-option="deduplicateWindow" min="0" step="0.5">
                             </div>
                         </div>
                     </div>

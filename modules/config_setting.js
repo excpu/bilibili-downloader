@@ -2,6 +2,8 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+const { DEFAULT_OPTIONS: DEFAULT_DANMAKU_ASS_OPTIONS } = require('./xml2ass');
+
 const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
 const DEFAULT_ARIA2_CONCURRENCY = 2;
 const DEFAULT_SUBTITLE_SETTINGS = {
@@ -26,6 +28,15 @@ const DEFAULT_SUBTITLE_SETTINGS = {
     },
 };
 
+// 弹幕 XML 转 ASS 设置：convertToAss 开启后按 assOptions 转换；keepXml 控制是否保留原始 xml
+// convertStandalone 控制"直接点击下载弹幕"（独立下载）时是否也转换为 ASS
+const DEFAULT_DANMAKU_SETTINGS = {
+    convertToAss: false,
+    convertStandalone: false,
+    keepXml: true,
+    assOptions: { ...DEFAULT_DANMAKU_ASS_OPTIONS },
+};
+
 // 配置文件保存在appData目录中的 config.json 不加密，和认证文件分开
 class Setting {
     constructor() {
@@ -39,6 +50,7 @@ class Setting {
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
             aria2Concurrency: DEFAULT_ARIA2_CONCURRENCY,
             subtitleSettings: DEFAULT_SUBTITLE_SETTINGS,
+            danmakuSettings: DEFAULT_DANMAKU_SETTINGS,
         };
     }
 
@@ -200,6 +212,95 @@ class Setting {
             assOptions: {
                 ...DEFAULT_SUBTITLE_SETTINGS.assOptions,
                 ...assOptions,
+            },
+        };
+    }
+
+    updateDanmakuSettings(danmakuSettings) {
+        const data = this.load() || {};
+        const assOptions = danmakuSettings?.assOptions || {};
+        const numberOption = (key, fallback, minimum = -Infinity, maximum = Infinity) => {
+            const rawValue = assOptions[key];
+            const value = rawValue === '' || rawValue === null || rawValue === undefined
+                ? NaN
+                : Number(rawValue);
+            return Number.isFinite(value) && value >= minimum && value <= maximum
+                ? value
+                : fallback;
+        };
+        const stringOption = (key, fallback) =>
+            typeof assOptions[key] === 'string' && assOptions[key].length > 0
+                ? assOptions[key]
+                : fallback;
+        const boolOption = (key, fallback) =>
+            typeof assOptions[key] === 'boolean' ? assOptions[key] : fallback;
+
+        const blockModes = Array.isArray(assOptions.blockModes)
+            ? assOptions.blockModes
+                .map(Number)
+                .filter(mode => Number.isInteger(mode) && mode >= 1 && mode <= 6)
+            : [...DEFAULT_DANMAKU_SETTINGS.assOptions.blockModes];
+
+        // blockRegex 以字符串形式存储，空字符串表示不启用
+        const blockRegexSource = typeof assOptions.blockRegex === 'string'
+            ? assOptions.blockRegex.trim()
+            : '';
+        let blockRegex = null;
+        if (blockRegexSource) {
+            try {
+                blockRegex = new RegExp(blockRegexSource, 'i').source;
+            } catch {
+                blockRegex = null;
+            }
+        }
+
+        const defaults = DEFAULT_DANMAKU_SETTINGS.assOptions;
+        data.danmakuSettings = {
+            convertToAss: danmakuSettings?.convertToAss === true,
+            convertStandalone: danmakuSettings?.convertStandalone === true,
+            keepXml: danmakuSettings?.keepXml !== false,
+            assOptions: {
+                resX: numberOption('resX', defaults.resX, 1),
+                resY: numberOption('resY', defaults.resY, 1),
+                fontName: stringOption('fontName', defaults.fontName),
+                fontSize: numberOption('fontSize', defaults.fontSize, 1),
+                scaleFontSize: boolOption('scaleFontSize', defaults.scaleFontSize),
+                bold: boolOption('bold', defaults.bold),
+                opacity: numberOption('opacity', defaults.opacity, 0, 1),
+                outlineWidth: numberOption('outlineWidth', defaults.outlineWidth, 0),
+                shadowDepth: numberOption('shadowDepth', defaults.shadowDepth, 0),
+                lineSpacing: numberOption('lineSpacing', defaults.lineSpacing, 0),
+                marginTop: numberOption('marginTop', defaults.marginTop, 0),
+                marginBottom: numberOption('marginBottom', defaults.marginBottom, 0),
+                scrollArea: numberOption('scrollArea', defaults.scrollArea, 0.01, 1),
+                fixedArea: numberOption('fixedArea', defaults.fixedArea, 0.01, 1),
+                scrollDuration: numberOption('scrollDuration', defaults.scrollDuration, 0.1),
+                fixedDuration: numberOption('fixedDuration', defaults.fixedDuration, 0.1),
+                horizontalPadding: numberOption('horizontalPadding', defaults.horizontalPadding, 0),
+                allowOverlap: boolOption('allowOverlap', defaults.allowOverlap),
+                maxOverlapOffset: numberOption('maxOverlapOffset', defaults.maxOverlapOffset, 0),
+                timeOffset: numberOption('timeOffset', defaults.timeOffset),
+                blockModes,
+                blockColor: boolOption('blockColor', defaults.blockColor),
+                blockRegex,
+                deduplicate: boolOption('deduplicate', defaults.deduplicate),
+                deduplicateWindow: numberOption('deduplicateWindow', defaults.deduplicateWindow, 0),
+            },
+        };
+        this.save(data);
+        return data.danmakuSettings;
+    }
+
+    getDanmakuSettings() {
+        const data = this.load() || {};
+        const stored = data.danmakuSettings || {};
+        return {
+            convertToAss: stored.convertToAss === true,
+            convertStandalone: stored.convertStandalone === true,
+            keepXml: stored.keepXml !== false,
+            assOptions: {
+                ...DEFAULT_DANMAKU_SETTINGS.assOptions,
+                ...(stored.assOptions || {}),
             },
         };
     }

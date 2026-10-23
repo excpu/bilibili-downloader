@@ -1,6 +1,6 @@
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true"; // 禁用安全警告，开发阶段使用
 // 多连接下载的文件写入与 DNS 都走 libuv 线程池，默认 4 个线程容易排队；必须在线程池首次使用前设置
-if (!process.env.UV_THREADPOOL_SIZE) process.env.UV_THREADPOOL_SIZE = '16';
+if (!process.env.UV_THREADPOOL_SIZE) process.env.UV_THREADPOOL_SIZE = '64';
 // main.js
 const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');

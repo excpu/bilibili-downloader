@@ -14,6 +14,11 @@ function createSettingWeb() {
     const $assSubtitleSettings = document.getElementById('assSubtitleSettings');
     const $subtitleAppendLanguage = document.getElementById('subtitleAppendLanguage');
     const $assOptionInputs = [...document.querySelectorAll('[data-ass-option]')];
+    const $danmakuConvertToAss = document.getElementById('danmakuConvertToAss');
+    const $danmakuConvertStandalone = document.getElementById('danmakuConvertStandalone');
+    const $danmakuKeepXml = document.getElementById('danmakuKeepXml');
+    const $danmakuAssSettings = document.getElementById('danmakuAssSettings');
+    const $danmakuOptionInputs = [...document.querySelectorAll('[data-danmaku-option]')];
     
     async function openSetting() {
         settingModel.classList.remove('hidden');
@@ -25,6 +30,7 @@ function createSettingWeb() {
         await loadDanmuDownloadMethod();
         await loadCdnList();
         await loadSubtitleSettings();
+        await loadDanmakuSettings();
         selectSettingTab('basicSettingsTab');
     }
 
@@ -157,6 +163,66 @@ function createSettingWeb() {
         return window.electronAPI.invoke('setSubtitleSettings', getSubtitleSettingsFromForm());
     }
 
+    function updateDanmakuAssSettingsVisibility() {
+        const anyConversion = $danmakuConvertToAss.checked === true || $danmakuConvertStandalone.checked === true;
+        $danmakuAssSettings.classList.toggle('hidden', !anyConversion);
+    }
+
+    async function loadDanmakuSettings() {
+        const settings = await window.electronAPI.invoke('getDanmakuSettings');
+        if (!settings) return;
+
+        $danmakuConvertToAss.checked = settings.convertToAss === true;
+        $danmakuConvertStandalone.checked = settings.convertStandalone === true;
+        $danmakuKeepXml.checked = settings.keepXml !== false;
+
+        const assOptions = settings.assOptions || {};
+        for (const input of $danmakuOptionInputs) {
+            const value = assOptions[input.dataset.danmakuOption];
+            if (input.type === 'checkbox') {
+                input.checked = value === true;
+            } else if (input.dataset.danmakuOption === 'blockModes') {
+                input.value = Array.isArray(value) ? value.join(',') : '';
+            } else if (input.dataset.danmakuOption === 'blockRegex') {
+                input.value = value || '';
+            } else if (value !== undefined && value !== null) {
+                input.value = String(value);
+            }
+        }
+        updateDanmakuAssSettingsVisibility();
+    }
+
+    function getDanmakuSettingsFromForm() {
+        const assOptions = {};
+        for (const input of $danmakuOptionInputs) {
+            const key = input.dataset.danmakuOption;
+            if (input.type === 'checkbox') {
+                assOptions[key] = input.checked;
+            } else if (key === 'blockModes') {
+                assOptions[key] = input.value
+                    .split(',')
+                    .map(part => Number(part.trim()))
+                    .filter(Number.isFinite);
+            } else if (key === 'blockRegex') {
+                assOptions[key] = input.value.trim();
+            } else if (input.type === 'number') {
+                assOptions[key] = Number(input.value);
+            } else {
+                assOptions[key] = input.value;
+            }
+        }
+        return {
+            convertToAss: $danmakuConvertToAss.checked,
+            convertStandalone: $danmakuConvertStandalone.checked,
+            keepXml: $danmakuKeepXml.checked,
+            assOptions
+        };
+    }
+
+    function saveDanmakuSettings() {
+        return window.electronAPI.invoke('setDanmakuSettings', getDanmakuSettingsFromForm());
+    }
+
     function selectSettingTab(tabId) {
         document.querySelectorAll('[data-setting-tab]').forEach(button => {
             const isActive = button.dataset.settingTab === tabId;
@@ -178,6 +244,17 @@ function createSettingWeb() {
     });
     $subtitleAppendLanguage.addEventListener('change', saveSubtitleSettings);
     $assOptionInputs.forEach(input => input.addEventListener('change', saveSubtitleSettings));
+
+    $danmakuConvertToAss.addEventListener('change', () => {
+        updateDanmakuAssSettingsVisibility();
+        saveDanmakuSettings();
+    });
+    $danmakuConvertStandalone.addEventListener('change', () => {
+        updateDanmakuAssSettingsVisibility();
+        saveDanmakuSettings();
+    });
+    $danmakuKeepXml.addEventListener('change', saveDanmakuSettings);
+    $danmakuOptionInputs.forEach(input => input.addEventListener('change', saveDanmakuSettings));
 
     async function selectDownloadPath() {
         const selectedPath = await window.electronAPI.invoke('selectDownloadPath');

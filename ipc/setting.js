@@ -1,11 +1,21 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const Setting = require('../modules/config_setting');
 const { fetchCdnList } = require('../modules/cdn_source');
+const theme = require('../modules/theme');
 
 const setting = new Setting();
 setting.load(); // 加载设置数据
 
 module.exports = function registerSettingIpc(mainWindow) {
+    ipcMain.handle('getTheme', () => setting.getTheme());
+
+    ipcMain.handle('setTheme', (event, pref) => {
+        // 写盘后交给 nativeTheme，渲染进程的 light-dark() 会自动重新取色
+        const saved = setting.updateTheme(pref);
+        theme.applyThemePreference(saved);
+        return saved;
+    });
+
     ipcMain.handle('getDownloadEngine', () => {
         return setting.getDownloadEngine();
     });

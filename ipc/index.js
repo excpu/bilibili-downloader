@@ -7,6 +7,7 @@ const registerCoverIpc = require('./cover');
 const registerNewWindowIpc = require('./new_window');
 const registerSettingIpc = require('./setting');
 const registerPreviewIpc = require('./preview');
+const theme = require('../modules/theme');
 // 为 merge 窗口注册 IPC
 const registerMergeIpc = require('./merge/merge');
 
@@ -20,14 +21,17 @@ module.exports = function registerIpc(mainWindow) {
     registerPreviewIpc(mainWindow);
 
     // 监听模态框打开/关闭状态以动态同步原生控制按钮遮罩颜色
+    // 跟随主题的窗口由 theme 模块统一决定符号色，其余窗口沿用传入的颜色
     ipcMain.handle('setTitleBarOverlay', (event, options) => {
         const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-        if (win && !win.isDestroyed() && typeof win.setTitleBarOverlay === 'function') {
-            try {
-                win.setTitleBarOverlay(options);
-            } catch (err) {
-                console.error('setTitleBarOverlay 失败:', err);
-            }
+        if (!win || win.isDestroyed()) return;
+        if (theme.setModalState(win, !!options?.modal)) return;
+        // 未跟随主题的窗口必须自带颜色，否则不做处理
+        if (!options?.symbolColor || typeof win.setTitleBarOverlay !== 'function') return;
+        try {
+            win.setTitleBarOverlay(options);
+        } catch (err) {
+            console.error('setTitleBarOverlay 失败:', err);
         }
     });
 

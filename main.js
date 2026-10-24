@@ -7,6 +7,8 @@ const path = require('path');
 const registerIpc = require('./ipc');
 const { hasActiveDownloads } = require('./ipc/download');
 const { getAriaBinaryPath } = require('./modules/bin_path');
+const theme = require('./modules/theme');
+const Setting = require('./modules/config_setting');
 
 // // 禁用 User-Agent Client Hints，防止部分请求被拒绝
 // app.commandLine.appendSwitch('disable-features', 'UserAgentClientHint');
@@ -78,23 +80,28 @@ if (aria2Process && aria2Process.pid) {
 
 app.commandLine.appendSwitch('log-level', '3') // 只输出错误日志，减少控制台噪音
 
+// 系统外观变化或 themeSource 改变时，同步所有跟随主题的窗口的原生外观
+theme.watchThemeChange();
+
 function createWindow() {
     let allowClose = false;
+    // 先按已保存的偏好确定主题，窗口才能用正确的底色和标题栏符号色创建
+    theme.applyThemePreference(new Setting().getTheme());
+    const titleBarOverlay = process.platform === 'win32' ? {
+        color: '#00000000',
+        symbolColor: theme.isDark() ? '#ffffff' : '#333333',
+        height: 52
+    } : null;
     const win = new BrowserWindow({
         width: 1000,
         height: 700,
         minWidth: 730,
         minHeight: 520,
         icon: path.join(__dirname, 'assets/icon/icon.png'),
+        backgroundColor: theme.windowBackgroundColor(),
         ...(process.platform === 'linux' ? {} : {
             titleBarStyle: 'hidden',
-            ...(process.platform === 'win32' ? {
-                titleBarOverlay: {
-                    color: '#00000000',
-                    symbolColor: '#333333',
-                    height: 52
-                }
-            } : {})
+            ...(titleBarOverlay ? { titleBarOverlay } : {})
         }),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -103,6 +110,8 @@ function createWindow() {
             spellcheck: false
         },
     });
+    // 主窗口的 CSS 已支持深浅两套配色，因此让它的原生标题栏与底色跟随主题
+    theme.registerThemeAwareWindow(win, titleBarOverlay || {});
     win.setMenuBarVisibility(false);
     // 设置用户代理以防止头像屏蔽
     win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0');

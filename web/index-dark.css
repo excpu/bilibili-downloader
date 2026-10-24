@@ -1,0 +1,205 @@
+/* ==========================================================================
+   主题层（暗色支持，纯追加）
+
+   设计要点：
+   - 必须在 index.css / model.css / setting.css 之后引入，靠同特异性 + 后者胜出进行覆盖。
+   - 色值统一用 light-dark(浅色, 深色) 成对声明，因此不需要为深色模式重复写一套规则块。
+   - `color-scheme: light dark` 使页面默认跟随系统外观（原生控件、滚动条、表单控件一并切换）。
+   - 手动切换由主进程设置 nativeTheme.themeSource，它会改写 prefers-color-scheme，
+     因此渲染进程无需任何主题 JS；下方 [data-theme] 规则只是留作手工调试的备用开关。
+   - 浅色值全部等于改造前的硬编码值，未启用暗色时外观不变。
+
+   依赖：light-dark() 需要 Chromium 123+。本项目 Electron 39（Chromium 142），满足。
+   ========================================================================== */
+
+:root {
+    color-scheme: light dark;
+
+    /* ---- 覆盖 index-base.css 原有 token，补上深色对应值（中性灰，不带蓝相） ---- */
+    --bg: light-dark(#f8fafc, #141414);
+    --panel: light-dark(#ffffff, #1f1f1f);
+    --muted: light-dark(#64748b, #a0a0a0);
+    --text: light-dark(#1e293b, #e8e8e8);
+    --brand: light-dark(#0078ff, #4da3ff);
+    --brand-2: light-dark(#40a0ff, #7cc0ff);
+    /* 品牌渐变专用 token：深色下比 --brand 更暗一档，只用于高亮按钮和左上角 LOGO 徽标，
+       不影响 --brand 本身（激活标签下划线、焦点边框等仍用较亮的强调蓝）。 */
+    --brand-grad: light-dark(#0078ff, #2f6fce);
+    --brand-grad-2: light-dark(#40a0ff, #4a82d6);
+    --ok: light-dark(#27ae60, #3ecf8e);
+    --warn: light-dark(#f39c12, #f5b445);
+    --err: light-dark(#e74c3c, #ff6b6b);
+    --stroke: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.12));
+
+    /* ---- 新增 token ---- */
+    /* 注意：setting.css / model.css 里大量使用了 var(--border)，但它在整个项目里从未被定义，
+       对应的 border 声明一直处于“无效被丢弃”状态，即那些 div / 输入框本来就没有边框。
+       千万不要在这里补定义 --border，否则会给原本无边框的元素凭空加上线条。 */
+    --stroke-strong: light-dark(#a3a3a3dc, rgba(255, 255, 255, 0.28));
+
+    --panel-translucent: light-dark(rgba(255, 255, 255, 0.85), rgba(31, 31, 31, 0.85));
+    --panel-translucent-2: light-dark(rgba(255, 255, 255, 0.75), rgba(38, 38, 38, 0.7));
+
+    --surface: light-dark(#f0f0f0, #2a2a2a);
+    --surface-hover: light-dark(#e9e9e9, #333333);
+    --surface-sunken: light-dark(#eeeeee, #2a2a2a);
+    --surface-sunken-fg: light-dark(#666666, #a0a0a0);
+    --surface-raised: light-dark(#ffffff, #242424);
+
+    --input-bg: light-dark(#ffffff, #1c1c1c);
+
+    /* setting.css 中依赖 fallback 的别名，在此统一接管 */
+    --bg-light: light-dark(rgba(0, 0, 0, 0.02), rgba(255, 255, 255, 0.05));
+    --text-secondary: light-dark(rgba(0, 0, 0, 0.6), rgba(232, 232, 232, 0.72));
+    --text-tertiary: light-dark(rgba(0, 0, 0, 0.4), rgba(232, 232, 232, 0.45));
+    /* 不定义 --primary：setting.css 的 focus/hover 边框色用它做 fallback(#0066cc)，
+       且这些元素的 border 本身无效（见上），定义它只会引入原设计没有的观感变化。 */
+
+    /* 深色下顶部的光晕改为中性白，避免整页泛蓝 */
+    --brand-glow: light-dark(rgba(64, 160, 255, 0.08), rgba(255, 255, 255, 0.05));
+    --brand-tint: light-dark(rgba(0, 120, 255, 0.08), rgba(255, 255, 255, 0.08));
+
+    --overlay: light-dark(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.6));
+    --info-strong: light-dark(#2c80b9, #4da3ff);
+    --ok-strong: light-dark(#1e8449, #2f8a5f);
+    --err-strong: light-dark(#c0392b, #b94a3f);
+    --notification-success-bg: light-dark(#27ae60, #123528);
+    --notification-success-fg: light-dark(#ffffff, #86efac);
+    --notification-error-bg: light-dark(#e74c3c, #3b1a18);
+    --notification-error-fg: light-dark(#ffffff, #fca5a5);
+    --notification-info-bg: light-dark(#3498db, #242424);
+    --notification-info-fg: light-dark(#ffffff, #93c5fd);
+
+    /* 深色下工具格子也走中性白，不再泛蓝 */
+    --tool-slot-top: light-dark(rgba(0, 120, 255, 0.04), rgba(255, 255, 255, 0.05));
+    --tool-slot-bottom: light-dark(rgba(0, 120, 255, 0.01), rgba(255, 255, 255, 0.015));
+
+    /* 阴影一律不加强：light-dark() 是颜色函数，包住整条阴影值会导致声明无效、
+       连原有阴影都丢失（此前 --shadow 被这样覆盖后 .card 的阴影就消失了）。
+       且深色背景上的黑色阴影本就不可见，保持原值即可，不给深色凭空加阴影。 */
+}
+
+/* ---- 手动覆盖：只改 color-scheme，light-dark() 自动取对应分支 ---- */
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+/* ==========================================================================
+   以下把 index-base.css / index-video.css / model.css / setting.css 中
+   写死浅色的规则改为 token。浅色结果与改造前一致。
+   ========================================================================== */
+
+body {
+    background: radial-gradient(circle at 50% -120px, var(--brand-glow) 0%, transparent 480px), var(--bg);
+    color: var(--text);
+}
+
+.topbar {
+    background: var(--panel-translucent);
+}
+
+.pill {
+    background: var(--panel-translucent-2);
+}
+
+.pill.clickable:hover {
+    background: var(--brand-tint);
+    border-color: var(--brand-2);
+    color: var(--brand);
+}
+
+.avatar {
+    background: var(--surface-sunken);
+    color: var(--surface-sunken-fg);
+}
+
+.btn {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.btn:hover {
+    background: var(--surface-hover);
+}
+
+/* .btn.brand 用品牌渐变，深色下走更暗一档的 --brand-grad；文字两种模式都保持白色 */
+.btn.brand {
+    background: linear-gradient(135deg, var(--brand-grad), var(--brand-grad-2));
+    color: #fff;
+}
+
+/* 左上角 LOGO 徽标：同样用调暗的品牌渐变，并把蓝色投影压暗，避免深色下发飘。
+   注意 light-dark() 是颜色函数，只能包住颜色本身，不能包住整条 box-shadow。 */
+.brand-badge {
+    background: linear-gradient(135deg, var(--brand-grad), var(--brand-grad-2));
+    box-shadow: 0 2px 6px light-dark(rgba(0, 120, 255, 0.25), rgba(0, 0, 0, 0.4));
+}
+
+.field input {
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.task {
+    background: var(--surface-raised);
+}
+
+.progress {
+    background: var(--surface-sunken);
+}
+
+.multi-part-selector {
+    border-color: var(--stroke-strong);
+}
+
+.model {
+    background: var(--overlay);
+}
+
+.model-content {
+    background: var(--bg);
+}
+
+.tool-slot {
+    background: linear-gradient(180deg, var(--tool-slot-top), var(--tool-slot-bottom));
+}
+
+.notification-success {
+    background: var(--notification-success-bg);
+    color: var(--notification-success-fg);
+    border-color: var(--ok-strong);
+}
+
+.notification-error {
+    background: var(--notification-error-bg);
+    color: var(--notification-error-fg);
+    border-color: var(--err-strong);
+}
+
+.notification-info {
+    background: var(--notification-info-bg);
+    color: var(--notification-info-fg);
+    border-color: var(--info-strong);
+}
+
+.path-input,
+.setting-select {
+    background: var(--input-bg);
+    color: var(--text);
+}
+
+.path-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+/* 登录二维码：qrcode.min.js 画出来的是白底位图，深色模式下给它一块浅色托板，
+   既保证对比度可扫，也不会让一张白斑直接贴在深色卡片上。
+   浅色下卡片本身就是白色，加上这层托板看不出差别，外观不变。 */
+.loginQr {
+    background: #ffffff;
+    border-radius: 10px;
+}

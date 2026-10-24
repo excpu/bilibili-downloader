@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="model.css">
     <link rel="stylesheet" href="setting.css">
+    <!-- 主题层：必须在上面三个样式表之后，靠加载顺序覆盖写死浅色的规则 -->
+    <link rel="stylesheet" href="index-dark.css">
 </head>
 
 <body>
@@ -130,15 +132,16 @@
             <div class="model-content">
                 <div class="model-header" id="settingModelHeader">
                     <span id="settingModelTitle">设置</span>
-                    <button class="btn small" id="settingModelCloseBtn">关闭</button>
+                    <button class="btn brand small" id="saveSettingBtn">保存并退出</button>
+                </div>
+                <div class="setting-tabs" role="tablist" aria-label="设置分类">
+                    <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton" data-setting-tab="danmakuSettingsTab">弹幕</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="themeSettingsTab" id="themeSettingsTabButton" data-setting-tab="themeSettingsTab">主题</button>
                 </div>
                 <div class="model-body" id="settingModelBody">
-                    <div class="setting-tabs" role="tablist" aria-label="设置分类">
-                        <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
-                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
-                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
-                        <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton" data-setting-tab="danmakuSettingsTab">弹幕</button>
-                    </div>
                     <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab" aria-labelledby="basicSettingsTabButton">
                         <!-- 用户信息部分 -->
                         <div class="setting-section">
@@ -428,9 +431,20 @@
                         </div>
                     </div>
 
-                    <!-- 保存按钮 -->
-                    <div class="setting-actions">
-                        <button class="btn brand" id="saveSettingBtn">保存并退出</button>
+                    <!-- 主题选项卡 -->
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="themeSettingsTab" aria-labelledby="themeSettingsTabButton">
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">界面主题</h3>
+                            <div class="setting-item">
+                                <label for="themeSelect">配色方案：</label>
+                                <select id="themeSelect" class="setting-select">
+                                    <option value="system">跟随系统</option>
+                                    <option value="light">浅色</option>
+                                    <option value="dark">深色</option>
+                                </select>
+                            </div>
+                            <p class="setting-hint">选择"跟随系统"时，界面会随操作系统的深浅色设置自动切换。</p>
+                        </div>
                     </div>
                 </div>
             </div>

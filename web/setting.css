@@ -3,42 +3,47 @@
 /* 设置分区 */
 .setting-tabs {
     display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid var(--border);
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 0 20px;
+    margin-bottom: 14px;
 }
 
 .setting-tab {
-    border-radius: 6px 6px 0 0;
-    opacity: 0.75;
+    border-radius: 8px;
+    opacity: 0.7;
+    padding: 6px 14px;
+}
+
+.setting-tab:hover {
+    opacity: 0.9;
 }
 
 .setting-tab.active {
     opacity: 1;
-    border-bottom: 2px solid var(--brand);
+    color: var(--brand);
+    background: var(--brand-tint, rgba(0, 120, 255, 0.08));
 }
 
 .setting-tab-panel.hidden {
     display: none;
 }
 
+/* 分区之间用统一的垂直间距分隔，比原来的下划线更透气 */
 .setting-section {
-    /* margin-bottom: 24px;
-    padding-bottom: 24px; */
-    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
 }
 
 .setting-section:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
 }
 
 .setting-section-title {
-    margin: 0 0 16px 0;
-    font-size: 14px;
+    margin: 0 0 12px 0;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+    letter-spacing: 0.3px;
 }
 
 /* 用户信息部分 */
@@ -46,9 +51,9 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px;
+    padding: 16px;
     background: var(--bg-light, rgba(0, 0, 0, 0.02));
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .user-avatar {
@@ -56,14 +61,16 @@
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--border);
+    flex-shrink: 0;
 }
 
 .user-details {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 10px;
 }
 
 .user-name {
@@ -78,6 +85,10 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
 }
 
 .setting-item[hidden] {
@@ -95,13 +106,30 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 0 16px;
+    margin: 0 0 12px;
     color: var(--text-secondary, rgba(0, 0, 0, 0.6));
     font-size: 13px;
+    cursor: pointer;
+}
+
+.setting-checkbox:last-child {
+    margin-bottom: 0;
+}
+
+/* 设置项下方的补充说明 */
+.setting-hint {
+    margin: 8px 0 0;
+    color: var(--text-tertiary, rgba(0, 0, 0, 0.4));
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .setting-checkbox input {
     margin: 0;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
 }
 
 /* 需显式覆盖上面的 display: flex，否则 .hidden 无法生效 */
@@ -118,9 +146,10 @@
 
 .path-input {
     flex: 1;
-    padding: 8px 12px;
+    min-width: 0;
+    padding: 9px 12px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 13px;
     background: var(--input-bg, white);
     color: var(--text);
@@ -129,8 +158,8 @@
 
 .path-input:focus {
     outline: none;
-    border-color: var(--primary, #0066cc);
-    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-tint, rgba(0, 102, 204, 0.1));
 }
 
 .path-input::placeholder {
@@ -139,39 +168,55 @@
 
 /* 下载引擎选择 */
 .setting-select {
-    padding: 8px 12px;
+    padding: 9px 12px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 13px;
     background: var(--input-bg, white);
     color: var(--text);
     font-family: inherit;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: border-color .15s ease, box-shadow .15s ease;
 }
 
 .setting-select:hover {
-    border-color: var(--primary, #0066cc);
+    border-color: var(--brand);
 }
 
 .setting-select:focus {
     outline: none;
-    border-color: var(--primary, #0066cc);
-    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-tint, rgba(0, 102, 204, 0.1));
 }
 
 .setting-select option {
     padding: 6px;
 }
 
-/* 设置操作按钮 */
-.setting-actions {
+/* 设置弹窗：固定高度，头部与标签栏不滚动，仅内容区滚动，切换 Tab 时高度不变 */
+#settingModel .model-content {
+    height: min(80vh, 640px);
     display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#settingModelHeader {
+    flex-shrink: 0;
+}
+
+#saveSettingBtn {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+#settingModelBody {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    padding-top: 0;
 }
 
 /* 响应式设计 */
@@ -204,10 +249,6 @@
 }
 
 /* 解决设置上部分空过大问题 */
-#settingModelBody {
-    padding-top: 0;
-}
-
 #settingModelHeader {
-    padding-bottom: 5px;
+    padding-bottom: 8px;
 }

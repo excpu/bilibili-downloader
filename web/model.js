@@ -47,18 +47,9 @@ function createModel() {
         if (!window.electronAPI || !window.electronAPI.invoke) return;
 
         function updateOverlayState() {
+            // 只上报状态，具体颜色由主进程按当前主题决定（深色主题下顶栏本身就是浅字）
             const hasVisibleModal = !!document.querySelector('.model:not(.hidden)');
-            if (hasVisibleModal) {
-                window.electronAPI.invoke('setTitleBarOverlay', {
-                    color: '#00000000',
-                    symbolColor: '#ffffff'
-                }).catch(() => {});
-            } else {
-                window.electronAPI.invoke('setTitleBarOverlay', {
-                    color: '#00000000',
-                    symbolColor: '#333333'
-                }).catch(() => {});
-            }
+            window.electronAPI.invoke('setTitleBarOverlay', { modal: hasVisibleModal }).catch(() => {});
         }
 
         const modals = document.querySelectorAll('.model');

@@ -7,6 +7,8 @@ const { sanitizePath } = require('./sanitize_path');
 
 const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
 const DEFAULT_ARIA2_CONCURRENCY = 2;
+// 界面主题取值：跟随系统 / 浅色 / 深色
+const THEME_VALUES = ['system', 'light', 'dark'];
 const DEFAULT_SUBTITLE_SETTINGS = {
     format: 'srt',
     appendLanguage: false,
@@ -44,6 +46,7 @@ class Setting {
         this.settingFilePath = path.join(app.getPath('userData'), 'config.json');
         this.defaultDownloadPath = app.getPath('downloads');
         this.defaultData = {
+            theme: 'system',  // 界面主题：system / light / dark
             downloadInFolder: false,  // 是否在下载目录中创建与视频/集合同名的子文件夹
             downloadFolderNesting: false,  // 是否启用文件夹嵌套（分P、合集分层保存）
             downloadEngine: "node-multi", // 下载引擎，node aria2 node-multi
@@ -92,6 +95,19 @@ class Setting {
     getDownloadEngine() {
         const data = this.load();
         return data ? data.downloadEngine : this.defaultData.downloadEngine;
+    }
+
+    updateTheme(theme) {
+        const data = this.load() || {};
+        data.theme = THEME_VALUES.includes(theme) ? theme : 'system';
+        this.save(data);
+        return data.theme;
+    }
+
+    getTheme() {
+        const data = this.load();
+        const theme = data ? data.theme : this.defaultData.theme;
+        return THEME_VALUES.includes(theme) ? theme : 'system';
     }
 
     updateNodeResumeEnabled(enabled) {

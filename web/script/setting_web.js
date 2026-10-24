@@ -1,12 +1,12 @@
 function createSettingWeb() {
     const settingModel = document.getElementById('settingModel');
-    const settingModelCloseBtn = document.getElementById('settingModelCloseBtn');
     const $saveSettingBtn = document.getElementById('saveSettingBtn');
     const $downloadEngineSelect = document.getElementById('downloadEngineSelect');
     const $aria2ConcurrencySetting = document.getElementById('aria2ConcurrencySetting');
     const $aria2ConcurrencySelect = document.getElementById('aria2ConcurrencySelect');
     const $nodeResumeCheckbox = document.getElementById('nodeResumeCheckbox');
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
+    const $themeSelect = document.getElementById('themeSelect');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
     const $downloadInFolderCheckbox = document.getElementById('downloadInFolderCheckbox');
@@ -32,6 +32,7 @@ function createSettingWeb() {
         await loadDownloadEngine();
         await loadAria2Concurrency();
         await loadDanmuDownloadMethod();
+        await loadTheme();
         await loadCdnList();
         await loadSubtitleSettings();
         await loadDanmakuSettings();
@@ -88,6 +89,13 @@ function createSettingWeb() {
         const danmuDownloadMethod = await window.electronAPI.invoke('getDanmuDownloadMethod');
         if (danmuDownloadMethod && $danmuDownloadMethodSelect) {
             $danmuDownloadMethodSelect.value = danmuDownloadMethod;
+        }
+    }
+
+    async function loadTheme() {
+        const theme = await window.electronAPI.invoke('getTheme');
+        if (theme && $themeSelect) {
+            $themeSelect.value = theme;
         }
     }
 
@@ -313,6 +321,13 @@ function createSettingWeb() {
         });
     }
 
+    if ($themeSelect) {
+        $themeSelect.addEventListener('change', (event) => {
+            // 主进程改写 nativeTheme.themeSource，CSS 的 light-dark() 随即整体切换
+            window.electronAPI.invoke('setTheme', event.target.value);
+        });
+    }
+
     if ($selectDownloadPathBtn) {
         $selectDownloadPathBtn.addEventListener('click', selectDownloadPath);
     }
@@ -366,11 +381,6 @@ function createSettingWeb() {
 
 
 
-
-    // 绑定关闭按钮事件
-    if (settingModelCloseBtn) {
-        settingModelCloseBtn.addEventListener('click', closeSetting);
-    }
 
     // 点击背景关闭弹窗
     if (settingModel) {

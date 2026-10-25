@@ -24,6 +24,8 @@
     cursor: pointer;
     transition: color .15s ease, transform .15s ease;
     -webkit-app-region: no-drag;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .library-entry:hover {
@@ -91,9 +93,11 @@
 }
 
 /* ---- 模态框 ---- */
+/* 宽度写死：内容加载前后尺寸一致，避免加载时模态框忽宽忽窄 */
 .library-model-content {
-    max-width: 760px;
-    min-width: 620px;
+    width: min(760px, 90%);
+    min-width: 0;
+    max-width: 90%;
 }
 
 .library-model-body {
@@ -120,16 +124,29 @@
 }
 
 .fav-group-title {
-    padding: 10px 10px 4px;
-    font-size: .75rem;
-    font-weight: 600;
-    color: var(--muted);
-    letter-spacing: .04em;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 10px 6px;
+    font-size: .86rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: .02em;
     user-select: none;
 }
 
+/* 品牌色小竖条，让分组标题更醒目 */
+.fav-group-title::before {
+    content: '';
+    flex: none;
+    width: 3px;
+    height: 1em;
+    border-radius: 2px;
+    background: var(--brand);
+}
+
 .fav-group-title:first-child {
-    padding-top: 2px;
+    padding-top: 4px;
 }
 
 .fav-folder {
@@ -143,6 +160,8 @@
     color: var(--text);
     cursor: pointer;
     transition: background .15s ease, color .15s ease;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .fav-folder:hover {
@@ -214,6 +233,8 @@
     border-radius: 10px;
     cursor: pointer;
     transition: background .15s ease;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .library-item:hover {

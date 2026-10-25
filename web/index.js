@@ -51,7 +51,7 @@ function getVideoInfo() {
     // 自动清空URL
     $urlInput.value = "";
     // 获取视频基本信息
-    window.electronAPI.invoke('getVideoInfo', bv).then((videoInfo) => {
+    return window.electronAPI.invoke('getVideoInfo', bv).then((videoInfo) => {
         if (!videoInfo.success) {
             alert('获取视频信息失败：' + videoInfo.message);
             infoSection.hide();

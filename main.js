@@ -114,7 +114,7 @@ function createWindow() {
     theme.registerThemeAwareWindow(win, titleBarOverlay || {});
     win.setMenuBarVisibility(false);
     // 设置用户代理以防止头像屏蔽
-    win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edge/134.0.0.0');
+    win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0');
     win.loadFile('./web/index.html');
     // 开发环境打开检查器
     if (!app.isPackaged) {

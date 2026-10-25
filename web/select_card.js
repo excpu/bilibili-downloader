@@ -450,52 +450,58 @@ function selectInfo() {
         }
 
         $searchCollectionBtn.classList.remove('hidden');
-        $searchCollectionBtn.onclick = async () => {
-            console.log('搜索合集', season.id);
-            console.log('合集用户', season.mid);
-            const seasondata = await window.electronAPI.invoke('searchCollection', season.id, season.mid, season.ep_count
-            );
-            console.log('合集搜索结果:', seasondata);
+        $searchCollectionBtn.onclick = () => openCollection(season.id, season.mid, season.ep_count, videoData);
+    }
 
-            if (!seasondata.success) {
-                alert(`合集搜索失败: ${seasondata.message || '未知错误'}`);
-                return;
+    // 直接按合集ID搜索合集并应用到视频信息界面（供"搜索合集"按钮与收藏/历史选择器共用）
+    async function openCollection(seasonId, mid, epCount, sourceVideo) {
+        const seasondata = await window.electronAPI.invoke('searchCollection', seasonId, mid, epCount);
+        console.log('合集搜索结果:', seasondata);
+
+        if (!seasondata.success) {
+            alert(`合集搜索失败: ${seasondata.message || '未知错误'}`);
+            return false;
+        }
+
+        return applyCollectionSeason(seasondata, sourceVideo);
+    }
+
+    // 把合集搜索结果应用到视频信息界面，供"搜索合集"按钮和收藏/历史选择器共用
+    function applyCollectionSeason(seasondata, sourceVideo) {
+        const archives = Array.isArray(seasondata?.data?.archives) ? seasondata.data.archives : [];
+        if (archives.length < 1) {
+            alert('该合集暂无可下载视频');
+            return false;
+        }
+
+        const episodes = archives.map((item, index) => ({
+            episode: index + 1,
+            title: item.title,
+            bvid: item.bvid,
+            aid: item.aid,
+            duration: Number(item.duration) || 0,
+            coverUrl: item.pic,
+            archive: item,
+            pages: [],
+            detailsLoaded: false,
+            partsRendered: false,
+            selectAllRequested: false,
+            loadingPromise: null
+        }));
+
+        clearMultipart();
+        showMultipartSelector();
+        activeCollectionEpisodes = episodes;
+        addCollection(episodes);
+
+        window.dispatchEvent(new CustomEvent('season-data-loaded', {
+            detail: {
+                sourceVideo: sourceVideo,
+                seasonData: seasondata.data,
+                episodes
             }
-
-            const archives = Array.isArray(seasondata.data.archives) ? seasondata.data.archives : [];
-            if (archives.length < 1) {
-                alert('该合集暂无可下载视频');
-                return;
-            }
-
-            const episodes = archives.map((item, index) => ({
-                episode: index + 1,
-                title: item.title,
-                bvid: item.bvid,
-                aid: item.aid,
-                duration: Number(item.duration) || 0,
-                coverUrl: item.pic,
-                archive: item,
-                pages: [],
-                detailsLoaded: false,
-                partsRendered: false,
-                selectAllRequested: false,
-                loadingPromise: null
-            }));
-
-            clearMultipart();
-            showMultipartSelector();
-            activeCollectionEpisodes = episodes;
-            addCollection(episodes);
-
-            window.dispatchEvent(new CustomEvent('season-data-loaded', {
-                detail: {
-                    sourceVideo: videoData,
-                    seasonData: seasondata.data,
-                    episodes
-                }
-            }));
-        };
+        }));
+        return true;
     }
 
     function hideCollectionSearch() {
@@ -564,6 +570,7 @@ function selectInfo() {
         ignoreAllPart,
         collectionSearch,
         hideCollectionSearch,
+        openCollection,
         getSubtitleInfo
     }
 }

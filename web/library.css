@@ -1,0 +1,398 @@
+/* ==========================================================================
+   收藏 / 历史记录选择：入口按钮 + 模态框
+   图标全部用 CSS 绘制，颜色跟随主题 token，深色模式无需额外覆盖。
+   ========================================================================== */
+
+/* ---- 输入框下方的入口按钮 ---- */
+.library-entry-row {
+    display: flex;
+    gap: 18px;
+    margin-top: 8px;
+}
+
+.library-entry {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: .85rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color .15s ease, transform .15s ease;
+    -webkit-app-region: no-drag;
+}
+
+.library-entry:hover {
+    color: var(--brand);
+    transform: translateY(-1px);
+}
+
+.library-entry:active {
+    transform: translateY(0);
+}
+
+/* 五角星（收藏）：外层实心星 + 内层背景色星叠出描边效果 */
+.fav-icon {
+    position: relative;
+    width: 21px;
+    height: 21px;
+    background: currentColor;
+    clip-path: polygon(50% 0%, 61.8% 34.5%, 98% 35%, 69% 57.5%, 79.4% 91%, 50% 70.5%, 20.6% 91%, 31% 57.5%, 2% 35%, 38.2% 34.5%);
+}
+
+.fav-icon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 51%;
+    width: 71%;
+    height: 71%;
+    transform: translate(-50%, -50%);
+    background: var(--panel);
+    clip-path: polygon(50% 0%, 61.8% 34.5%, 98% 35%, 69% 57.5%, 79.4% 91%, 50% 70.5%, 20.6% 91%, 31% 57.5%, 2% 35%, 38.2% 34.5%);
+}
+
+/* 时钟（历史）：圆环 + 时针分针 */
+.history-icon {
+    position: relative;
+    width: 19px;
+    height: 19px;
+    border: 1.6px solid currentColor;
+    border-radius: 50%;
+}
+
+.history-icon::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1.6px;
+    height: 5.5px;
+    margin-left: -.8px;
+    margin-top: -5.3px;
+    background: currentColor;
+    border-radius: 1px;
+}
+
+.history-icon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 4.5px;
+    height: 1.6px;
+    margin-top: -.8px;
+    background: currentColor;
+    border-radius: 1px;
+}
+
+/* ---- 模态框 ---- */
+.library-model-content {
+    max-width: 760px;
+    min-width: 620px;
+}
+
+.library-model-body {
+    display: flex;
+    gap: 16px;
+    height: min(60vh, 520px);
+    padding: 14px 20px 20px;
+    max-height: none;
+    overflow: hidden;
+}
+
+.library-fav-list {
+    flex: 0 0 178px;
+    overflow-y: auto;
+    border-right: 1px solid var(--stroke);
+    padding-right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.library-fav-list.hidden {
+    display: none;
+}
+
+.fav-group-title {
+    padding: 10px 10px 4px;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: .04em;
+    user-select: none;
+}
+
+.fav-group-title:first-child {
+    padding-top: 2px;
+}
+
+.fav-folder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: .9rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+}
+
+.fav-folder:hover {
+    background: var(--surface-hover);
+}
+
+.fav-folder.active {
+    background: var(--brand);
+    color: #fff;
+}
+
+.fav-folder-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.fav-folder-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* 追的合集角标（侧栏里区分普通收藏夹） */
+.fav-folder-season-tag {
+    flex: none;
+    font-size: .68rem;
+    line-height: 1.5;
+    padding: 0 5px;
+    border-radius: 4px;
+    color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+.fav-folder.active .fav-folder-season-tag {
+    color: #fff;
+    background: rgba(255, 255, 255, .25);
+}
+
+.fav-folder-count {
+    flex: none;
+    font-size: .78rem;
+    opacity: .75;
+}
+
+.library-video-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding-right: 4px;
+}
+
+.library-group-title {
+    margin: 6px 0 8px;
+    font-size: .8rem;
+    color: var(--muted);
+}
+
+.library-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s ease;
+}
+
+.library-item:hover {
+    background: var(--surface-hover);
+}
+
+.library-item+.library-item {
+    border-top: 1px solid var(--stroke);
+    border-radius: 0 0 10px 10px;
+}
+
+.library-thumb {
+    position: relative;
+    flex: none;
+    width: 148px;
+    height: 86px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface-sunken);
+}
+
+.library-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.library-duration {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .6);
+    color: #fff;
+    font-size: .72rem;
+}
+
+/* 合集角标：放在缩略图左上角，避免和时长重叠 */
+.library-collection-tag {
+    left: 4px;
+    right: auto;
+    background: color-mix(in srgb, var(--brand) 85%, transparent);
+}
+
+/* 失效角标：视频放右下角（原时长位置），合集放右上角（避开左上角合集角标） */
+.library-invalid-tag {
+    background: rgba(0, 0, 0, .72);
+    color: var(--warn);
+}
+
+.library-item[data-kind="collection"] .library-invalid-tag {
+    right: 4px;
+    bottom: auto;
+    top: 4px;
+}
+
+/* 失效条目：置灰、不可点击 */
+.library-item.invalid {
+    cursor: default;
+    opacity: .55;
+    filter: saturate(.35);
+}
+
+.library-item.invalid:hover {
+    background: transparent;
+}
+
+.library-item.invalid .library-title {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.library-item.picking {
+    opacity: .55;
+    pointer-events: none;
+}
+
+.library-detail {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+.library-title {
+    font-size: .92rem;
+    font-weight: 600;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+.library-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .78rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 元信息里的小时钟（复用 .history-icon 的画法，缩到 11px） */
+.library-meta .history-icon {
+    width: 11px;
+    height: 11px;
+    border-width: 1.2px;
+}
+
+.library-meta .history-icon::before {
+    width: 1.2px;
+    height: 3.4px;
+    margin-left: -.6px;
+    margin-top: -3.3px;
+}
+
+.library-meta .history-icon::after {
+    width: 2.8px;
+    height: 1.2px;
+    margin-top: -.6px;
+}
+
+.library-status {
+    padding: 24px 10px;
+    text-align: center;
+    color: var(--muted);
+    font-size: .88rem;
+}
+
+/* 底部无限加载状态条 */
+.library-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0 4px;
+    padding: 8px 10px;
+    font-size: .82rem;
+    color: var(--muted);
+    user-select: none;
+}
+
+.library-footer-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--stroke);
+    border-top-color: var(--brand);
+    animation: library-footer-spin .8s linear infinite;
+}
+
+@keyframes library-footer-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.library-footer.error {
+    color: var(--warn);
+}
+
+.library-footer-retry {
+    border: 1px solid var(--stroke);
+    background: var(--surface);
+    color: var(--text);
+    font-size: .78rem;
+    padding: 2px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.library-footer-retry:hover {
+    background: var(--surface-hover);
+}

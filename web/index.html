@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="model.css">
     <link rel="stylesheet" href="setting.css">
+    <link rel="stylesheet" href="library.css">
     <!-- 主题层：必须在上面三个样式表之后，靠加载顺序覆盖写死浅色的规则 -->
     <link rel="stylesheet" href="index-dark.css">
 </head>
@@ -38,6 +39,17 @@
                     <span class="suffix" id="suffix">URL</span>
                 </div>
                 <button class="btn brand" id="confirmBtn">确认</button>
+            </div>
+            <!-- 从收藏 / 历史记录选择入口 -->
+            <div class="library-entry-row">
+                <button class="library-entry" id="pickFromFavBtn" type="button">
+                    <span class="fav-icon" aria-hidden="true"></span>
+                    <span>收藏</span>
+                </button>
+                <button class="library-entry" id="pickFromHistoryBtn" type="button">
+                    <span class="history-icon" aria-hidden="true"></span>
+                    <span>历史</span>
+                </button>
             </div>
             <!-- <div class="actions"><span class="hint">点击确认后选择清晰度开始下载（演示）。</span></div> -->
         </section>
@@ -124,6 +136,19 @@
                     <!-- 模态框内容 -->
                     <!-- 播放器 -->
                     <!-- 缓存合并工具 -->
+                </div>
+            </div>
+        </div>
+        <!-- 收藏 / 历史记录选择弹出框 -->
+        <div class="model hidden" id="libraryModel">
+            <div class="model-content library-model-content">
+                <div class="model-header">
+                    <span id="libraryModelTitle">选择视频</span>
+                    <button class="btn small" id="libraryModelCloseBtn">关闭</button>
+                </div>
+                <div class="model-body library-model-body">
+                    <div class="library-fav-list hidden" id="libraryFavList"></div>
+                    <div class="library-video-list" id="libraryVideoList"></div>
                 </div>
             </div>
         </div>
@@ -459,6 +484,7 @@
     <script src="select_card.js"></script>
     <script src="model.js"></script>
     <script src="index.js"></script>
+    <script src="library_picker.js"></script>
     <script src="download_task.js"></script>
     <script src="ui_detail.js"></script>
     <script src="./script/setting_web.js"></script>

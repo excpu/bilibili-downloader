@@ -187,7 +187,12 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
         const videoPath = path.join(downloadDir, `${title}_video.m4s`);
         const audioPath = path.join(downloadDir, `${title}_audio.m4s`);
-        const outputPath = path.join(downloadDir, `${title}.mp4`);
+                // 未允许非标封装时，FLAC / 杜比全景声会自动改用 MKV 容器
+                const outputFormat = setting.resolveOutputFormat({
+                    audioId: videoStream.selectedAudioId,
+                    audioCodec: videoStream.selectedAudioCodec,
+                });
+                const outputPath = path.join(downloadDir, `${title}.${outputFormat}`);
         let m4aOutputPath = path.join(downloadDir, `${title}.m4a`);
 
         if (videoStream.selectedAudioId == 30251) {

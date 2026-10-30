@@ -163,6 +163,7 @@
                     <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
                     <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
                     <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="formatSettingsTab" id="formatSettingsTabButton" data-setting-tab="formatSettingsTab">格式</button>
                     <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton" data-setting-tab="danmakuSettingsTab">弹幕</button>
                     <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="themeSettingsTab" id="themeSettingsTabButton" data-setting-tab="themeSettingsTab">主题</button>
                 </div>
@@ -331,6 +332,24 @@
                                 <label for="assMarginV">垂直边距：</label>
                                 <input class="setting-select" type="number" id="assMarginV" data-ass-option="marginV" min="0">
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="formatSettingsTab" aria-labelledby="formatSettingsTabButton">
+                        <div class="setting-section">
+                            <h3 class="setting-section-title">输出格式</h3>
+                            <div class="setting-item">
+                                <label for="outputFormatSelect">视频格式：</label>
+                                <select id="outputFormatSelect" class="setting-select">
+                                    <option value="mp4">MP4</option>
+                                    <option value="mkv">MKV</option>
+                                </select>
+                            </div>
+                                                        <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
+                                                                                        <input type="checkbox" id="mp4NonStandardAudioCheckbox">
+                                                                                        <span>将 FLAC、杜比全景声非标封装进 MP4</span>
+                                                                                    </label>
+                                                                                    <p class="setting-hint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
                         </div>
                     </div>
 

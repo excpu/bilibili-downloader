@@ -2,6 +2,7 @@ const { app, ipcMain, dialog, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const Setting = require('../../modules/config_setting');
 
 // ================== 工具函数 ==================
 
@@ -229,6 +230,22 @@ function parseTimeToSeconds(value) {
     return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
+// 读取音频文件编码，用于判断 FLAC / 杜比全景声是否需要改用 MKV 容器
+function probeAudioCodec(audioPath) {
+    return new Promise(resolve => {
+        const child = spawn(ffmpeg, ['-hide_banner', '-i', audioPath], { windowsHide: true });
+        let output = '';
+        child.stderr.on('data', data => {
+            output += data.toString();
+        });
+        child.on('error', () => resolve(''));
+        child.on('close', () => {
+            const match = /Stream #\d+:\d+.*: Audio: ([\w-]+)/i.exec(output);
+            resolve(match ? match[1].toLowerCase() : '');
+        });
+    });
+}
+
 function runFFmpeg(videoPath, audioPath, outputPath, onProgress) {
     return new Promise((resolve, reject) => {
         // 如果环境变量或者根目录有特定 ffmpeg，你可以改这里，默认调系统环境变量
@@ -285,6 +302,7 @@ function runFFmpeg(videoPath, audioPath, outputPath, onProgress) {
 }
 
 module.exports = function registerMergeIpc() {
+    const setting = new Setting();
     // 选择目录
     ipcMain.handle('open-dir-dialog', async (event) => {
         // event.sender 就是发送指令的 mergeWindow 的 webContents
@@ -304,7 +322,12 @@ module.exports = function registerMergeIpc() {
         const sendLog = (msg) => event.sender.send('log', msg);
 
         const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku, copyCover } = config;
-        sendLog("[INFO] 开始任务...");
+        const outputFormat = setting.getOutputFormat();
+                const allowNonStandardAudio = setting.getMp4AllowNonStandardAudio();
+                // 仅在选择了 MP4 且不允许非标封装时才需要探测音轨编码
+                const needProbeAudioCodec = outputFormat === 'mp4' && !allowNonStandardAudio;
+                sendLog("[INFO] 开始任务...");
+                sendLog(`[INFO] 输出格式: ${outputFormat.toUpperCase()}${needProbeAudioCodec ? '（遇到 FLAC / 杜比全景声将改用 MKV）' : ''}`);
 
         sendLog(`[INFO] 输入目录: ${inputDir}`);
         sendLog(`[INFO] 输出目录: ${outputDir}`);
@@ -388,19 +411,29 @@ module.exports = function registerMergeIpc() {
                 baseName = finalPrefix + baseName;
             }
 
-            let outputPath = path.join(outputDir, `${baseName}.mp4`);
-            let idx = 1;
-            while (fs.existsSync(outputPath)) {
-                outputPath = path.join(outputDir, `${baseName}(${idx}).mp4`);
-                idx++;
-            }
+                        // 逐个文件判定容器：FLAC / 杜比全景声在未允许非标封装时用 MKV
+                                    let itemFormat = outputFormat;
+                                    if (needProbeAudioCodec) {
+                                        const audioCodec = await probeAudioCodec(audioPath);
+                                        itemFormat = setting.resolveOutputFormat({ audioCodec }, outputFormat);
+                                        if (itemFormat !== outputFormat) {
+                                            sendLog(`[INFO] 检测到 ${audioCodec.toUpperCase() || '特殊'} 音轨，改用 MKV 容器`);
+                                        }
+                                    }
+
+                                    let outputPath = path.join(outputDir, `${baseName}.${itemFormat}`);
+                                    let idx = 1;
+                                    while (fs.existsSync(outputPath)) {
+                                        outputPath = path.join(outputDir, `${baseName}(${idx}).${itemFormat}`);
+                                        idx++;
+                                    }
 
             sendLog(`[INFO] 找到视频: ${videoPath}`);
             sendLog(`[INFO] 找到音频: ${audioPath}`);
             sendLog(`[INFO] 输出目标: ${outputPath}`);
 
             if (copyDanmaku && danmakuPath && fs.existsSync(danmakuPath)) {
-                const xmlOutputPath = outputPath.replace(/\.mp4$/, '.xml');
+                const xmlOutputPath = outputPath.slice(0, -path.extname(outputPath).length) + '.xml';
                 try {
                     fs.copyFileSync(danmakuPath, xmlOutputPath);
                     sendLog(`[INFO] 已复制弹幕: -> ${xmlOutputPath}`);
@@ -410,7 +443,7 @@ module.exports = function registerMergeIpc() {
             }
 
             if (copyCover && coverPath && fs.existsSync(coverPath)) {
-                const coverOutputPath = outputPath.replace(/\.mp4$/, '.jpg');
+                const coverOutputPath = outputPath.slice(0, -path.extname(outputPath).length) + '.jpg';
                 try {
                     fs.copyFileSync(coverPath, coverOutputPath);
                     sendLog(`[INFO] 已复制封面: -> ${coverOutputPath}`);

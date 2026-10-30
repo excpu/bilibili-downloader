@@ -24,6 +24,16 @@ module.exports = function registerSettingIpc(mainWindow) {
         setting.updateDownloadEngine(engine);
     });
 
+    ipcMain.handle('getOutputFormat', () => setting.getOutputFormat());
+
+    ipcMain.handle('setOutputFormat', (event, format) => setting.updateOutputFormat(format));
+
+        ipcMain.handle('getMp4AllowNonStandardAudio', () => setting.getMp4AllowNonStandardAudio());
+
+        ipcMain.handle('setMp4AllowNonStandardAudio', (event, enabled) =>
+            setting.updateMp4AllowNonStandardAudio(enabled)
+        );
+
     ipcMain.handle('getNodeResumeEnabled', () => setting.getNodeResumeEnabled());
     ipcMain.handle('setNodeResumeEnabled', (event, enabled) => {
         setting.updateNodeResumeEnabled(enabled);

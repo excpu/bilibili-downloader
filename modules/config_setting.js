@@ -9,6 +9,11 @@ const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
 const DEFAULT_ARIA2_CONCURRENCY = 2;
 // 界面主题取值：跟随系统 / 浅色 / 深色
 const THEME_VALUES = ['system', 'light', 'dark'];
+// 最终输出视频容器格式
+const OUTPUT_FORMAT_VALUES = ['mp4', 'mkv'];
+const DEFAULT_OUTPUT_FORMAT = 'mp4';
+// 是否允许把 FLAC / 杜比全景声以非标方式封装进 MP4；关闭时这类音轨自动改用 MKV
+const DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO = true;
 const DEFAULT_SUBTITLE_SETTINGS = {
     format: 'srt',
     appendLanguage: false,
@@ -53,6 +58,8 @@ class Setting {
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
+            outputFormat: DEFAULT_OUTPUT_FORMAT, // 合并后输出格式：mp4 / mkv
+            mp4AllowNonStandardAudio: DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO, // MP4 是否允许非标封装 FLAC / 杜比全景声
             aria2Concurrency: DEFAULT_ARIA2_CONCURRENCY,
             subtitleSettings: DEFAULT_SUBTITLE_SETTINGS,
             danmakuSettings: DEFAULT_DANMAKU_SETTINGS,
@@ -103,6 +110,69 @@ class Setting {
         this.save(data);
         return data.theme;
     }
+
+    updateOutputFormat(format) {
+        const data = this.load() || {};
+        const normalized = String(format || '').toLowerCase();
+        data.outputFormat = OUTPUT_FORMAT_VALUES.includes(normalized)
+            ? normalized
+            : DEFAULT_OUTPUT_FORMAT;
+        this.save(data);
+        return data.outputFormat;
+    }
+
+    getOutputFormat() {
+        const data = this.load();
+        const format = String(data ? data.outputFormat : '').toLowerCase();
+        return OUTPUT_FORMAT_VALUES.includes(format) ? format : DEFAULT_OUTPUT_FORMAT;
+    }
+
+        updateMp4AllowNonStandardAudio(enabled) {
+            const data = this.load() || {};
+            data.mp4AllowNonStandardAudio = enabled !== false;
+            this.save(data);
+            return data.mp4AllowNonStandardAudio;
+        }
+
+        getMp4AllowNonStandardAudio() {
+            const data = this.load() || {};
+            return data.mp4AllowNonStandardAudio !== false;
+        }
+
+        /**
+         * 判断给定音频流是否为 MP4 无法标准封装的音轨（FLAC / 杜比全景声）。
+         * 同时根据音轨 id 与编码前缀判断，避免上游字段缺失时漏判。
+         * @param {{audioId?: number|string, audioCodec?: string}} audioInfo
+         * @returns {boolean}
+         */
+        isNonStandardMp4Audio(audioInfo = {}) {
+            const audioId = parseInt(audioInfo.audioId);
+            if (audioId === 30251 || audioId === 30250) {
+                return true;
+            }
+
+            const codec = String(audioInfo.audioCodec || '').toLowerCase().split('.')[0];
+            return codec === 'flac' || codec === 'ec-3' || codec === 'eac3' || codec === 'ac-3';
+        }
+
+        /**
+         * 结合输出格式设置与当前音轨，解析本次实际使用的容器格式。
+         * 选择 MP4 且未勾选"允许非标封装"时，遇到 FLAC / 杜比全景声自动改用 MKV。
+         * @param {{audioId?: number|string, audioCodec?: string}} [audioInfo]
+         * @param {string} [format] 指定的输出格式，缺省读取设置
+         * @returns {'mp4'|'mkv'}
+         */
+        resolveOutputFormat(audioInfo = {}, format) {
+            const preferred = OUTPUT_FORMAT_VALUES.includes(String(format || '').toLowerCase())
+                ? String(format).toLowerCase()
+                : this.getOutputFormat();
+
+            if (preferred !== 'mp4' || this.getMp4AllowNonStandardAudio()) {
+                return preferred;
+            }
+
+            return this.isNonStandardMp4Audio(audioInfo) ? 'mkv' : preferred;
+        }
 
     getTheme() {
         const data = this.load();

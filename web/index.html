@@ -385,7 +385,7 @@
                                 <input type="checkbox" id="experimentalMergeCheckbox">
                                 <span>使用实验性合并工具（MP4 / MKV）</span>
                             </label>
-                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 m4s 会直接转封装为 M4A。</p>
+                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 AAC 转封装为 M4A、FLAC 转封装为原生 FLAC、杜比全景声等其余编码封装为纯音频 MKV，只有 js-media 覆盖不到的编码才交给 ffmpeg。</p>
                             <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
                                 <input type="checkbox" id="mp4NonStandardAudioCheckbox">
                                 <span>将 FLAC、杜比全景声非标封装进 MP4</span>

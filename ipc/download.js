@@ -73,8 +73,8 @@ const util = require('util');
 let ffmpeg = require('ffmpeg-static');
 const { execFile } = require('child_process');
 const execFileAsync = util.promisify(execFile);
-const { mergeBiliM4sToFile } = require('../modules/js-media/merge');
-const { m4sToM4a } = require('../modules/js-media/m4a');
+// js-media 统一门面：合并与纯音频转封装都只从这里进
+const { mergeBiliM4sToFile, convertBiliM4sAudio, checkAudioConversion } = require('../modules/js-media/media');
 
 // asar 修正
 if (app.isPackaged && ffmpeg.includes('app.asar')) {
@@ -270,22 +270,31 @@ module.exports = function registerDownloadIpc(mainWindow) {
             );
 
             if (audioOnly) {
-                // 仅音频模式：直接转换音频为 m4a
-                console.log(`⏳ [${title}] 正在转换为 m4a 格式...`);
+                // 仅音频模式：把音频 .m4s 转封装成目标格式（.m4a / .flac / 纯音频 .mkv）
+                const audioExt = path.extname(m4aOutputPath).replace('.', '').toUpperCase();
+                console.log(`⏳ [${title}] 正在转换为 ${audioExt} 格式...`);
                 notifyProgress(100, '0.00', 'converting');
                 mergeStarted = true;
 
-                // 实验性合并工具自带 AAC 转封装；FLAC / 杜比全景声仍需 ffmpeg 处理
-                const useJsMediaAudio = experimentalMergeEnabled
-                    && path.extname(m4aOutputPath).toLowerCase() === '.m4a';
+                // 实验性合并工具按实际"编码 + 目标容器"判定能否由 js-media 处理；
+                // FLAC / 杜比全景声现在也能走 js-media（原生 FLAC / 纯音频 MKV），
+                // 只有 js-media 覆盖不到的编码才回落 ffmpeg。
+                const jsAudio = experimentalMergeEnabled
+                    ? checkAudioConversion(audioPath, m4aOutputPath)
+                    : { supported: false };
+                const useJsMediaAudio = jsAudio.supported;
+
+                if (!useJsMediaAudio && experimentalMergeEnabled) {
+                    console.log(`ℹ️ [${title}] js-media 不处理该音频，回落 ffmpeg：${jsAudio.reason}`);
+                }
 
                 if (useJsMediaAudio) {
                     try {
-                        await m4sToM4a(audioPath, m4aOutputPath, { signal });
-                        console.log(`✅ [${title}] 转换为 m4a 完成 (js-media)`);
+                        await convertBiliM4sAudio(audioPath, m4aOutputPath, { signal });
+                        console.log(`✅ [${title}] 转换为 ${audioExt} 完成 (js-media)`);
                     } catch (err) {
                         if (signal.aborted) throw createCancelError();
-                        console.error(`❌ [${title}] 转换为 m4a 出错 (js-media)`);
+                        console.error(`❌ [${title}] 转换为 ${audioExt} 出错 (js-media)`);
                         console.error('err.message:', err.message);
                         return {
                             success: false,
@@ -302,7 +311,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                         }
                     }
 
-                    // 使用 ffmpeg 将 m4s 转换为 m4a
+                    // 使用 ffmpeg 将 .m4s 转封装到目标容器（-c:a copy，不重编码）
                     const ffmpegArgs = [
                         '-y',
                         '-i', audioPath,
@@ -312,10 +321,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
                     try {
                         await execFileAsync(ffmpeg, ffmpegArgs, { signal });
-                        console.log(`✅ [${title}] 转换为 m4a 完成`);
+                        console.log(`✅ [${title}] 转换为 ${audioExt} 完成`);
                     } catch (err) {
                         if (signal.aborted) throw createCancelError();
-                        console.error(`❌ [${title}] 转换为 m4a 出错`);
+                        console.error(`❌ [${title}] 转换为 ${audioExt} 出错`);
                         console.error('err.message:', err.message);
                         console.error('err.stderr:', err.stderr);
                         console.error('err.stdout:', err.stdout);
@@ -349,7 +358,8 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 mergeStarted = true;
                 try {
                     if (experimentalMergeEnabled) {
-                        await mergeBiliM4sToFile(videoPath, audioPath, outputPath, { title });
+                        // 传入 signal：js-media 在分片/Cluster 边界检查，取消可中途生效
+                        await mergeBiliM4sToFile(videoPath, audioPath, outputPath, { title, signal });
                         if (signal.aborted) throw createCancelError();
                     } else {
                         // 修复 macOS/Linux 下的执行权限问题

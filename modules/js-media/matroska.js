@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const { createFileWriter } = require('./stream-writer');
+// 输入统一为 track-source.js 定义的 TrackSource 契约，不直接依赖解封装实现
+const { sampleBytes, stsdBoxPayload, toBuffer } = require('./track-source');
 
 // ================== EBML 基础写入 ==================
 
@@ -175,18 +177,6 @@ function uintLength(n) {
 /** el(id, payload) 序列化后的总字节数 */
 function elLength(id, payloadLength) {
     return idLength(id) + vintLength(payloadLength) + payloadLength;
-}
-
-/** 取样本字节：内存模式下直接返回 data，流式模式下按需从源文件读取 */
-function sampleBytes(sample) {
-    let data;
-    if (sample.data) data = sample.data;
-    else if (typeof sample.read === 'function') data = sample.read();
-    else throw new Error('Sample 既没有 data 也没有 read()');
-    if (data.length !== sample.size) {
-        throw new Error(`Sample 长度不一致: 期望 ${sample.size}，实际 ${data.length}`);
-    }
-    return data;
 }
 
 // ================== 字幕解析 ==================
@@ -380,17 +370,8 @@ function parseAss(input) {
 
 // ================== 编解码器信息 ==================
 
-/** 从 stsd 子 Box 中取出原始载荷字节 */
-function configPayload(stsdEntry, type) {
-    if (!stsdEntry) return null;
-    const boxes = Array.isArray(stsdEntry.boxes) ? stsdEntry.boxes : [];
-    const box = boxes.find((b) => b && b.type === type) || stsdEntry[type];
-    if (!box) return null;
-    if (box.data && box.data.length > 0) {
-        return Buffer.from(box.data.buffer, box.data.byteOffset, box.data.byteLength);
-    }
-    return null;
-}
+/** 从 stsd 子 Box 中取出原始载荷字节（契约工具，见 track-source.js） */
+const configPayload = stsdBoxPayload;
 
 /** 读取 esds 中的 DecoderSpecificInfo（AAC 的 AudioSpecificConfig） */
 function parseEsdsAsc(esdsBox) {
@@ -579,30 +560,33 @@ function audioCodecInfo(trackInfo, stsdEntry) {
 
 // ================== 轨道与分片构造 ==================
 
-function demuxSamplesToMkv(demuxData, useCts) {
-    const timescale = demuxData.trackInfo.timescale;
-    const readSample = typeof demuxData.readSample === 'function' ? demuxData.readSample : null;
+/**
+ * 把 TrackSource 的帧列表转成 mkv 样本描述。
+ * 流式契约（source.streamed）只留元信息与 read() 闭包，写 Cluster 时才取字节。
+ */
+function demuxSamplesToMkv(source, useCts) {
+    const timescale = source.timescale;
 
-    return demuxData.samples.map((s) => {
+    return source.samples.map((s) => {
         const timeMs = Math.max(0, Math.round(((useCts ? s.cts : s.dts) || 0) * 1000 / timescale));
         const durMs = Math.max(0, Math.round((s.duration || 0) * 1000 / timescale));
 
         if (s.data) {
-            const data = Buffer.from(s.data.buffer, s.data.byteOffset, s.data.byteLength);
-            return { timeMs, durMs, data, size: data.length, keyframe: Boolean(s.is_sync) };
+            const data = toBuffer(s.data);
+            return { timeMs, durMs, data, size: data.length, keyframe: s.keyframe };
         }
-        if (readSample) {
+        if (source.readSample) {
             // 流式模式：只留元信息，写 Cluster 时才从源文件按偏移读取
             return {
                 timeMs,
                 durMs,
                 size: s.size,
                 offset: s.offset,
-                read: () => readSample(s),
-                keyframe: Boolean(s.is_sync),
+                read: () => source.readSample(s),
+                keyframe: s.keyframe,
             };
         }
-        throw new Error('Sample 缺少 data，且未提供 readSample 读取器');
+        throw new Error(`Sample 缺少 data，且未提供 readSample 读取器 (${source.label})`);
     });
 }
 
@@ -760,12 +744,18 @@ function buildClusters(tracks) {
         // Cluster 时间戳取块内最早时间（B 帧的 cts 可能比解码顺序更早）
         let ts = Infinity;
         for (const b of blocks) ts = Math.min(ts, b.sample.timeMs);
-        // 只有以视频关键帧开头的 Cluster 才适合做跳转目标（Cues）
-        const firstVideo = videoSlice.length > 0 ? videoSlice[0] : null;
-        const cueTime =
-            firstVideo && firstVideo.keyframe && firstVideo.timeMs === ts
-                ? firstVideo.timeMs
-                : null;
+        let cueTime = null;
+        if (videoTrack) {
+            // 只有以视频关键帧开头的 Cluster 才适合做跳转目标（Cues）
+            const firstVideo = videoSlice.length > 0 ? videoSlice[0] : null;
+            cueTime =
+                firstVideo && firstVideo.keyframe && firstVideo.timeMs === ts
+                    ? firstVideo.timeMs
+                    : null;
+        } else {
+            // 纯音频：每个 Cluster 都以音频帧开头，可直接作为跳转点
+            cueTime = ts;
+        }
         clusters.push({ ts, cueTime, blocks });
     }
     return clusters;
@@ -849,10 +839,11 @@ function buildSeekHead(infoPos, tracksPos, cuesPos) {
  * @param {Array<object>} params.tracks
  * @param {string} [params.title]
  * @param {(progress: number) => void} [params.onProgress]
+ * @param {AbortSignal} [params.signal] 取消信号，中止时抛「转封装已取消」
  * @param {(chunk: Buffer) => (void|Promise<void>)} params.write 顺序写出分块
  * @returns {Promise<{ clusters: number, durationMs: number, size: number }>}
  */
-async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, write }) {
+async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, signal = null, write }) {
     let durationMs = 0;
     for (const t of tracks) {
         for (const s of t.samples) {
@@ -933,9 +924,17 @@ async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, wr
         buildSeekHead(infoPos, tracksPos, clusterPos).copy(seekHead);
 
         let written = 0;
+        // 输出总长可预先算出（Segment 载荷长度 + 各段头），进度按已写字节给出
+        const totalBytes =
+            ebmlHeader.length + segmentHeaderLength + segmentPayloadLength;
         const emit = async (chunk) => {
             await write(chunk);
             written += chunk.length;
+        };
+        const report = () => {
+            if (onProgress) {
+                onProgress(totalBytes === 0 ? 1 : Math.min(1, written / totalBytes));
+            }
         };
 
         await emit(ebmlHeader);
@@ -945,8 +944,9 @@ async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, wr
         await emit(tracksBuf);
 
         for (let i = 0; i < clusters.length; i++) {
+            if (signal && signal.aborted) throw new Error('转封装已取消');
             for (const chunk of clusterChunks(clusters[i])) await emit(chunk);
-            if (onProgress) onProgress(Math.min((i + 1) / (clusters.length + 1), 0.99));
+            report();
         }
 
         await emit(cues);
@@ -961,14 +961,16 @@ async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, wr
  * @param {Array<object>} params.tracks
  * @param {string} [params.title]
  * @param {(progress: number) => void} [params.onProgress]
+ * @param {AbortSignal} [params.signal]
  * @returns {Promise<Buffer>}
  */
-async function muxMatroska({ tracks, title = null, onProgress = null }) {
+async function muxMatroska({ tracks, title = null, onProgress = null, signal = null }) {
     const chunks = [];
     await muxMatroskaToWriter({
         tracks,
         title,
         onProgress,
+        signal,
         write: (chunk) => {
             chunks.push(chunk);
         },
@@ -977,22 +979,30 @@ async function muxMatroska({ tracks, title = null, onProgress = null }) {
 }
 
 /**
- * 由 demuxM4s 的结果构造 mkv 轨道信息
- * @param {object} video demuxM4s(视频) 的结果
- * @param {object} audio demuxM4s(音频) 的结果
+ * 由 TrackSource 构造 mkv 轨道信息
+ *
+ * video / audio 都可以省略，但至少要给一个：
+ * 只给 audio 就是「纯音频 mkv」（B 站 FLAC / 杜比全景声单独下载走这条），
+ * 轨道编号按实际给出的轨道顺序分配，缺视频时音频轨就是 1 号轨。
+ * @param {object|null} video 视频轨 TrackSource（见 track-source.js）
+ * @param {object|null} audio 音频轨 TrackSource
  * @param {Array<object>|null} subtitle 字幕轨（已在 build 阶段解析）
  * @returns {Array<object>}
  */
 function buildTracks(video, audio, subtitle) {
-    const vCodec = videoCodecInfo(video.trackInfo, video.stsdEntry);
-    const aCodec = audioCodecInfo(audio.trackInfo, audio.stsdEntry);
-    const vInfo = video.trackInfo;
-    const aInfo = audio.trackInfo;
+    if (!video && !audio) {
+        throw new Error('buildTracks 需要至少一条视频或音频轨');
+    }
 
-    const tracks = [
-        {
-            number: 1,
-            uid: 1,
+    const tracks = [];
+    let nextNumber = 1;
+
+    if (video) {
+        const vCodec = videoCodecInfo(video.trackInfo, video.stsdEntry);
+        const vInfo = video.trackInfo;
+        tracks.push({
+            number: nextNumber,
+            uid: nextNumber,
             type: TRACK_TYPE.VIDEO,
             codecId: vCodec.codecId,
             codecPrivate: vCodec.codecPrivate,
@@ -1001,10 +1011,16 @@ function buildTracks(video, audio, subtitle) {
             width: vInfo.video ? vInfo.video.width : vInfo.track_width,
             height: vInfo.video ? vInfo.video.height : vInfo.track_height,
             samples: demuxSamplesToMkv(video, true),
-        },
-        {
-            number: 2,
-            uid: 2,
+        });
+        nextNumber++;
+    }
+
+    if (audio) {
+        const aCodec = audioCodecInfo(audio.trackInfo, audio.stsdEntry);
+        const aInfo = audio.trackInfo;
+        tracks.push({
+            number: nextNumber,
+            uid: nextNumber,
             type: TRACK_TYPE.AUDIO,
             codecId: aCodec.codecId,
             codecPrivate: aCodec.codecPrivate,
@@ -1014,13 +1030,14 @@ function buildTracks(video, audio, subtitle) {
             channels: aInfo.audio ? aInfo.audio.channel_count : 2,
             bitDepth: aInfo.audio ? aInfo.audio.sample_size : 16,
             samples: demuxSamplesToMkv(audio, false),
-        },
-    ];
+        });
+        nextNumber++;
+    }
 
     if (subtitle) {
         tracks.push({
-            number: 3,
-            uid: 3,
+            number: nextNumber,
+            uid: nextNumber,
             type: TRACK_TYPE.SUBTITLE,
             codecId: subtitle.codecId,
             codecPrivate: subtitle.codecPrivate,
@@ -1088,28 +1105,30 @@ async function loadSubtitleTrack({ filePath, title, language, isDefault }) {
 /**
  * 生成 mkv 文件内容（一次性返回完整 Buffer，小文件/测试用）
  * @param {object} params
- * @param {object} params.video demuxM4s(视频) 的结果
- * @param {object} params.audio demuxM4s(音频) 的结果
+ * @param {object|null} [params.video] 视频轨 TrackSource（见 track-source.js），纯音频时省略
+ * @param {object|null} [params.audio] 音频轨 TrackSource
  * @param {object|null} [params.subtitle] 字幕轨参数，传给 loadSubtitleTrack
  * @param {string} [params.title]
  * @param {(progress: number) => void} [params.onProgress]
+ * @param {AbortSignal} [params.signal]
  * @returns {Promise<Buffer>}
  */
-async function buildMkvBuffer({ video, audio, subtitle = null, title = null, onProgress = null }) {
+async function buildMkvBuffer({ video, audio, subtitle = null, title = null, onProgress = null, signal = null }) {
     const subtitleTrack = subtitle ? await loadSubtitleTrack(subtitle) : null;
     const tracks = buildTracks(video, audio, subtitleTrack);
-    return muxMatroska({ tracks, title, onProgress });
+    return muxMatroska({ tracks, title, onProgress, signal });
 }
 
 /**
  * 把 mkv 流式写入文件（不把整个文件放进内存）
  * @param {object} params
- * @param {object} params.video demuxM4s(视频) 的结果
- * @param {object} params.audio demuxM4s(音频) 的结果
+ * @param {object|null} [params.video] 视频轨 TrackSource（见 track-source.js），纯音频时省略
+ * @param {object|null} [params.audio] 音频轨 TrackSource
  * @param {object|null} [params.subtitle] 字幕轨参数，传给 loadSubtitleTrack
  * @param {string} params.outputPath 输出 .mkv 路径
  * @param {string} [params.title]
  * @param {(progress: number) => void} [params.onProgress]
+ * @param {AbortSignal} [params.signal]
  * @returns {Promise<{ outputPath: string, size: number, clusters: number, durationMs: number }>}
  */
 async function buildMkvFile({
@@ -1119,6 +1138,7 @@ async function buildMkvFile({
     outputPath,
     title = null,
     onProgress = null,
+    signal = null,
 }) {
     const subtitleTrack = subtitle ? await loadSubtitleTrack(subtitle) : null;
     const tracks = buildTracks(video, audio, subtitleTrack);
@@ -1129,6 +1149,7 @@ async function buildMkvFile({
             tracks,
             title,
             onProgress,
+            signal,
             write: writer.write,
         });
         const { size } = await writer.close();

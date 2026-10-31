@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const Setting = require('../../modules/config_setting');
-const { mergeBiliM4sToFile } = require('../../modules/js-media/merge');
+const { mergeBiliM4sToFile } = require('../../modules/js-media/media');
 
 // ================== 工具函数 ==================
 

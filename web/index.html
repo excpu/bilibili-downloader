@@ -383,14 +383,14 @@
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="experimentalMergeCheckbox">
-                                <span>使用实验性合并工具（仅支持 MP4）</span>
+                                <span>使用实验性合并工具（MP4 / MKV）</span>
                             </label>
-                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合并，并固定输出为 MP4。</p>
+                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 m4s 会直接转封装为 M4A。</p>
                             <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
                                 <input type="checkbox" id="mp4NonStandardAudioCheckbox">
                                 <span>将 FLAC、杜比全景声非标封装进 MP4</span>
                             </label>
-                            <p class="setting-hint" id="mp4NonStandardAudioHint">使用常规合并时，MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
+                            <p class="setting-hint" id="mp4NonStandardAudioHint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器（实验性合并工具同样适用）。</p>
                         </div>
                     </div>
 

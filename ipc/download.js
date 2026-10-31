@@ -73,7 +73,8 @@ const util = require('util');
 let ffmpeg = require('ffmpeg-static');
 const { execFile } = require('child_process');
 const execFileAsync = util.promisify(execFile);
-const { mergeBiliM4s } = require('../modules/js-media/merge');
+const { mergeBiliM4sToFile } = require('../modules/js-media/merge');
+const { m4sToM4a } = require('../modules/js-media/m4a');
 
 // asar 修正
 if (app.isPackaged && ffmpeg.includes('app.asar')) {
@@ -274,38 +275,57 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 notifyProgress(100, '0.00', 'converting');
                 mergeStarted = true;
 
-                // 修复 macOS/Linux 下的执行权限问题
-                if (process.platform === 'darwin' || process.platform === 'linux') {
+                // 实验性合并工具自带 AAC 转封装；FLAC / 杜比全景声仍需 ffmpeg 处理
+                const useJsMediaAudio = experimentalMergeEnabled
+                    && path.extname(m4aOutputPath).toLowerCase() === '.m4a';
+
+                if (useJsMediaAudio) {
                     try {
-                        fs.chmodSync(ffmpeg, 0o755);
-                    } catch (chmodErr) {
-                        console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响转换:', chmodErr);
+                        await m4sToM4a(audioPath, m4aOutputPath, { signal });
+                        console.log(`✅ [${title}] 转换为 m4a 完成 (js-media)`);
+                    } catch (err) {
+                        if (signal.aborted) throw createCancelError();
+                        console.error(`❌ [${title}] 转换为 m4a 出错 (js-media)`);
+                        console.error('err.message:', err.message);
+                        return {
+                            success: false,
+                            message: err.message || '音频转换失败'
+                        };
                     }
-                }
+                } else {
+                    // 修复 macOS/Linux 下的执行权限问题
+                    if (process.platform === 'darwin' || process.platform === 'linux') {
+                        try {
+                            fs.chmodSync(ffmpeg, 0o755);
+                        } catch (chmodErr) {
+                            console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响转换:', chmodErr);
+                        }
+                    }
 
-                // 使用 ffmpeg 将 m4s 转换为 m4a
-                const ffmpegArgs = [
-                    '-y',
-                    '-i', audioPath,
-                    '-c:a', 'copy',
-                    m4aOutputPath
-                ];
+                    // 使用 ffmpeg 将 m4s 转换为 m4a
+                    const ffmpegArgs = [
+                        '-y',
+                        '-i', audioPath,
+                        '-c:a', 'copy',
+                        m4aOutputPath
+                    ];
 
-                try {
-                    await execFileAsync(ffmpeg, ffmpegArgs, { signal });
-                    console.log(`✅ [${title}] 转换为 m4a 完成`);
-                } catch (err) {
-                    if (signal.aborted) throw createCancelError();
-                    console.error(`❌ [${title}] 转换为 m4a 出错`);
-                    console.error('err.message:', err.message);
-                    console.error('err.stderr:', err.stderr);
-                    console.error('err.stdout:', err.stdout);
-                    console.error('full err:', err);
+                    try {
+                        await execFileAsync(ffmpeg, ffmpegArgs, { signal });
+                        console.log(`✅ [${title}] 转换为 m4a 完成`);
+                    } catch (err) {
+                        if (signal.aborted) throw createCancelError();
+                        console.error(`❌ [${title}] 转换为 m4a 出错`);
+                        console.error('err.message:', err.message);
+                        console.error('err.stderr:', err.stderr);
+                        console.error('err.stdout:', err.stdout);
+                        console.error('full err:', err);
 
-                    return {
-                        success: false,
-                        message: err.stderr || err.message || '音频转换失败'
-                    };
+                        return {
+                            success: false,
+                            message: err.stderr || err.message || '音频转换失败'
+                        };
+                    }
                 }
             } else {
                 // 音视频模式：下载视频并合并
@@ -329,7 +349,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 mergeStarted = true;
                 try {
                     if (experimentalMergeEnabled) {
-                        await mergeBiliM4s(videoPath, audioPath, outputPath);
+                        await mergeBiliM4sToFile(videoPath, audioPath, outputPath, { title });
                         if (signal.aborted) throw createCancelError();
                     } else {
                         // 修复 macOS/Linux 下的执行权限问题

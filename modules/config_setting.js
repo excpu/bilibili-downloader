@@ -115,9 +115,6 @@ class Setting {
     updateOutputFormat(format) {
         const data = this.load() || {};
         const normalized = String(format || '').toLowerCase();
-        if (data.experimentalMergeEnabled === true) {
-            return 'mp4';
-        }
         data.outputFormat = OUTPUT_FORMAT_VALUES.includes(normalized)
             ? normalized
             : DEFAULT_OUTPUT_FORMAT;
@@ -127,9 +124,6 @@ class Setting {
 
     getOutputFormat() {
         const data = this.load();
-        if (data && data.experimentalMergeEnabled === true) {
-            return 'mp4';
-        }
         const format = String(data ? data.outputFormat : '').toLowerCase();
         return OUTPUT_FORMAT_VALUES.includes(format) ? format : DEFAULT_OUTPUT_FORMAT;
     }
@@ -174,27 +168,25 @@ class Setting {
             return codec === 'flac' || codec === 'ec-3' || codec === 'eac3' || codec === 'ac-3';
         }
 
-        /**
-         * 结合输出格式设置与当前音轨，解析本次实际使用的容器格式。
-         * 选择 MP4 且未勾选"允许非标封装"时，遇到 FLAC / 杜比全景声自动改用 MKV。
-         * @param {{audioId?: number|string, audioCodec?: string}} [audioInfo]
-         * @param {string} [format] 指定的输出格式，缺省读取设置
-         * @returns {'mp4'|'mkv'}
-         */
-        resolveOutputFormat(audioInfo = {}, format) {
-            if (this.getExperimentalMergeEnabled()) {
-                return 'mp4';
-            }
-            const preferred = OUTPUT_FORMAT_VALUES.includes(String(format || '').toLowerCase())
-                ? String(format).toLowerCase()
-                : this.getOutputFormat();
+    /**
+     * 结合输出格式设置与当前音轨，解析本次实际使用的容器格式。
+     * 选择 MP4 且未勾选"允许非标封装"时，遇到 FLAC / 杜比全景声自动改用 MKV。
+     * 实验性合并工具同样支持 MKV（Matroska 封装），因此这里不再强制改写为 MP4。
+     * @param {{audioId?: number|string, audioCodec?: string}} [audioInfo]
+     * @param {string} [format] 指定的输出格式，缺省读取设置
+     * @returns {'mp4'|'mkv'}
+     */
+    resolveOutputFormat(audioInfo = {}, format) {
+        const preferred = OUTPUT_FORMAT_VALUES.includes(String(format || '').toLowerCase())
+            ? String(format).toLowerCase()
+            : this.getOutputFormat();
 
-            if (preferred !== 'mp4' || this.getMp4AllowNonStandardAudio()) {
-                return preferred;
-            }
-
-            return this.isNonStandardMp4Audio(audioInfo) ? 'mkv' : preferred;
+        if (preferred !== 'mp4' || this.getMp4AllowNonStandardAudio()) {
+            return preferred;
         }
+
+        return this.isNonStandardMp4Audio(audioInfo) ? 'mkv' : preferred;
+    }
 
     getTheme() {
         const data = this.load();

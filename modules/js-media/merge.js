@@ -1,5 +1,6 @@
 // merge.js (biliM4sMerger.js)
 const fs = require('fs');
+const path = require('path');
 const MP4Box = require('mp4box');
 const { createFileWriter } = require('./stream-writer');
 const { buildMkvFile } = require('./matroska');
@@ -22,6 +23,42 @@ function makeBoxVerbatim(box, payload) {
     box.original_size = undefined;
     box.hdr_size = 8;
     box.write = MP4Box.Box.prototype.write;
+}
+
+/**
+ * 从已打开的文件中按 Box 的 start/size 切出原始载荷，并标记为"原样输出"。
+ *
+ * MP4Box 只在 Box 类没有自定义 write() 时才会填充 box.data
+ * （见 parseOneBox -> parseDataAndRewind），像 avcC 这类带自定义 write()
+ * 的 Box 解析后 box.data 是 undefined。仅靠 makeBoxVerbatim 传 undefined
+ * 会让配置 Box 变成空载荷，因此这里直接从源文件字节切片。
+ *
+ * @param {number} fd 文件描述符
+ * @param {number} dataStart 文件内数据流起点（跳过 Bilibili 前缀后的偏移）
+ * @param {object} box MP4Box 解析出的 Box 实例
+ * @returns {boolean} 是否成功设置
+ */
+function readBoxPayloadVerbatim(fd, dataStart, box) {
+    if (!box || !box.type) return false;
+    // MP4Box 已经填好 .data 的 Box 保持原样（FullBox 的 .data 是去掉 version/flags 的视图）
+    if (box.data && box.data.length > 0) return false;
+    if (!Number.isFinite(box.start) || !Number.isFinite(box.size) || box.size <= 0) {
+        return false;
+    }
+    const hdrSize = box.hdr_size || 8;
+    if (box.size < hdrSize) return false;
+
+    const payloadLength = box.size - hdrSize;
+    const payload = Buffer.allocUnsafe(payloadLength);
+    const at = dataStart + box.start + hdrSize;
+    let filled = 0;
+    while (filled < payloadLength) {
+        const got = fs.readSync(fd, payload, filled, payloadLength - filled, at + filled);
+        if (got <= 0) return false;
+        filled += got;
+    }
+    makeBoxVerbatim(box, payload);
+    return true;
 }
 
 /**
@@ -55,24 +92,24 @@ function normalizeM4sBuffer(nodeBuffer) {
     return arrayBuffer;
 }
 
-    const M4S_PREFIX_LENGTH = 9;
+const M4S_PREFIX_LENGTH = 9;
 
-    /**
-     * 探测 .m4s 是否带 Bilibili 的 9 字节 '0' 前缀（读文件头判断，不加载整个文件）
-     * @param {number} fd 已打开的文件描述符
-     * @param {number} fileSize
-     * @returns {number} 需要跳过的字节数
-     */
-    function probeM4sPrefix(fd, fileSize) {
-        if (fileSize <= M4S_PREFIX_LENGTH) return 0;
-        const head = Buffer.allocUnsafe(M4S_PREFIX_LENGTH);
-        const read = fs.readSync(fd, head, 0, M4S_PREFIX_LENGTH, 0);
-        if (read !== M4S_PREFIX_LENGTH) return 0;
-        for (let i = 0; i < M4S_PREFIX_LENGTH; i++) {
-            if (head[i] !== 0x30) return 0;
-        }
-        return M4S_PREFIX_LENGTH;
+/**
+ * 探测 .m4s 是否带 Bilibili 的 9 字节 '0' 前缀（读文件头判断，不加载整个文件）
+ * @param {number} fd 已打开的文件描述符
+ * @param {number} fileSize
+ * @returns {number} 需要跳过的字节数
+ */
+function probeM4sPrefix(fd, fileSize) {
+    if (fileSize <= M4S_PREFIX_LENGTH) return 0;
+    const head = Buffer.allocUnsafe(M4S_PREFIX_LENGTH);
+    const read = fs.readSync(fd, head, 0, M4S_PREFIX_LENGTH, 0);
+    if (read !== M4S_PREFIX_LENGTH) return 0;
+    for (let i = 0; i < M4S_PREFIX_LENGTH; i++) {
+        if (head[i] !== 0x30) return 0;
     }
+    return M4S_PREFIX_LENGTH;
+}
 
 /**
  * 解析单个 M4S 文件，提取轨道信息、原始 stsd 编码配置 Box 以及全部 Sample 帧
@@ -280,6 +317,13 @@ function demuxM4sIndex(filePath) {
                 return fail(new Error(`未能完成 moov 头解析: ${filePath}`));
             }
 
+            // 趁文件句柄还可用，把解码器配置子 Box（avcC/hvcC/av1C/esds/dfLa 等）
+            // 的原始字节读出来并标记为原样输出。
+            // MP4Box 只对没有自定义 write() 的 Box 填充 .data，avcC 之类必须自己切。
+            if (stsdEntry && Array.isArray(stsdEntry.boxes)) {
+                for (const b of stsdEntry.boxes) readBoxPayloadVerbatim(fd, dataStart, b);
+            }
+
             const rawTrak = mp4boxfile.getTrackById(trackInfo.id);
             const samples = (rawTrak && rawTrak.samples) || [];
             if (samples.length === 0) {
@@ -475,7 +519,7 @@ function buildTraf(trackId, baseDts, samples, isVideo) {
   * @param {{ id: number, timescale: number, samples: Array }} audio
   * @returns {Array<{ moof: Buffer, mdatSize: number, videoSamples: Array, audioSamples: Array, duration: number, earliestPts: number }>}
   */
- function buildFragments(video, audio) {
+function buildFragments(video, audio) {
     const vs = video.samples;
     const as = audio.samples;
     const starts = [];
@@ -517,11 +561,11 @@ function buildTraf(trackId, baseDts, samples, isVideo) {
             traf.buf.copy(moof, p);
             p += traf.buf.length;
             for (const s of segSamples) {
-                            if (!Number.isFinite(s.size)) {
-                                throw new Error('Sample 缺少 size，无法计算 mdat 布局');
-                            }
-                            mdatPos += s.size;
-                        }
+                if (!Number.isFinite(s.size)) {
+                    throw new Error('Sample 缺少 size，无法计算 mdat 布局');
+                }
+                mdatPos += s.size;
+            }
         }
 
         let minPts = Infinity;
@@ -758,43 +802,61 @@ async function mergeBiliM4sToMkv(videoM4sPath, audioM4sPath, outputMkvPath, opti
         onProgress = null,
     } = options;
 
-     // 只解析元信息与 Sample 偏移，帧数据在写盘时按需读取（流式落盘，内存占用与文件大小无关）
-     const [videoData, audioData] = await Promise.all([
-         demuxM4sIndex(videoM4sPath),
-         demuxM4sIndex(audioM4sPath),
-     ]);
+    // 只解析元信息与 Sample 偏移，帧数据在写盘时按需读取（流式落盘，内存占用与文件大小无关）
+    const [videoData, audioData] = await Promise.all([
+        demuxM4sIndex(videoM4sPath),
+        demuxM4sIndex(audioM4sPath),
+    ]);
 
-     try {
-         await buildMkvFile({
-             video: videoData,
-             audio: audioData,
-             subtitle: subtitlePath
-                 ? {
-                       filePath: subtitlePath,
-                       title: subtitleTitle,
-                       language: subtitleLanguage,
-                       isDefault: subtitleDefault,
-                   }
-                 : null,
-             outputPath: outputMkvPath,
-             title,
-             onProgress,
-         });
-     } finally {
-         videoData.close();
-         audioData.close();
-     }
+    try {
+        await buildMkvFile({
+            video: videoData,
+            audio: audioData,
+            subtitle: subtitlePath
+                ? {
+                    filePath: subtitlePath,
+                    title: subtitleTitle,
+                    language: subtitleLanguage,
+                    isDefault: subtitleDefault,
+                }
+                : null,
+            outputPath: outputMkvPath,
+            title,
+            onProgress,
+        });
+    } finally {
+        videoData.close();
+        audioData.close();
+    }
 
-     return {
-         outputMkvPath,
-         subtitleEmbedded: Boolean(subtitlePath),
-         videoSamples: videoData.samples.length,
-         audioSamples: audioData.samples.length,
-     };
- }
+    return {
+        outputMkvPath,
+        subtitleEmbedded: Boolean(subtitlePath),
+        videoSamples: videoData.samples.length,
+        audioSamples: audioData.samples.length,
+    };
+}
+
+/**
+ * 按输出文件扩展名自动选择容器：.mkv 走 Matroska 封装，其余走 MP4 分片封装
+ *
+ * @param {string} videoM4sPath 视频 .m4s 路径
+ * @param {string} audioM4sPath 音频 .m4s 路径
+ * @param {string} outputPath 输出路径，扩展名决定容器
+ * @param {object} [options] 传给 MKV 封装的选项（title / subtitlePath / onProgress 等）
+ */
+async function mergeBiliM4sToFile(videoM4sPath, audioM4sPath, outputPath, options = {}) {
+    if (path.extname(outputPath).toLowerCase() === '.mkv') {
+        return mergeBiliM4sToMkv(videoM4sPath, audioM4sPath, outputPath, options);
+    }
+
+    return mergeBiliM4s(videoM4sPath, audioM4sPath, outputPath);
+}
+
 module.exports = {
     mergeBiliM4s,
     mergeBiliM4sToMkv,
+    mergeBiliM4sToFile,
     demuxM4s,
     demuxM4sIndex,
     normalizeM4sBuffer,

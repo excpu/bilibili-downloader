@@ -411,7 +411,9 @@ function parseEsdsAsc(esdsBox) {
         return { tag, start: p, end: Math.min(p + len, buf.length) };
     };
 
-    let pos = 4; // 跳过 version + flags
+    // 注意：mp4box 的 box.data 已经把 FullBox 的 version + flags 计入 hdr_size，
+    // 因此这里从 0 开始就是第一个描述符（esds 的 ES_Descriptor）
+    let pos = 0;
     let dcd = null;
     let guard = 0;
     while (pos < buf.length && guard++ < 16) {
@@ -460,6 +462,61 @@ function fallbackAacAsc(codecString, sampleRate, channels) {
     return Buffer.from([(value >> 8) & 0xff, value & 0xff]);
 }
 
+const FLAC_STREAMINFO_SIZE = 34;
+
+/**
+ * 把 MP4 的 dfLa 载荷整理成 Matroska 要求的 FLAC CodecPrivate。
+ *
+ * Matroska 的 A_FLAC CodecPrivate 必须是 "fLaC" 魔数 + FLAC 元数据块（含 4 字节块头），
+ * 且第一个块必须是 STREAMINFO。而 dfLa 只是 FLAC 元数据块的容器：
+ *  - 有的封装带 FullBox 的 version/flags（4 字节），有的不带；
+ *  - 也见过把 "fLaC" 魔数一起塞进 dfLa 的。
+ * 所以这里按块结构重新解析并规范化输出，避免直接切固定 4 字节出错。
+ *
+ * @param {Buffer|null} dfLa
+ * @returns {Buffer|null}
+ */
+function buildFlacCodecPrivate(dfLa) {
+    if (!dfLa || dfLa.length < 4) return null;
+
+    let start = 0;
+    // dfLa 是 FullBox：version(1) + flags(3)，正常情况下都为 0
+    if (dfLa.length > 4 && dfLa[0] === 0 && dfLa[1] === 0 && dfLa[2] === 0 && dfLa[3] === 0) {
+        start = 4;
+    }
+    if (dfLa.toString('latin1', start, start + 4) === 'fLaC') start += 4;
+
+    // 按 FLAC 元数据块结构走一遍，拿到 STREAMINFO 与其他块
+    const blocks = [];
+    let off = start;
+    while (off + 4 <= dfLa.length) {
+        const flagType = dfLa[off];
+        const type = flagType & 0x7f;
+        const isLast = (flagType & 0x80) !== 0;
+        const length = (dfLa[off + 1] << 16) | (dfLa[off + 2] << 8) | dfLa[off + 3];
+        if (off + 4 + length > dfLa.length) break;
+        blocks.push({ type, body: dfLa.subarray(off + 4, off + 4 + length) });
+        off += 4 + length;
+        if (isLast) break;
+    }
+
+    // 必须有 STREAMINFO（type 0）且长度合法，否则 ffmpeg 会报 Invalid FLAC private data
+    const streamInfo = blocks.find((b) => b.type === 0);
+    if (!streamInfo || streamInfo.body.length < FLAC_STREAMINFO_SIZE) return null;
+
+    const parts = [Buffer.from('fLaC', 'latin1')];
+    for (let i = 0; i < blocks.length; i++) {
+        const { type, body } = blocks[i];
+        // 最后一个元数据块要置 last-metadata-block 标志
+        const flagType = (i === blocks.length - 1 ? 0x80 : 0x00) | (type & 0x7f);
+        parts.push(
+            Buffer.from([flagType, (body.length >> 16) & 0xff, (body.length >> 8) & 0xff, body.length & 0xff]),
+            body
+        );
+    }
+    return Buffer.concat(parts);
+}
+
 /**
  * 根据视频轨信息得到 Matroska 的 CodecID 与 CodecPrivate
  * @returns {{ codecId: string, codecPrivate: Buffer|null }}
@@ -497,11 +554,8 @@ function audioCodecInfo(trackInfo, stsdEntry) {
             return { codecId: 'A_AAC', codecPrivate: asc };
         }
         case 'flac': {
-            const dfLa = configPayload(stsdEntry, 'dfLa');
-            if (!dfLa) return { codecId: 'A_FLAC', codecPrivate: null };
-            // dfLa 载荷：version/flags(4) + FLAC 元数据块；MKV 要求带 "fLaC" 魔数
-            return { codecId: 'A_FLAC', codecPrivate: Buffer.concat([Buffer.from('fLaC'), dfLa.subarray(4)]) };
-        }
+                    return { codecId: 'A_FLAC', codecPrivate: buildFlacCodecPrivate(configPayload(stsdEntry, 'dfLa')) };
+                }
         case 'opus': {
             const dOps = configPayload(stsdEntry, 'dOps');
             return {
@@ -628,7 +682,18 @@ function blockGroupLength(trackNumber, sample) {
 }
 
 /**
- * 把音轨/字幕按视频关键帧切成 Cluster，并保持视频 Sample 的解码顺序
+ * SimpleBlock 的相对时间码是 int16，Cluster 时长必须严格控制在 32.7 s 以内。
+ * 这里取 30 s 上限，保证即使块时间有抖动也不会溢出。
+ */
+const MAX_CLUSTER_DURATION_MS = 30000;
+
+/**
+ * 把音轨/字幕按时间窗切成 Cluster，并保持视频 Sample 的解码顺序
+ *
+ * Cluster 边界取「视频关键帧时间」+ 固定 MAX_CLUSTER_DURATION_MS 兜底。
+ * 只按关键帧切会在两种情况下出错：
+ *  1) 关键帧稀疏或整段视频只有一个关键帧 —— SimpleBlock 的 int16 相对时间码会溢出；
+ *  2) 视频比音轨短 —— 剩下的音频会被全部塞进最后一个 Cluster（同样溢出）。
  * @param {Array<object>} tracks
  * @returns {Array<{ ts: number, blocks: Array<{ track: object, sample: object }> }>}
  */
@@ -637,21 +702,36 @@ function buildClusters(tracks) {
     const others = tracks.filter((t) => t !== videoTrack);
     const videoSamples = videoTrack ? videoTrack.samples : [];
 
-    const starts = [];
-    for (let i = 0; i < videoSamples.length; i++) {
-        if (i === 0 || videoSamples[i].keyframe) starts.push(i);
+    let endMs = 0;
+    for (const t of tracks) {
+        for (const s of t.samples) endMs = Math.max(endMs, s.timeMs + s.durMs);
     }
-    if (starts.length === 0) starts.push(0);
+    if (endMs <= 0) return [];
+
+    const boundaries = new Set([0]);
+    for (const s of videoSamples) {
+        if (s.keyframe && s.timeMs > 0) boundaries.add(s.timeMs);
+    }
+    for (let ms = MAX_CLUSTER_DURATION_MS; ms < endMs; ms += MAX_CLUSTER_DURATION_MS) {
+        boundaries.add(ms);
+    }
+    const starts = Array.from(boundaries).sort((a, b) => a - b);
 
     const pointers = new Map(others.map((t) => [t.number, 0]));
     const clusters = [];
-    let previousTs = 0;
+    let videoIndex = 0;
 
     for (let k = 0; k < starts.length; k++) {
-        const from = starts[k];
-        const to = k + 1 < starts.length ? starts[k + 1] : videoSamples.length;
-        const videoSlice = videoSamples.slice(from, to);
-        const limit = k + 1 < starts.length ? videoSamples[starts[k + 1]].timeMs : Infinity;
+        const limit = k + 1 < starts.length ? starts[k + 1] : Infinity;
+
+        const videoSlice = [];
+        while (
+            videoIndex < videoSamples.length &&
+            videoSamples[videoIndex].timeMs < limit
+        ) {
+            videoSlice.push(videoSamples[videoIndex]);
+            videoIndex++;
+        }
 
         const othersSlice = others.map((t) => {
             const arr = t.samples;
@@ -661,12 +741,6 @@ function buildClusters(tracks) {
             pointers.set(t.number, end);
             return { track: t, samples: arr.slice(start, end) };
         });
-
-        let ts = videoSlice.length > 0 ? videoSlice[0].timeMs : previousTs;
-        for (const o of othersSlice) {
-            if (o.samples.length > 0) ts = Math.min(ts, o.samples[0].timeMs);
-        }
-        previousTs = ts;
 
         const blocks = [];
         const emitReady = (limitMs) => {
@@ -683,7 +757,16 @@ function buildClusters(tracks) {
         emitReady(Infinity);
 
         if (blocks.length === 0) continue;
-        clusters.push({ ts, blocks });
+        // Cluster 时间戳取块内最早时间（B 帧的 cts 可能比解码顺序更早）
+        let ts = Infinity;
+        for (const b of blocks) ts = Math.min(ts, b.sample.timeMs);
+        // 只有以视频关键帧开头的 Cluster 才适合做跳转目标（Cues）
+        const firstVideo = videoSlice.length > 0 ? videoSlice[0] : null;
+        const cueTime =
+            firstVideo && firstVideo.keyframe && firstVideo.timeMs === ts
+                ? firstVideo.timeMs
+                : null;
+        clusters.push({ ts, cueTime, blocks });
     }
     return clusters;
 }
@@ -821,23 +904,27 @@ async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, wr
     const cuePointParts = [];
     let clusterPos = tracksPos + tracksBuf.length;
     for (let i = 0; i < clusters.length; i++) {
-        cuePointParts.push(
-            el(
-                ID.CuePoint,
-                Buffer.concat([
-                    elUint(ID.CueTime, clusters[i].ts),
-                    el(
-                        ID.CueTrackPositions,
-                        Buffer.concat([
-                            elUint(ID.CueTrack, cueTrack),
-                            elUint(ID.CueClusterPosition, clusterPos),
-                        ])
-                    ),
-                ])
-            )
-        );
+        // 只给「以关键帧开头」的 Cluster 建 Cue，否则跳转过去解不出画面
+        if (clusters[i].cueTime !== null) {
+            cuePointParts.push(
+                el(
+                    ID.CuePoint,
+                    Buffer.concat([
+                        elUint(ID.CueTime, clusters[i].cueTime),
+                        el(
+                            ID.CueTrackPositions,
+                            Buffer.concat([
+                                elUint(ID.CueTrack, cueTrack),
+                                elUint(ID.CueClusterPosition, clusterPos),
+                            ])
+                        ),
+                    ])
+                )
+            );
+        }
         clusterPos += clusterSizes[i];
     }
+    // 即使没有 CuePoint 也写出空 Cues，保证 SeekHead 里的 Cues 位置始终有效
     const cues = el(ID.Cues, Buffer.concat(cuePointParts));
     segmentPayloadLength += cues.length;
 

@@ -106,42 +106,32 @@ function createSettingWeb() {
     }
 
     async function loadOutputFormat() {
-            const [format, allowNonStandard, experimentalMergeEnabled] = await Promise.all([
-                window.electronAPI.invoke('getOutputFormat'),
-                window.electronAPI.invoke('getMp4AllowNonStandardAudio'),
-                window.electronAPI.invoke('getExperimentalMergeEnabled')
-            ]);
-            if (format && $outputFormatSelect) {
-                $outputFormatSelect.value = format;
-            }
-            if ($experimentalMergeCheckbox) {
-                $experimentalMergeCheckbox.checked = experimentalMergeEnabled === true;
-            }
-            if ($mp4NonStandardAudioCheckbox) {
-                $mp4NonStandardAudioCheckbox.checked = allowNonStandard !== false;
-            }
-            updateExperimentalMergeVisibility();
-            updateMp4NonStandardAudioVisibility();
+        const [format, allowNonStandard, experimentalMergeEnabled] = await Promise.all([
+            window.electronAPI.invoke('getOutputFormat'),
+            window.electronAPI.invoke('getMp4AllowNonStandardAudio'),
+            window.electronAPI.invoke('getExperimentalMergeEnabled')
+        ]);
+        if (format && $outputFormatSelect) {
+            $outputFormatSelect.value = format;
         }
+        if ($experimentalMergeCheckbox) {
+            $experimentalMergeCheckbox.checked = experimentalMergeEnabled === true;
+        }
+        if ($mp4NonStandardAudioCheckbox) {
+            $mp4NonStandardAudioCheckbox.checked = allowNonStandard !== false;
+        }
+        updateMp4NonStandardAudioVisibility();
+    }
 
-        function updateExperimentalMergeVisibility() {
-            if (!$outputFormatSelect || !$experimentalMergeCheckbox) return;
-            const mkvOption = $outputFormatSelect.querySelector('option[value="mkv"]');
-            if (mkvOption) {
-                mkvOption.disabled = $experimentalMergeCheckbox.checked;
-            }
+    // 非标封装选项只对 MP4 有意义，选择 MKV 时隐藏
+    function updateMp4NonStandardAudioVisibility() {
+        if (!$mp4NonStandardAudioSetting || !$outputFormatSelect) return;
+        const visible = $outputFormatSelect.value === 'mp4';
+        $mp4NonStandardAudioSetting.classList.toggle('hidden', !visible);
+        if ($mp4NonStandardAudioHint) {
+            $mp4NonStandardAudioHint.classList.toggle('hidden', !visible);
         }
-
-        // 非标封装选项只对 MP4 有意义，选择 MKV 时隐藏
-        function updateMp4NonStandardAudioVisibility() {
-            if (!$mp4NonStandardAudioSetting || !$outputFormatSelect) return;
-            const visible = $outputFormatSelect.value === 'mp4'
-                && !$experimentalMergeCheckbox?.checked;
-            $mp4NonStandardAudioSetting.classList.toggle('hidden', !visible);
-            if ($mp4NonStandardAudioHint) {
-                $mp4NonStandardAudioHint.classList.toggle('hidden', !visible);
-            }
-        }
+    }
 
     async function loadDownloadPath() {
         const downloadPath = await window.electronAPI.invoke('getDownloadPath');

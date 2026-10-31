@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const Setting = require('../../modules/config_setting');
-const { mergeBiliM4s } = require('../../modules/js-media/merge');
+const { mergeBiliM4sToFile } = require('../../modules/js-media/merge');
 
 // ================== 工具函数 ==================
 
@@ -325,11 +325,12 @@ module.exports = function registerMergeIpc() {
         const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku, copyCover } = config;
         const experimentalMergeEnabled = setting.getExperimentalMergeEnabled();
         const outputFormat = setting.getOutputFormat();
-                const allowNonStandardAudio = setting.getMp4AllowNonStandardAudio();
-                // 仅在选择了 MP4 且不允许非标封装时才需要探测音轨编码
-                const needProbeAudioCodec = !experimentalMergeEnabled && outputFormat === 'mp4' && !allowNonStandardAudio;
-                sendLog("[INFO] 开始任务...");
-                sendLog(`[INFO] 输出格式: ${outputFormat.toUpperCase()}${needProbeAudioCodec ? '（遇到 FLAC / 杜比全景声将改用 MKV）' : ''}`);
+        const allowNonStandardAudio = setting.getMp4AllowNonStandardAudio();
+        // 仅在选择了 MP4 且不允许非标封装时才需要探测音轨编码
+        const needProbeAudioCodec = outputFormat === 'mp4' && !allowNonStandardAudio;
+        sendLog("[INFO] 开始任务...");
+        sendLog(`[INFO] 输出格式: ${outputFormat.toUpperCase()}${needProbeAudioCodec ? '（遇到 FLAC / 杜比全景声将改用 MKV）' : ''}`);
+        sendLog(`[INFO] 合并工具: ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'}`);
 
         sendLog(`[INFO] 输入目录: ${inputDir}`);
         sendLog(`[INFO] 输出目录: ${outputDir}`);
@@ -413,22 +414,22 @@ module.exports = function registerMergeIpc() {
                 baseName = finalPrefix + baseName;
             }
 
-                        // 逐个文件判定容器：FLAC / 杜比全景声在未允许非标封装时用 MKV
-                                    let itemFormat = outputFormat;
-                                    if (needProbeAudioCodec) {
-                                        const audioCodec = await probeAudioCodec(audioPath);
-                                        itemFormat = setting.resolveOutputFormat({ audioCodec }, outputFormat);
-                                        if (itemFormat !== outputFormat) {
-                                            sendLog(`[INFO] 检测到 ${audioCodec.toUpperCase() || '特殊'} 音轨，改用 MKV 容器`);
-                                        }
-                                    }
+            // 逐个文件判定容器：FLAC / 杜比全景声在未允许非标封装时用 MKV
+            let itemFormat = outputFormat;
+            if (needProbeAudioCodec) {
+                const audioCodec = await probeAudioCodec(audioPath);
+                itemFormat = setting.resolveOutputFormat({ audioCodec }, outputFormat);
+                if (itemFormat !== outputFormat) {
+                    sendLog(`[INFO] 检测到 ${audioCodec.toUpperCase() || '特殊'} 音轨，改用 MKV 容器`);
+                }
+            }
 
-                                    let outputPath = path.join(outputDir, `${baseName}.${itemFormat}`);
-                                    let idx = 1;
-                                    while (fs.existsSync(outputPath)) {
-                                        outputPath = path.join(outputDir, `${baseName}(${idx}).${itemFormat}`);
-                                        idx++;
-                                    }
+            let outputPath = path.join(outputDir, `${baseName}.${itemFormat}`);
+            let idx = 1;
+            while (fs.existsSync(outputPath)) {
+                outputPath = path.join(outputDir, `${baseName}(${idx}).${itemFormat}`);
+                idx++;
+            }
 
             sendLog(`[INFO] 找到视频: ${videoPath}`);
             sendLog(`[INFO] 找到音频: ${audioPath}`);
@@ -458,7 +459,15 @@ module.exports = function registerMergeIpc() {
 
             try {
                 if (experimentalMergeEnabled) {
-                    await mergeBiliM4s(videoPath, audioPath, outputPath);
+                    await mergeBiliM4sToFile(videoPath, audioPath, outputPath, {
+                        title: item.entry.title || null,
+                        onProgress: (progress) => {
+                            event.sender.send('merge-progress', {
+                                current: i + progress,
+                                total: items.length
+                            });
+                        },
+                    });
                 } else {
                     await runFFmpeg(videoPath, audioPath, outputPath, (progress) => {
                         event.sender.send('merge-progress', {

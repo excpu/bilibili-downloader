@@ -93,7 +93,8 @@
                     </div>
                     <div class="quality-selection">
                         <input type="checkbox" id="downloadDanmuCheckbox">
-                        <label class="clickable" id="downloadDanmuLabel" onclick="independentDownload.downloadDanmu()">下载弹幕</label>
+                        <label class="clickable" id="downloadDanmuLabel"
+                            onclick="independentDownload.downloadDanmu()">下载弹幕</label>
                         <input type="checkbox" id="downloadCoverCheckbox">
                         <label class="clickable" onclick="independentDownload.downloadCover()">下载封面</label>
                     </div>
@@ -160,20 +161,34 @@
                     <button class="btn brand small" id="saveSettingBtn">保存并退出</button>
                 </div>
                 <div class="setting-tabs" role="tablist" aria-label="设置分类">
-                    <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true" aria-controls="basicSettingsTab" id="basicSettingsTabButton" data-setting-tab="basicSettingsTab">基础</button>
-                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="engineSettingsTab" id="engineSettingsTabButton" data-setting-tab="engineSettingsTab">下载引擎</button>
-                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton" data-setting-tab="subtitleSettingsTab">字幕</button>
-                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="formatSettingsTab" id="formatSettingsTabButton" data-setting-tab="formatSettingsTab">格式</button>
-                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton" data-setting-tab="danmakuSettingsTab">弹幕</button>
-                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false" aria-controls="themeSettingsTab" id="themeSettingsTabButton" data-setting-tab="themeSettingsTab">主题</button>
+                    <button class="btn small setting-tab active" type="button" role="tab" aria-selected="true"
+                        aria-controls="basicSettingsTab" id="basicSettingsTabButton"
+                        data-setting-tab="basicSettingsTab">基础</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false"
+                        aria-controls="engineSettingsTab" id="engineSettingsTabButton"
+                        data-setting-tab="engineSettingsTab">下载引擎</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false"
+                        aria-controls="subtitleSettingsTab" id="subtitleSettingsTabButton"
+                        data-setting-tab="subtitleSettingsTab">字幕</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false"
+                        aria-controls="formatSettingsTab" id="formatSettingsTabButton"
+                        data-setting-tab="formatSettingsTab">格式</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false"
+                        aria-controls="danmakuSettingsTab" id="danmakuSettingsTabButton"
+                        data-setting-tab="danmakuSettingsTab">弹幕</button>
+                    <button class="btn small setting-tab" type="button" role="tab" aria-selected="false"
+                        aria-controls="themeSettingsTab" id="themeSettingsTabButton"
+                        data-setting-tab="themeSettingsTab">主题</button>
                 </div>
                 <div class="model-body" id="settingModelBody">
-                    <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab" aria-labelledby="basicSettingsTabButton">
+                    <div class="setting-tab-panel" role="tabpanel" id="basicSettingsTab"
+                        aria-labelledby="basicSettingsTabButton">
                         <!-- 用户信息部分 -->
                         <div class="setting-section">
                             <h3 class="setting-section-title">用户信息</h3>
                             <div class="user-info">
-                                <img id="settingUserAvatar" class="user-avatar" src="./assets/compressed-loading-placeholder.jpg" alt="用户头像" />
+                                <img id="settingUserAvatar" class="user-avatar"
+                                    src="./assets/compressed-loading-placeholder.jpg" alt="用户头像" />
                                 <div class="user-details">
                                     <div class="user-name" id="settingUserName">未登录</div>
                                     <button class="btn small" id="logoutBtn">退出登录</button>
@@ -187,7 +202,8 @@
                             <div class="setting-item">
                                 <label for="downloadPathInput">下载目录：</label>
                                 <div class="path-input-group">
-                                    <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..." readonly />
+                                    <input type="text" id="downloadPathInput" class="path-input" placeholder="选择下载目录..."
+                                        readonly />
                                     <button class="btn small" id="selectDownloadPathBtn">浏览</button>
                                 </div>
                             </div>
@@ -220,7 +236,8 @@
                         </div>
                     </div>
 
-                    <div class="setting-tab-panel hidden" role="tabpanel" id="engineSettingsTab" aria-labelledby="engineSettingsTabButton">
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="engineSettingsTab"
+                        aria-labelledby="engineSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">下载引擎</h3>
                             <div class="setting-item">
@@ -250,7 +267,8 @@
                         </div>
                     </div>
 
-                    <div class="setting-tab-panel hidden" role="tabpanel" id="subtitleSettingsTab" aria-labelledby="subtitleSettingsTabButton">
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="subtitleSettingsTab"
+                        aria-labelledby="subtitleSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">字幕保存</h3>
                             <div class="setting-item">
@@ -274,11 +292,13 @@
                             </div>
                             <div class="setting-item">
                                 <label for="assPlayResX">画面宽度：</label>
-                                <input class="setting-select" type="number" id="assPlayResX" data-ass-option="playResX" min="1">
+                                <input class="setting-select" type="number" id="assPlayResX" data-ass-option="playResX"
+                                    min="1">
                             </div>
                             <div class="setting-item">
                                 <label for="assPlayResY">画面高度：</label>
-                                <input class="setting-select" type="number" id="assPlayResY" data-ass-option="playResY" min="1">
+                                <input class="setting-select" type="number" id="assPlayResY" data-ass-option="playResY"
+                                    min="1">
                             </div>
                             <div class="setting-item">
                                 <label for="assFontName">字体：</label>
@@ -286,19 +306,23 @@
                             </div>
                             <div class="setting-item">
                                 <label for="assFontSize">字号：</label>
-                                <input class="setting-select" type="number" id="assFontSize" data-ass-option="fontSize" min="1">
+                                <input class="setting-select" type="number" id="assFontSize" data-ass-option="fontSize"
+                                    min="1">
                             </div>
                             <div class="setting-item">
                                 <label for="assPrimaryColor">文字颜色：</label>
-                                <input class="setting-select" type="color" id="assPrimaryColor" data-ass-option="primaryColor">
+                                <input class="setting-select" type="color" id="assPrimaryColor"
+                                    data-ass-option="primaryColor">
                             </div>
                             <div class="setting-item">
                                 <label for="assOutlineColor">描边颜色：</label>
-                                <input class="setting-select" type="color" id="assOutlineColor" data-ass-option="outlineColor">
+                                <input class="setting-select" type="color" id="assOutlineColor"
+                                    data-ass-option="outlineColor">
                             </div>
                             <div class="setting-item">
                                 <label for="assBackColor">阴影颜色：</label>
-                                <input class="setting-select" type="color" id="assBackColor" data-ass-option="backColor">
+                                <input class="setting-select" type="color" id="assBackColor"
+                                    data-ass-option="backColor">
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="assBold" data-ass-option="bold">
@@ -306,36 +330,48 @@
                             </label>
                             <div class="setting-item">
                                 <label for="assOutline">描边宽度：</label>
-                                <input class="setting-select" type="number" id="assOutline" data-ass-option="outline" min="0" step="0.1">
+                                <input class="setting-select" type="number" id="assOutline" data-ass-option="outline"
+                                    min="0" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="assShadow">阴影深度：</label>
-                                <input class="setting-select" type="number" id="assShadow" data-ass-option="shadow" min="0" step="0.1">
+                                <input class="setting-select" type="number" id="assShadow" data-ass-option="shadow"
+                                    min="0" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="assAlignment">对齐方式：</label>
                                 <select class="setting-select" id="assAlignment" data-ass-option="alignment">
-                                    <option value="1">左下</option><option value="2">居中下</option><option value="3">右下</option>
-                                    <option value="4">左中</option><option value="5">居中</option><option value="6">右中</option>
-                                    <option value="7">左上</option><option value="8">居中上</option><option value="9">右上</option>
+                                    <option value="1">左下</option>
+                                    <option value="2">居中下</option>
+                                    <option value="3">右下</option>
+                                    <option value="4">左中</option>
+                                    <option value="5">居中</option>
+                                    <option value="6">右中</option>
+                                    <option value="7">左上</option>
+                                    <option value="8">居中上</option>
+                                    <option value="9">右上</option>
                                 </select>
                             </div>
                             <div class="setting-item">
                                 <label for="assMarginL">左边距：</label>
-                                <input class="setting-select" type="number" id="assMarginL" data-ass-option="marginL" min="0">
+                                <input class="setting-select" type="number" id="assMarginL" data-ass-option="marginL"
+                                    min="0">
                             </div>
                             <div class="setting-item">
                                 <label for="assMarginR">右边距：</label>
-                                <input class="setting-select" type="number" id="assMarginR" data-ass-option="marginR" min="0">
+                                <input class="setting-select" type="number" id="assMarginR" data-ass-option="marginR"
+                                    min="0">
                             </div>
                             <div class="setting-item">
                                 <label for="assMarginV">垂直边距：</label>
-                                <input class="setting-select" type="number" id="assMarginV" data-ass-option="marginV" min="0">
+                                <input class="setting-select" type="number" id="assMarginV" data-ass-option="marginV"
+                                    min="0">
                             </div>
                         </div>
                     </div>
 
-                    <div class="setting-tab-panel hidden" role="tabpanel" id="formatSettingsTab" aria-labelledby="formatSettingsTabButton">
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="formatSettingsTab"
+                        aria-labelledby="formatSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">输出格式</h3>
                             <div class="setting-item">
@@ -345,15 +381,21 @@
                                     <option value="mkv">MKV</option>
                                 </select>
                             </div>
-                                                        <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
-                                                                                        <input type="checkbox" id="mp4NonStandardAudioCheckbox">
-                                                                                        <span>将 FLAC、杜比全景声非标封装进 MP4</span>
-                                                                                    </label>
-                                                                                    <p class="setting-hint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
+                            <label class="setting-checkbox">
+                                <input type="checkbox" id="experimentalMergeCheckbox">
+                                <span>使用实验性合并工具（仅支持 MP4）</span>
+                            </label>
+                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合并，并固定输出为 MP4。</p>
+                            <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
+                                <input type="checkbox" id="mp4NonStandardAudioCheckbox">
+                                <span>将 FLAC、杜比全景声非标封装进 MP4</span>
+                            </label>
+                            <p class="setting-hint" id="mp4NonStandardAudioHint">使用常规合并时，MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
                         </div>
                     </div>
 
-                    <div class="setting-tab-panel hidden" role="tabpanel" id="danmakuSettingsTab" aria-labelledby="danmakuSettingsTabButton">
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="danmakuSettingsTab"
+                        aria-labelledby="danmakuSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">弹幕转换</h3>
                             <label class="setting-checkbox">
@@ -374,19 +416,23 @@
                             <h3 class="setting-section-title">ASS 弹幕设置</h3>
                             <div class="setting-item">
                                 <label for="danmakuResX">画面宽度：</label>
-                                <input class="setting-select" type="number" id="danmakuResX" data-danmaku-option="resX" min="1">
+                                <input class="setting-select" type="number" id="danmakuResX" data-danmaku-option="resX"
+                                    min="1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuResY">画面高度：</label>
-                                <input class="setting-select" type="number" id="danmakuResY" data-danmaku-option="resY" min="1">
+                                <input class="setting-select" type="number" id="danmakuResY" data-danmaku-option="resY"
+                                    min="1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuFontName">字体：</label>
-                                <input class="setting-select" type="text" id="danmakuFontName" data-danmaku-option="fontName">
+                                <input class="setting-select" type="text" id="danmakuFontName"
+                                    data-danmaku-option="fontName">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuFontSize">基准字号：</label>
-                                <input class="setting-select" type="number" id="danmakuFontSize" data-danmaku-option="fontSize" min="1">
+                                <input class="setting-select" type="number" id="danmakuFontSize"
+                                    data-danmaku-option="fontSize" min="1">
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="danmakuScaleFontSize" data-danmaku-option="scaleFontSize">
@@ -398,47 +444,58 @@
                             </label>
                             <div class="setting-item">
                                 <label for="danmakuOpacity">不透明度 (0~1)：</label>
-                                <input class="setting-select" type="number" id="danmakuOpacity" data-danmaku-option="opacity" min="0" max="1" step="0.05">
+                                <input class="setting-select" type="number" id="danmakuOpacity"
+                                    data-danmaku-option="opacity" min="0" max="1" step="0.05">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuOutlineWidth">描边宽度：</label>
-                                <input class="setting-select" type="number" id="danmakuOutlineWidth" data-danmaku-option="outlineWidth" min="0" step="0.1">
+                                <input class="setting-select" type="number" id="danmakuOutlineWidth"
+                                    data-danmaku-option="outlineWidth" min="0" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuShadowDepth">阴影深度：</label>
-                                <input class="setting-select" type="number" id="danmakuShadowDepth" data-danmaku-option="shadowDepth" min="0" step="0.1">
+                                <input class="setting-select" type="number" id="danmakuShadowDepth"
+                                    data-danmaku-option="shadowDepth" min="0" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuLineSpacing">轨道行间距：</label>
-                                <input class="setting-select" type="number" id="danmakuLineSpacing" data-danmaku-option="lineSpacing" min="0">
+                                <input class="setting-select" type="number" id="danmakuLineSpacing"
+                                    data-danmaku-option="lineSpacing" min="0">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuMarginTop">顶部留白：</label>
-                                <input class="setting-select" type="number" id="danmakuMarginTop" data-danmaku-option="marginTop" min="0">
+                                <input class="setting-select" type="number" id="danmakuMarginTop"
+                                    data-danmaku-option="marginTop" min="0">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuMarginBottom">底部留白：</label>
-                                <input class="setting-select" type="number" id="danmakuMarginBottom" data-danmaku-option="marginBottom" min="0">
+                                <input class="setting-select" type="number" id="danmakuMarginBottom"
+                                    data-danmaku-option="marginBottom" min="0">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuScrollArea">滚动区域占比 (0~1)：</label>
-                                <input class="setting-select" type="number" id="danmakuScrollArea" data-danmaku-option="scrollArea" min="0.01" max="1" step="0.05">
+                                <input class="setting-select" type="number" id="danmakuScrollArea"
+                                    data-danmaku-option="scrollArea" min="0.01" max="1" step="0.05">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuFixedArea">固定区域占比 (0~1)：</label>
-                                <input class="setting-select" type="number" id="danmakuFixedArea" data-danmaku-option="fixedArea" min="0.01" max="1" step="0.05">
+                                <input class="setting-select" type="number" id="danmakuFixedArea"
+                                    data-danmaku-option="fixedArea" min="0.01" max="1" step="0.05">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuScrollDuration">滚动耗时（秒）：</label>
-                                <input class="setting-select" type="number" id="danmakuScrollDuration" data-danmaku-option="scrollDuration" min="0.1" step="0.5">
+                                <input class="setting-select" type="number" id="danmakuScrollDuration"
+                                    data-danmaku-option="scrollDuration" min="0.1" step="0.5">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuFixedDuration">固定停留（秒）：</label>
-                                <input class="setting-select" type="number" id="danmakuFixedDuration" data-danmaku-option="fixedDuration" min="0.1" step="0.5">
+                                <input class="setting-select" type="number" id="danmakuFixedDuration"
+                                    data-danmaku-option="fixedDuration" min="0.1" step="0.5">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuHorizontalPadding">同轨安全间距：</label>
-                                <input class="setting-select" type="number" id="danmakuHorizontalPadding" data-danmaku-option="horizontalPadding" min="0">
+                                <input class="setting-select" type="number" id="danmakuHorizontalPadding"
+                                    data-danmaku-option="horizontalPadding" min="0">
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="danmakuAllowOverlap" data-danmaku-option="allowOverlap">
@@ -446,15 +503,18 @@
                             </label>
                             <div class="setting-item">
                                 <label for="danmakuMaxOverlapOffset">最大延后入轨（秒）：</label>
-                                <input class="setting-select" type="number" id="danmakuMaxOverlapOffset" data-danmaku-option="maxOverlapOffset" min="0" step="0.1">
+                                <input class="setting-select" type="number" id="danmakuMaxOverlapOffset"
+                                    data-danmaku-option="maxOverlapOffset" min="0" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuTimeOffset">全局时间偏移（秒）：</label>
-                                <input class="setting-select" type="number" id="danmakuTimeOffset" data-danmaku-option="timeOffset" step="0.1">
+                                <input class="setting-select" type="number" id="danmakuTimeOffset"
+                                    data-danmaku-option="timeOffset" step="0.1">
                             </div>
                             <div class="setting-item">
                                 <label for="danmakuBlockModes">屏蔽模式（逗号分隔）：</label>
-                                <input class="setting-select" type="text" id="danmakuBlockModes" data-danmaku-option="blockModes" placeholder="如 4,5；留空表示不屏蔽">
+                                <input class="setting-select" type="text" id="danmakuBlockModes"
+                                    data-danmaku-option="blockModes" placeholder="如 4,5；留空表示不屏蔽">
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="danmakuBlockColor" data-danmaku-option="blockColor">
@@ -462,7 +522,8 @@
                             </label>
                             <div class="setting-item">
                                 <label for="danmakuBlockRegex">正则屏蔽词：</label>
-                                <input class="setting-select" type="text" id="danmakuBlockRegex" data-danmaku-option="blockRegex" placeholder="如 剧透|打卡；留空表示不启用">
+                                <input class="setting-select" type="text" id="danmakuBlockRegex"
+                                    data-danmaku-option="blockRegex" placeholder="如 剧透|打卡；留空表示不启用">
                             </div>
                             <label class="setting-checkbox">
                                 <input type="checkbox" id="danmakuDeduplicate" data-danmaku-option="deduplicate">
@@ -470,13 +531,15 @@
                             </label>
                             <div class="setting-item">
                                 <label for="danmakuDeduplicateWindow">重复判定时间窗口（秒）：</label>
-                                <input class="setting-select" type="number" id="danmakuDeduplicateWindow" data-danmaku-option="deduplicateWindow" min="0" step="0.5">
+                                <input class="setting-select" type="number" id="danmakuDeduplicateWindow"
+                                    data-danmaku-option="deduplicateWindow" min="0" step="0.5">
                             </div>
                         </div>
                     </div>
 
                     <!-- 主题选项卡 -->
-                    <div class="setting-tab-panel hidden" role="tabpanel" id="themeSettingsTab" aria-labelledby="themeSettingsTabButton">
+                    <div class="setting-tab-panel hidden" role="tabpanel" id="themeSettingsTab"
+                        aria-labelledby="themeSettingsTabButton">
                         <div class="setting-section">
                             <h3 class="setting-section-title">界面主题</h3>
                             <div class="setting-item">

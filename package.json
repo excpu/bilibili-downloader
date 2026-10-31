@@ -19,13 +19,15 @@
     "license": "AGPL",
     "description": "帮助你下载bilibili的视频",
     "devDependencies": {
-        "electron": "^39.0.0",
+        "cross-env": "^10.1.0",
+        "electron": "^45.2.0",
         "electron-builder": "^26.0.12"
     },
     "dependencies": {
         "ffmpeg-static": "^5.2.0",
         "got": "^11.8.6",
         "md5": "^2.3.0",
+        "mp4box": "^2.5.0",
         "protobufjs": "^8.0.0",
         "ws": "^8.18.3"
     },

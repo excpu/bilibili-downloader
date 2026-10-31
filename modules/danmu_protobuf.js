@@ -51,8 +51,8 @@ async function fetchAllVideoDanmaku(cid, duration) {
     console.log(`视频时长 ${duration}s，共需下载 ${totalSegments} 个分段`);
 
     // 假设这些工具函数在你的上下文可用
-    const credentialCookie = auth.getConstructedCookie();
-    const wbiKeys = getWbiKeys();
+    const credentialCookie = await auth.getConstructedCookie();
+        const wbiKeys = await getWbiKeys();
 
     for (let i = 1; i <= totalSegments; i++) {
         try {

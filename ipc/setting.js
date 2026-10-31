@@ -28,6 +28,12 @@ module.exports = function registerSettingIpc(mainWindow) {
 
     ipcMain.handle('setOutputFormat', (event, format) => setting.updateOutputFormat(format));
 
+    ipcMain.handle('getExperimentalMergeEnabled', () => setting.getExperimentalMergeEnabled());
+
+    ipcMain.handle('setExperimentalMergeEnabled', (event, enabled) =>
+        setting.updateExperimentalMergeEnabled(enabled)
+    );
+
         ipcMain.handle('getMp4AllowNonStandardAudio', () => setting.getMp4AllowNonStandardAudio());
 
         ipcMain.handle('setMp4AllowNonStandardAudio', (event, enabled) =>

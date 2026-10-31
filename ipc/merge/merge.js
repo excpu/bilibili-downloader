@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const Setting = require('../../modules/config_setting');
+const { mergeBiliM4s } = require('../../modules/js-media/merge');
 
 // ================== 工具函数 ==================
 
@@ -322,10 +323,11 @@ module.exports = function registerMergeIpc() {
         const sendLog = (msg) => event.sender.send('log', msg);
 
         const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku, copyCover } = config;
+        const experimentalMergeEnabled = setting.getExperimentalMergeEnabled();
         const outputFormat = setting.getOutputFormat();
                 const allowNonStandardAudio = setting.getMp4AllowNonStandardAudio();
                 // 仅在选择了 MP4 且不允许非标封装时才需要探测音轨编码
-                const needProbeAudioCodec = outputFormat === 'mp4' && !allowNonStandardAudio;
+                const needProbeAudioCodec = !experimentalMergeEnabled && outputFormat === 'mp4' && !allowNonStandardAudio;
                 sendLog("[INFO] 开始任务...");
                 sendLog(`[INFO] 输出格式: ${outputFormat.toUpperCase()}${needProbeAudioCodec ? '（遇到 FLAC / 杜比全景声将改用 MKV）' : ''}`);
 
@@ -455,15 +457,19 @@ module.exports = function registerMergeIpc() {
             }
 
             try {
-                await runFFmpeg(videoPath, audioPath, outputPath, (progress) => {
-                    event.sender.send('merge-progress', {
-                        current: i + progress,
-                        total: items.length
+                if (experimentalMergeEnabled) {
+                    await mergeBiliM4s(videoPath, audioPath, outputPath);
+                } else {
+                    await runFFmpeg(videoPath, audioPath, outputPath, (progress) => {
+                        event.sender.send('merge-progress', {
+                            current: i + progress,
+                            total: items.length
+                        });
                     });
-                });
-                sendLog(`[OK] 合成成功: ${outputPath}`);
+                }
+                sendLog(`[OK] ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'} 合成成功: ${outputPath}`);
             } catch (err) {
-                sendLog(`[ERROR] ffmpeg 合成失败: ${err.message}`);
+                sendLog(`[ERROR] ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'} 合成失败: ${err.message}`);
             }
         }
 

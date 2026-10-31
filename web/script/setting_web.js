@@ -14,7 +14,9 @@ function createSettingWeb() {
     const $downloadFolderNestingCheckbox = document.getElementById('downloadFolderNestingCheckbox');
     const $cdnSelect = document.getElementById('cdnSelect');
     const $outputFormatSelect = document.getElementById('outputFormatSelect');
+    const $experimentalMergeCheckbox = document.getElementById('experimentalMergeCheckbox');
     const $mp4NonStandardAudioSetting = document.getElementById('mp4NonStandardAudioSetting');
+    const $mp4NonStandardAudioHint = document.getElementById('mp4NonStandardAudioHint');
     const $mp4NonStandardAudioCheckbox = document.getElementById('mp4NonStandardAudioCheckbox');
     const $subtitleFormatSelect = document.getElementById('subtitleFormatSelect');
     const $assSubtitleSettings = document.getElementById('assSubtitleSettings');
@@ -104,23 +106,41 @@ function createSettingWeb() {
     }
 
     async function loadOutputFormat() {
-            const [format, allowNonStandard] = await Promise.all([
+            const [format, allowNonStandard, experimentalMergeEnabled] = await Promise.all([
                 window.electronAPI.invoke('getOutputFormat'),
-                window.electronAPI.invoke('getMp4AllowNonStandardAudio')
+                window.electronAPI.invoke('getMp4AllowNonStandardAudio'),
+                window.electronAPI.invoke('getExperimentalMergeEnabled')
             ]);
             if (format && $outputFormatSelect) {
                 $outputFormatSelect.value = format;
             }
+            if ($experimentalMergeCheckbox) {
+                $experimentalMergeCheckbox.checked = experimentalMergeEnabled === true;
+            }
             if ($mp4NonStandardAudioCheckbox) {
                 $mp4NonStandardAudioCheckbox.checked = allowNonStandard !== false;
             }
+            updateExperimentalMergeVisibility();
             updateMp4NonStandardAudioVisibility();
+        }
+
+        function updateExperimentalMergeVisibility() {
+            if (!$outputFormatSelect || !$experimentalMergeCheckbox) return;
+            const mkvOption = $outputFormatSelect.querySelector('option[value="mkv"]');
+            if (mkvOption) {
+                mkvOption.disabled = $experimentalMergeCheckbox.checked;
+            }
         }
 
         // 非标封装选项只对 MP4 有意义，选择 MKV 时隐藏
         function updateMp4NonStandardAudioVisibility() {
             if (!$mp4NonStandardAudioSetting || !$outputFormatSelect) return;
-            $mp4NonStandardAudioSetting.classList.toggle('hidden', $outputFormatSelect.value !== 'mp4');
+            const visible = $outputFormatSelect.value === 'mp4'
+                && !$experimentalMergeCheckbox?.checked;
+            $mp4NonStandardAudioSetting.classList.toggle('hidden', !visible);
+            if ($mp4NonStandardAudioHint) {
+                $mp4NonStandardAudioHint.classList.toggle('hidden', !visible);
+            }
         }
 
     async function loadDownloadPath() {
@@ -378,15 +398,22 @@ function createSettingWeb() {
     if ($outputFormatSelect) {
         $outputFormatSelect.addEventListener('change', (event) => {
             window.electronAPI.invoke('setOutputFormat', event.target.value);
-                updateMp4NonStandardAudioVisibility();
-            });
-        }
+            updateMp4NonStandardAudioVisibility();
+        });
+    }
 
-        if ($mp4NonStandardAudioCheckbox) {
-            $mp4NonStandardAudioCheckbox.addEventListener('change', (event) => {
-                window.electronAPI.invoke('setMp4AllowNonStandardAudio', event.target.checked);
-            });
-        }
+    if ($experimentalMergeCheckbox) {
+        $experimentalMergeCheckbox.addEventListener('change', async (event) => {
+            await window.electronAPI.invoke('setExperimentalMergeEnabled', event.target.checked);
+            await loadOutputFormat();
+        });
+    }
+
+    if ($mp4NonStandardAudioCheckbox) {
+        $mp4NonStandardAudioCheckbox.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setMp4AllowNonStandardAudio', event.target.checked);
+        });
+    }
 
     // 当前设置项为实时保存，保存按钮仅用于关闭设置弹窗
     if ($saveSettingBtn) {

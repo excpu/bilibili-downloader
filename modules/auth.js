@@ -1,4 +1,4 @@
-const { app, safeStorage } = require('electron');
+﻿const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const got = require('got');
@@ -11,36 +11,78 @@ function isValidCookieValue(value) {
     return value !== '' && value !== undefined && value !== 'undefined';
 }
 
+function createEmptyData() {
+    return {
+        loginStatus: false,
+        SESSDATA: '',
+        bili_jct: '',
+        ticket: '',
+        buvid3: '',
+        buvid4: '',
+        b_nut: '',
+        DedeUserID: '',
+        DedeUserID__ckMd5: '',
+        buvidRefreshAt: 0,
+        ticketExpiry: Date.now()
+    };
+}
+
 class Auth {
     constructor() {
         this.authFilePath = path.join(app.getPath('userData'), 'auth.dat');
         this._buvidRefreshPromise = null;
+        this._queue = Promise.resolve();
     }
 
-    load() {
+    // 串行化所有读写任务，避免并发时读到写了一半的密文
+    _enqueue(task) {
+        const run = this._queue.then(task, task);
+        this._queue = run.then(() => { }, () => { });
+        return run;
+    }
+
+    async _readData() {
+        if (!fs.existsSync(this.authFilePath)) {
+            return null;
+        }
+        const encryptedData = await fs.promises.readFile(this.authFilePath);
+        const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(encryptedData);
+        return { data: JSON.parse(result), shouldReEncrypt };
+    }
+
+    async _writeData(data) {
+        const encryptedData = await safeStorage.encryptStringAsync(JSON.stringify(data));
+        // 先写临时文件再重命名（原子替换），防止写入中断留下损坏的凭据文件
+        const tmpPath = `${this.authFilePath}.tmp`;
+        await fs.promises.writeFile(tmpPath, encryptedData);
+        await fs.promises.rename(tmpPath, this.authFilePath);
+    }
+
+    // 在读-改-写同一个队列任务内完成，避免并发保存互相覆盖
+    _update(mutator) {
+        return this._enqueue(async () => {
+            const existing = await this._readData();
+            const data = existing ? existing.data : createEmptyData();
+            mutator(data);
+            await this._writeData(data);
+            return data;
+        });
+    }
+
+    async load() {
         try {
-            if (fs.existsSync(this.authFilePath)) {
-                const encryptedData = fs.readFileSync(this.authFilePath);
-                const decryptedData = safeStorage.decryptString(encryptedData);
-                return JSON.parse(decryptedData);
-            } else {
+            const result = await this._enqueue(() => this._readData());
+            if (!result) {
                 // 如果不存在文件则初始化为空
-                const emptyData = {
-                    loginStatus: false,
-                    SESSDATA: '',
-                    bili_jct: '',
-                    ticket: '',
-                    buvid3: '',
-                    buvid4: '',
-                    b_nut: '',
-                    DedeUserID: '',
-                    DedeUserID__ckMd5: '',
-                    buvidRefreshAt: 0,
-                    ticketExpiry: Date.now()
-                };
-                this.save(emptyData);
+                const emptyData = createEmptyData();
+                await this.save(emptyData);
                 return emptyData;
             }
+            // 系统密钥已轮换或安全等级变化时，用新密钥重新加密落盘
+            if (result.shouldReEncrypt) {
+                await this.save(result.data);
+            }
+            return result.data;
         } catch (error) {
             // 加载失败
             console.error('Failed to load auth data:', error);
@@ -48,35 +90,35 @@ class Auth {
     }
 
     save(data) {
-        try {
-            const jsonData = JSON.stringify(data);
-            const encryptedData = safeStorage.encryptString(jsonData);
-            fs.writeFileSync(this.authFilePath, encryptedData);
-        } catch (error) {
-            // 保存失败
-            console.error('Failed to save auth data:', error);
-        }
+        return this._enqueue(async () => {
+            try {
+                await this._writeData(data);
+            } catch (error) {
+                // 保存失败
+                console.error('Failed to save auth data:', error);
+            }
+        });
     }
 
-    loadLoginStatus() {
-        const data = this.load();
+    async loadLoginStatus() {
+        const data = await this.load();
         return data ? data.loginStatus : false;
     }
 
-    updateLoginStatus(status) {
-        const data = this.load() || {};
-        data.loginStatus = status;
-        this.save(data);
+    async updateLoginStatus(status) {
+        await this._update((data) => {
+            data.loginStatus = status;
+        });
     }
 
-    updateLoginInfo(SESSDATA, bili_jct, DedeUserID, DedeUserID__ckMd5) {
-        const data = this.load() || {};
-        data.SESSDATA = SESSDATA;
-        data.bili_jct = bili_jct;
-        data.DedeUserID = DedeUserID;
-        data.DedeUserID__ckMd5 = DedeUserID__ckMd5;
-        data.loginStatus = true;
-        this.save(data);
+    async updateLoginInfo(SESSDATA, bili_jct, DedeUserID, DedeUserID__ckMd5) {
+        await this._update((data) => {
+            data.SESSDATA = SESSDATA;
+            data.bili_jct = bili_jct;
+            data.DedeUserID = DedeUserID;
+            data.DedeUserID__ckMd5 = DedeUserID__ckMd5;
+            data.loginStatus = true;
+        });
     }
 
     hasFreshBuvid(data) {
@@ -93,7 +135,7 @@ class Auth {
     }
 
     async ensureBuvidCredentials(force = false) {
-        const current = this.load() || {};
+        const current = (await this.load()) || {};
         if (!force && this.hasFreshBuvid(current)) {
             return current;
         }
@@ -105,25 +147,23 @@ class Auth {
         this._buvidRefreshPromise = (async () => {
             try {
                 const refreshed = await refreshBuvidCredentials();
-                const latest = this.load() || {};
 
-                const buvid3 = refreshed.buvid3 || latest.buvid3 || '';
-                const buvid4 = refreshed.buvid4 || latest.buvid4 || '';
-                const bNut = refreshed.b_nut || latest.b_nut || '';
+                return await this._update((data) => {
+                    const buvid3 = refreshed.buvid3 || data.buvid3 || '';
+                    const buvid4 = refreshed.buvid4 || data.buvid4 || '';
+                    const bNut = refreshed.b_nut || data.b_nut || '';
 
-                const shouldSave = buvid3 !== latest.buvid3 || buvid4 !== latest.buvid4 || bNut !== latest.b_nut;
-                if (shouldSave || !latest.buvidRefreshAt) {
-                    latest.buvid3 = buvid3;
-                    latest.buvid4 = buvid4;
-                    latest.b_nut = bNut;
-                    latest.buvidRefreshAt = Date.now();
-                    this.save(latest);
-                }
-
-                return latest;
+                    const shouldSave = buvid3 !== data.buvid3 || buvid4 !== data.buvid4 || bNut !== data.b_nut;
+                    if (shouldSave || !data.buvidRefreshAt) {
+                        data.buvid3 = buvid3;
+                        data.buvid4 = buvid4;
+                        data.b_nut = bNut;
+                        data.buvidRefreshAt = Date.now();
+                    }
+                });
             } catch (error) {
                 console.error('Refresh buvid3/buvid4/b_nut failed:', error.message);
-                return this.load() || {};
+                return (await this.load()) || {};
             } finally {
                 this._buvidRefreshPromise = null;
             }
@@ -132,12 +172,12 @@ class Auth {
         return this._buvidRefreshPromise;
     }
 
-    refreshBuvidInBackground() {
+    async refreshBuvidInBackground() {
         if (this._buvidRefreshPromise) {
             return;
         }
 
-        const current = this.load() || {};
+        const current = (await this.load()) || {};
         if (this.hasFreshBuvid(current)) {
             return;
         }
@@ -149,7 +189,7 @@ class Auth {
 
     // 调用官方接口注销凭据（SESSDATA 服务端失效），不影响本地凭据清理流程
     async logoutRemote() {
-        const data = this.load() || {};
+        const data = (await this.load()) || {};
         if (!isValidCookieValue(data.SESSDATA) || !isValidCookieValue(data.bili_jct)) {
             return { success: true }; // 未登录，无需请求官方接口
         }
@@ -158,7 +198,7 @@ class Auth {
                 headers: {
                     'Referer': 'https://www.bilibili.com/',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-                    'Cookie': this.getConstructedCookie()
+                    'Cookie': await this.getConstructedCookie()
                 },
                 form: {
                     biliCSRF: data.bili_jct,
@@ -176,20 +216,20 @@ class Auth {
         }
     }
 
-    logout() {
-        const data = this.load() || {};
-        data.loginStatus = false;
-        data.SESSDATA = '';
-        data.bili_jct = '';
-        data.ticket = '';
-        data.ticketExpiry = 0;
-        this.save(data);
+    async logout() {
+        await this._update((data) => {
+            data.loginStatus = false;
+            data.SESSDATA = '';
+            data.bili_jct = '';
+            data.ticket = '';
+            data.ticketExpiry = 0;
+        });
     }
 
     // 使用 Ticket 防止API被风控
     async updateTicket() {
         const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-        const data = this.load() || {};
+        const data = (await this.load()) || {};
         const currentTime = Date.now();
 
         // 1. 检查是否真的需要更新
@@ -208,12 +248,14 @@ class Auth {
             // 3. 这里的逻辑取决于 getBiliTicket 的返回结构
             // 假设成功时 response 为真，失败时可能返回 null 或带 message 的对象
             if (response && !response.error) {
-                data.ticket = response;
                 // 提前5分钟过期
-                data.ticketExpiry = Date.now() + THREE_DAYS_MS - 5 * 60 * 1000;
+                const ticketExpiry = Date.now() + THREE_DAYS_MS - 5 * 60 * 1000;
 
-                this.save(data);
-                return data.ticket;
+                await this._update((latest) => {
+                    latest.ticket = response;
+                    latest.ticketExpiry = ticketExpiry;
+                });
+                return response;
             } else {
                 throw new Error(response?.message || 'Unknown error');
             }
@@ -225,9 +267,11 @@ class Auth {
     }
 
     // 获取构造好的Cookie字符串
-    getConstructedCookie() {
-        const data = this.load();
-        this.refreshBuvidInBackground();
+    async getConstructedCookie() {
+        const data = (await this.load()) || {};
+        this.refreshBuvidInBackground().catch((error) => {
+            console.error('Background buvid refresh failed:', error.message);
+        });
 
         const cookieParts = [];
         if (isValidCookieValue(data.SESSDATA)) {

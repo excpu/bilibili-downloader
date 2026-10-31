@@ -295,7 +295,7 @@ function ensureProxyServer() {
                 'Referer': bvid ? `https://www.bilibili.com/video/${bvid}/` : 'https://www.bilibili.com/',
                 'User-Agent': BROWSER_UA,
                 'Origin': 'https://www.bilibili.com',
-                'Cookie': auth.getConstructedCookie(),
+                                'Cookie': await auth.getConstructedCookie(),
             };
 
             try {
@@ -421,7 +421,7 @@ async function fetchPreviewDashStreams(bvid, cid) {
             'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
             'Cache-Control': 'no-cache',
             'Origin': 'https://www.bilibili.com',
-            'Cookie': auth.getConstructedCookie(),
+                        'Cookie': await auth.getConstructedCookie(),
         },
         responseType: 'json',
         http2: true,
@@ -529,7 +529,7 @@ async function fetchPreviewDanmuXml(cid) {
             'Referer': 'https://www.bilibili.com/',
             'Origin': 'https://www.bilibili.com',
             'Accept': '*/*',
-            'Cookie': auth.getConstructedCookie(),
+            'Cookie': await auth.getConstructedCookie(),
         },
         http2: true,
         retry: 0,

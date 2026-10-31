@@ -20,7 +20,7 @@ async function downloadFile(url, outputPath, credential = true, http2Enable = tr
     };
 
     if (credential) {
-        headers['Cookie'] = auth.getConstructedCookie();
+        headers['Cookie'] = await auth.getConstructedCookie();
     }
 
     try {

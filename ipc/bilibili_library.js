@@ -21,7 +21,7 @@ async function libraryGet(url) {
         method: 'GET',
         headers: {
             ...API_HEADERS,
-            'Cookie': auth.getConstructedCookie() // 登录验证（SESSDATA 等）
+            'Cookie': await auth.getConstructedCookie() // 登录验证（SESSDATA 等）
         },
         responseType: 'json',
         http2: true
@@ -51,7 +51,7 @@ module.exports = function registerLibraryIpc() {
     // 获取观看历史（仅视频稿件）
     ipcMain.handle('getWatchHistory', async (event, cursor = null) => {
         try {
-            if (!auth.loadLoginStatus()) {
+                if (!await auth.loadLoginStatus()) {
                 return { success: false, code: -101, message: '请先登录 B 站账号' };
             }
             const query = new URLSearchParams({
@@ -76,9 +76,9 @@ module.exports = function registerLibraryIpc() {
     // 获取收藏夹列表（自己创建的 + 收藏的）
     ipcMain.handle('getFavFolders', async () => {
         try {
-            const data = auth.load();
+                const data = await auth.load();
             const mid = Number(data?.DedeUserID || 0);
-            if (!auth.loadLoginStatus() || !mid) {
+                            if (!await auth.loadLoginStatus() || !mid) {
                 return { success: false, code: -101, message: '请先登录 B 站账号' };
             }
             const [createdJson, collectedJson] = await Promise.all([
@@ -120,7 +120,7 @@ module.exports = function registerLibraryIpc() {
     // 获取收藏夹内容明细（视频稿件 + 视频合集）；追的合集（kind=season）走合集稿件接口
     ipcMain.handle('getFavResources', async (event, payload = {}) => {
         try {
-            if (!auth.loadLoginStatus()) {
+                if (!await auth.loadLoginStatus()) {
                 return { success: false, code: -101, message: '请先登录 B 站账号' };
             }
             const { mediaId, pn = 1 } = payload;

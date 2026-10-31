@@ -60,6 +60,7 @@ class Setting {
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
             outputFormat: DEFAULT_OUTPUT_FORMAT, // 合并后输出格式：mp4 / mkv
             mp4AllowNonStandardAudio: DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO, // MP4 是否允许非标封装 FLAC / 杜比全景声
+            experimentalMergeEnabled: false, // 是否使用实验性 js-media 合并工具
             aria2Concurrency: DEFAULT_ARIA2_CONCURRENCY,
             subtitleSettings: DEFAULT_SUBTITLE_SETTINGS,
             danmakuSettings: DEFAULT_DANMAKU_SETTINGS,
@@ -114,6 +115,9 @@ class Setting {
     updateOutputFormat(format) {
         const data = this.load() || {};
         const normalized = String(format || '').toLowerCase();
+        if (data.experimentalMergeEnabled === true) {
+            return 'mp4';
+        }
         data.outputFormat = OUTPUT_FORMAT_VALUES.includes(normalized)
             ? normalized
             : DEFAULT_OUTPUT_FORMAT;
@@ -123,8 +127,23 @@ class Setting {
 
     getOutputFormat() {
         const data = this.load();
+        if (data && data.experimentalMergeEnabled === true) {
+            return 'mp4';
+        }
         const format = String(data ? data.outputFormat : '').toLowerCase();
         return OUTPUT_FORMAT_VALUES.includes(format) ? format : DEFAULT_OUTPUT_FORMAT;
+    }
+
+    updateExperimentalMergeEnabled(enabled) {
+        const data = this.load() || {};
+        data.experimentalMergeEnabled = enabled === true;
+        this.save(data);
+        return data.experimentalMergeEnabled;
+    }
+
+    getExperimentalMergeEnabled() {
+        const data = this.load() || {};
+        return data.experimentalMergeEnabled === true;
     }
 
         updateMp4AllowNonStandardAudio(enabled) {
@@ -163,6 +182,9 @@ class Setting {
          * @returns {'mp4'|'mkv'}
          */
         resolveOutputFormat(audioInfo = {}, format) {
+            if (this.getExperimentalMergeEnabled()) {
+                return 'mp4';
+            }
             const preferred = OUTPUT_FORMAT_VALUES.includes(String(format || '').toLowerCase())
                 ? String(format).toLowerCase()
                 : this.getOutputFormat();

@@ -10,25 +10,25 @@ const auth = new Auth();
 
 module.exports = function registerInformationIpc(mainWindow) {
     // 获取登录状态
-    ipcMain.handle('loginStatus', () => {
+    ipcMain.handle('loginStatus', async () => {
         return auth.loadLoginStatus();
     });
 
     ipcMain.handle('logout', async () => {
         await auth.logoutRemote(); // 先调用官方接口注销凭据
-        auth.logout(); // 再清除本地登录凭据
+        await auth.logout(); // 再清除本地登录凭据
         return { success: true };
     });
 
     // 获取用户信息
     ipcMain.handle('getUserInfo', async () => {
-        if (auth.loadLoginStatus()) {
+        if (await auth.loadLoginStatus()) {
             await auth.ensureBuvidCredentials();
             await auth.updateTicket(); // 尝试更新票据
             const url = `https://api.bilibili.com/x/web-interface/nav`;
             //const credentialCookie = `SESSDATA=${data.SESSDATA}; bili_jct=${data.bili_jct};` || "";
             // 更换为统一构造函数
-            const credentialCookie = auth.getConstructedCookie();
+            const credentialCookie = await auth.getConstructedCookie();
             try {
                 const result = await got(url, {
                     method: 'GET',
@@ -48,7 +48,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                         data: json.data,
                     };
                 } else {
-                    auth.updateLoginStatus(false); // 更新登录状态为未登录
+                    await auth.updateLoginStatus(false); // 更新登录状态为未登录
                     return {
                         status: false,
                         message: '登录信息验证失败或登录已经过期',
@@ -61,7 +61,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 };
             }
         } else {
-            auth.updateTicket(); // 尝试更新票据
+            await auth.updateTicket().catch(() => { }); // 尝试更新票据（未登录时忽略缺失凭据的错误）
             return {
                 status: false,
                 message: '用户未登录',
@@ -126,9 +126,9 @@ module.exports = function registerInformationIpc(mainWindow) {
                 const biliJct = cookieData['bili_jct'] || '';
                 const DedeUserID = cookieData['DedeUserID'] || '';
                 const DedeUserID__ckMd5 = cookieData['DedeUserID__ckMd5'] || '';
-                auth.updateLoginInfo(sessdata, biliJct, DedeUserID, DedeUserID__ckMd5);
+                await auth.updateLoginInfo(sessdata, biliJct, DedeUserID, DedeUserID__ckMd5);
                 await auth.ensureBuvidCredentials(true);
-                auth.updateTicket(); // 更新票据
+                                await auth.updateTicket().catch(() => { }); // 更新票据
                 return { success: true };
             } else if (json.data.code === 86038) {
                 return { success: false, message: '二维码过期' };
@@ -151,7 +151,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/web-interface/wbi/view?${wbiQuery}`;
-            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+                        const credentialCookie = await auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
             const response = await got(url, {
                 headers: {
                     'Referer': 'https://www.bilibili.com/',
@@ -190,7 +190,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+                        const credentialCookie = await auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
             const response = await got(url, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,
@@ -227,7 +227,7 @@ module.exports = function registerInformationIpc(mainWindow) {
             }
 
             const wbiKeys = await getWbiKeys();
-            const credentialCookie = auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
+            const credentialCookie = await auth.getConstructedCookie(); // 获取构造好的 Cookie，包含 buvid3 / buvid4 / b_nut 来减少风控的可能性
 
             const pageSize = 30;
             const normalizedEpCount = Number.parseInt(ep_count, 10);
@@ -379,7 +379,7 @@ module.exports = function registerInformationIpc(mainWindow) {
                 web_location: 1315873,
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
-            const credentialCookie = auth.getConstructedCookie();
+                        const credentialCookie = await auth.getConstructedCookie();
             const response = await got.get(`${url}?${wbiQuery}`, {
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,

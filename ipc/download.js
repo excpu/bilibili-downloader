@@ -73,6 +73,7 @@ const util = require('util');
 let ffmpeg = require('ffmpeg-static');
 const { execFile } = require('child_process');
 const execFileAsync = util.promisify(execFile);
+const { mergeBiliM4s } = require('../modules/js-media/merge');
 
 // asar 修正
 if (app.isPackaged && ffmpeg.includes('app.asar')) {
@@ -187,12 +188,13 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
         const videoPath = path.join(downloadDir, `${title}_video.m4s`);
         const audioPath = path.join(downloadDir, `${title}_audio.m4s`);
-                // 未允许非标封装时，FLAC / 杜比全景声会自动改用 MKV 容器
-                const outputFormat = setting.resolveOutputFormat({
-                    audioId: videoStream.selectedAudioId,
-                    audioCodec: videoStream.selectedAudioCodec,
-                });
-                const outputPath = path.join(downloadDir, `${title}.${outputFormat}`);
+        // 未允许非标封装时，FLAC / 杜比全景声会自动改用 MKV 容器
+        const experimentalMergeEnabled = setting.getExperimentalMergeEnabled();
+        const outputFormat = setting.resolveOutputFormat({
+            audioId: videoStream.selectedAudioId,
+            audioCodec: videoStream.selectedAudioCodec,
+        });
+        const outputPath = path.join(downloadDir, `${title}.${outputFormat}`);
         let m4aOutputPath = path.join(downloadDir, `${title}.m4a`);
 
         if (videoStream.selectedAudioId == 30251) {
@@ -325,28 +327,30 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 console.log(`⏳ [${title}] 正在合并...`);
                 notifyProgress(100, '0.00', 'merging');
                 mergeStarted = true;
-                // 1. 修复 macOS/Linux 下的执行权限问题
-                if (process.platform === 'darwin' || process.platform === 'linux') {
-                    try {
-                        fs.chmodSync(ffmpeg, 0o755);
-                    } catch (chmodErr) {
-                        console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
-                    }
-                }
-
-                // 2. 使用 execFile 代替 exec，将参数写成数组，彻底避免路径转义问题
-                const ffmpegArgs = [
-                    '-y',
-                    '-i', videoPath,
-                    '-i', audioPath,
-                    '-c:v', 'copy',
-                    '-c:a', 'copy',
-                    outputPath
-                ];
-
-                // 合并音视频
                 try {
-                    await execFileAsync(ffmpeg, ffmpegArgs, { signal });
+                    if (experimentalMergeEnabled) {
+                        await mergeBiliM4s(videoPath, audioPath, outputPath);
+                        if (signal.aborted) throw createCancelError();
+                    } else {
+                        // 修复 macOS/Linux 下的执行权限问题
+                        if (process.platform === 'darwin' || process.platform === 'linux') {
+                            try {
+                                fs.chmodSync(ffmpeg, 0o755);
+                            } catch (chmodErr) {
+                                console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
+                            }
+                        }
+
+                        const ffmpegArgs = [
+                            '-y',
+                            '-i', videoPath,
+                            '-i', audioPath,
+                            '-c:v', 'copy',
+                            '-c:a', 'copy',
+                            outputPath
+                        ];
+                        await execFileAsync(ffmpeg, ffmpegArgs, { signal });
+                    }
                     console.log(`✅ [${title}] 转换完成`);
                 } catch (err) {
                     if (signal.aborted) throw createCancelError();
@@ -498,7 +502,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            const credentialCookie = auth.getConstructedCookie();
+            const credentialCookie = await auth.getConstructedCookie();
 
             const response = await fetch(url, {
                 headers: {

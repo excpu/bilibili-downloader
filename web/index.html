@@ -245,12 +245,11 @@
                                 <select id="downloadEngineSelect" class="setting-select">
                                     <option value="node">Node.js 引擎</option>
                                     <option value="node-multi">Node.JS 多线程</option>
-                                    <option value="aria2">Aria2 引擎</option>
                                 </select>
                             </div>
-                            <div class="setting-item hidden" id="aria2ConcurrencySetting">
-                                <label for="aria2ConcurrencySelect" id="concurrencySettingLabel">Aria2 并发数：</label>
-                                <select id="aria2ConcurrencySelect" class="setting-select">
+                            <div class="setting-item hidden" id="concurrencySetting">
+                                <label for="concurrencySelect" id="concurrencySettingLabel">并发线程数：</label>
+                                <select id="concurrencySelect" class="setting-select">
                                     <option value="1">1</option>
                                     <option value="2">2</option>
                                     <option value="4">4</option>
@@ -381,16 +380,12 @@
                                     <option value="mkv">MKV</option>
                                 </select>
                             </div>
-                            <label class="setting-checkbox">
-                                <input type="checkbox" id="experimentalMergeCheckbox">
-                                <span>使用实验性合并工具（MP4 / MKV）</span>
-                            </label>
-                            <p class="setting-hint">启用后，下载和批量合并将使用 js-media 合成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 AAC 转封装为 M4A、FLAC 转封装为原生 FLAC、杜比全景声等其余编码封装为纯音频 MKV，只有 js-media 覆盖不到的编码才交给 ffmpeg。</p>
                             <label class="setting-checkbox" id="mp4NonStandardAudioSetting">
                                 <input type="checkbox" id="mp4NonStandardAudioCheckbox">
                                 <span>将 FLAC、杜比全景声非标封装进 MP4</span>
                             </label>
-                            <p class="setting-hint" id="mp4NonStandardAudioHint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器（实验性合并工具同样适用）。</p>
+                            <p class="setting-hint" id="mp4NonStandardAudioHint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
+                            <p class="setting-hint">下载与音视频合成全部由纯 JS 的 js-media 完成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 AAC 转封装为 M4A、FLAC 转封装为原生 FLAC、杜比全景声等其余编码封装为纯音频 MKV。</p>
                         </div>
                     </div>
 

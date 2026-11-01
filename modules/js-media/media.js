@@ -169,7 +169,7 @@ async function mergeBiliM4sToFile(videoM4sPath, audioM4sPath, outputPath, option
 // ================== 纯音频转封装 ==================
 
 // 各输出容器能承接的音频编码。js-media 只做"搬运不重编码"，
-// 所以这里列的都是能原样塞进目标容器的编码，其余交回调用方回落 ffmpeg。
+// 所以这里列的都是能原样塞进目标容器的编码，其余由调用方报错处理（纯 JS 版本无 ffmpeg 兜底）。
 const AUDIO_OUTPUT_CODECS = {
     '.m4a': ['mp4a'],
     '.flac': ['fLaC'],
@@ -201,7 +201,7 @@ function normalizeCodec(codec) {
  *
  * 支持的输出容器由 AUDIO_OUTPUT_CODECS 决定：.m4a（AAC）、.flac（原生 FLAC）、
  * .mkv（纯音频 Matroska）。其余扩展名一律抛 ERR_UNSUPPORTED_OUTPUT_FORMAT，
- * 由调用方决定是否回落 ffmpeg —— 门面不替调用方做"偷偷换实现"的选择。
+ * 由调用方决定如何提示用户 —— 门面不替调用方做"偷偷换实现"的选择。
  *
  * 输入编码与目标容器不匹配时抛 ERR_UNSUPPORTED_AUDIO_CODEC。
  *
@@ -272,7 +272,7 @@ function tagCodecError(err) {
 /**
  * 判断某个音频 .m4s 能否由 js-media 转封装成目标格式（不写任何文件）
  *
- * 调用方据此决定走 js-media 还是回落 ffmpeg —— 只看输出扩展名是不够的，
+ * 调用方据此决定能否转封装 —— 只看输出扩展名是不够的，
  * 因为同一容器能装的编码也不止一种。探测本身失败时返回 supported:false
  * 而不是抛出，方便调用方直接分支。
  *
@@ -336,6 +336,27 @@ function probeAudioCodecWithReader(inputPath, probeOptions) {
     }
 }
 
+/**
+ * 只读取音频 .m4s 的编码名（MP4 Sample Entry 类型），不写任何文件
+ *
+ * 供调用方判断容器兼容性使用（如 FLAC / 杜比全景声是否要改用 MKV）。
+ * 解析失败时返回空字符串，让调用方按"未知编码"处理，而不是中断任务。
+ *
+ * @param {string} inputPath 音频 .m4s 路径
+ * @returns {string} 编码名（'mp4a' / 'fLaC' / 'ec-3' …），失败为 ''
+ */
+function probeAudioCodec(inputPath) {
+    try {
+        return probeAudioCodecWithReader(inputPath, PROBE_OPTIONS['.mkv']).codec || '';
+    } catch (err) {
+        // 编码不在放行列表里时，解析器会把 Sample Entry 类型写进报错文案，直接取回
+        const m = /不支持的音频编码 '([^']+)'/.exec(err.message || '');
+        if (m) return m[1];
+        console.warn(`[js-media] 音频编码探测失败: ${inputPath}`, err.message);
+        return '';
+    }
+}
+
 module.exports = {
     mergeBiliM4s,
     mergeBiliM4sToMkv,
@@ -343,6 +364,7 @@ module.exports = {
     convertBiliM4sAudio,
     convertBiliM4sAudioBuffer,
     checkAudioConversion,
+    probeAudioCodec,
     // 解封装层单独导出，便于只读取轨道信息的场景复用
     demuxM4s,
     demuxM4sIndex,

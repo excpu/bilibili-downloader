@@ -1,4 +1,4 @@
-const { ipcMain, app } = require('electron');
+const { ipcMain } = require('electron');
 const path = require('path');
 
 const Auth = require('../modules/auth');
@@ -6,8 +6,6 @@ const { encWbi, getWbiKeys } = require('../modules/wbi');
 const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安全函数
 const { downloadFileWithGot } = require('../modules/stream_download');
 const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_download');
-const Aria2Client = require('../modules/aria2-client'); // 引入 Aria2Client 类
-const { downloadWithAria2 } = require('../modules/aria2-client');
 const { createCancelError, isCancelError } = require('../modules/download_cancel');
 const Setting = require("../modules/config_setting");
 const subtitleJsonConverter = require('../modules/sub_json_converter');
@@ -34,21 +32,12 @@ async function removeFilesWithRetry(filePaths) {
 
 // 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
 const getDownloadFunction = () => {
-    const engine = setting.getDownloadEngine() || 'node';
-    if (engine === 'aria2') {
-        return downloadWithAria2;
+    const engine = setting.getDownloadEngine() || 'node-multi';
+    if (engine === 'node') {
+        return downloadFileWithGot;
     }
-    if (engine === 'node-multi') {
-        return downloadFileWithGotMulti;
-    }
-    return downloadFileWithGot;
+    return downloadFileWithGotMulti;
 };
-
-const aria2 = new Aria2Client();
-const client = new Aria2Client({
-    host: 'ws://localhost:6818/jsonrpc',
-    secret: '' // 如果有密码请填写
-});
 
 const auth = new Auth();
 
@@ -68,25 +57,15 @@ function applyCdnHost(url) {
 }
 
 const fs = require('fs');
-const util = require('util');
-// ffmpeg 用于合并Dash 音视频
-let ffmpeg = require('ffmpeg-static');
-const { execFile } = require('child_process');
-const execFileAsync = util.promisify(execFile);
-// js-media 统一门面：合并与纯音频转封装都只从这里进
+// js-media 统一门面：合并与纯音频转封装都只从这里进，全程纯 JS，不依赖 ffmpeg
 const { mergeBiliM4sToFile, convertBiliM4sAudio, checkAudioConversion } = require('../modules/js-media/media');
-
-// asar 修正
-if (app.isPackaged && ffmpeg.includes('app.asar')) {
-    ffmpeg = ffmpeg.replace('app.asar', 'app.asar.unpacked');
-}
 
 module.exports = function registerDownloadIpc(mainWindow) {
     ipcMain.handle('cleanupFailedDownload', async (event, payload) => {
         const dir = setting.resolveDownloadDir(payload?.folderNames);
         const base = path.join(dir, sanitizePath(String(payload?.title || '')));
         const targets = [`${base}_video.m4s`, `${base}_audio.m4s`].flatMap(p => [
-            p, `${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`
+            p, `${p}.tmp`, `${p}.dstate.json`
         ]);
         await removeFilesWithRetry(targets);
         return { success: true };
@@ -190,7 +169,6 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const videoPath = path.join(downloadDir, `${title}_video.m4s`);
         const audioPath = path.join(downloadDir, `${title}_audio.m4s`);
         // 未允许非标封装时，FLAC / 杜比全景声会自动改用 MKV 容器
-        const experimentalMergeEnabled = setting.getExperimentalMergeEnabled();
         const outputFormat = setting.resolveOutputFormat({
             audioId: videoStream.selectedAudioId,
             audioCodec: videoStream.selectedAudioCodec,
@@ -211,7 +189,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
         const audioOnly = parseInt(videoIndex) === -1;
 
         // 新任务开始前清理上次异常退出残留的临时文件，避免一开始就命中 416
-        const isMultiEngine = (setting.getDownloadEngine() || 'node') === 'node-multi' && setting.getNodeResumeEnabled();
+        const isMultiEngine = setting.getDownloadEngine() === 'node-multi' && setting.getNodeResumeEnabled();
         const resuming = isMultiEngine && payload.resume === true;
         const tempPathsToClean = resuming ? [] : [audioPath];
         if (!audioOnly && !resuming) tempPathsToClean.push(videoPath);
@@ -264,7 +242,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 downloadHeaders,
                 (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
                 undefined,
-                setting.getAria2Concurrency(),
+                setting.getConcurrency(),
                 signal,
                 { resume: isMultiEngine }
             );
@@ -276,65 +254,29 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 notifyProgress(100, '0.00', 'converting');
                 mergeStarted = true;
 
-                // 实验性合并工具按实际"编码 + 目标容器"判定能否由 js-media 处理；
-                // FLAC / 杜比全景声现在也能走 js-media（原生 FLAC / 纯音频 MKV），
-                // 只有 js-media 覆盖不到的编码才回落 ffmpeg。
-                const jsAudio = experimentalMergeEnabled
-                    ? checkAudioConversion(audioPath, m4aOutputPath)
-                    : { supported: false };
-                const useJsMediaAudio = jsAudio.supported;
-
-                if (!useJsMediaAudio && experimentalMergeEnabled) {
-                    console.log(`ℹ️ [${title}] js-media 不处理该音频，回落 ffmpeg：${jsAudio.reason}`);
+                // js-media 按实际"编码 + 目标容器"判定能否转封装：
+                // AAC -> M4A、FLAC -> 原生 FLAC、杜比全景声等 -> 纯音频 MKV。
+                // 纯 JS 版本没有 ffmpeg 兜底，覆盖不到的编码直接报错。
+                const jsAudio = checkAudioConversion(audioPath, m4aOutputPath);
+                if (!jsAudio.supported) {
+                    console.error(`❌ [${title}] js-media 无法转换为 ${audioExt}：${jsAudio.reason}`);
+                    return {
+                        success: false,
+                        message: `无法转换为 ${audioExt}：${jsAudio.reason}`
+                    };
                 }
 
-                if (useJsMediaAudio) {
-                    try {
-                        await convertBiliM4sAudio(audioPath, m4aOutputPath, { signal });
-                        console.log(`✅ [${title}] 转换为 ${audioExt} 完成 (js-media)`);
-                    } catch (err) {
-                        if (signal.aborted) throw createCancelError();
-                        console.error(`❌ [${title}] 转换为 ${audioExt} 出错 (js-media)`);
-                        console.error('err.message:', err.message);
-                        return {
-                            success: false,
-                            message: err.message || '音频转换失败'
-                        };
-                    }
-                } else {
-                    // 修复 macOS/Linux 下的执行权限问题
-                    if (process.platform === 'darwin' || process.platform === 'linux') {
-                        try {
-                            fs.chmodSync(ffmpeg, 0o755);
-                        } catch (chmodErr) {
-                            console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响转换:', chmodErr);
-                        }
-                    }
-
-                    // 使用 ffmpeg 将 .m4s 转封装到目标容器（-c:a copy，不重编码）
-                    const ffmpegArgs = [
-                        '-y',
-                        '-i', audioPath,
-                        '-c:a', 'copy',
-                        m4aOutputPath
-                    ];
-
-                    try {
-                        await execFileAsync(ffmpeg, ffmpegArgs, { signal });
-                        console.log(`✅ [${title}] 转换为 ${audioExt} 完成`);
-                    } catch (err) {
-                        if (signal.aborted) throw createCancelError();
-                        console.error(`❌ [${title}] 转换为 ${audioExt} 出错`);
-                        console.error('err.message:', err.message);
-                        console.error('err.stderr:', err.stderr);
-                        console.error('err.stdout:', err.stdout);
-                        console.error('full err:', err);
-
-                        return {
-                            success: false,
-                            message: err.stderr || err.message || '音频转换失败'
-                        };
-                    }
+                try {
+                    await convertBiliM4sAudio(audioPath, m4aOutputPath, { signal });
+                    console.log(`✅ [${title}] 转换为 ${audioExt} 完成 (js-media)`);
+                } catch (err) {
+                    if (signal.aborted) throw createCancelError();
+                    console.error(`❌ [${title}] 转换为 ${audioExt} 出错 (js-media)`);
+                    console.error('err.message:', err.message);
+                    return {
+                        success: false,
+                        message: err.message || '音频转换失败'
+                    };
                 }
             } else {
                 // 音视频模式：下载视频并合并
@@ -347,7 +289,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     downloadHeaders,
                     (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
                     undefined,
-                    setting.getAria2Concurrency(),
+                    setting.getConcurrency(),
                     signal,
                     { resume: isMultiEngine }
                 );
@@ -357,42 +299,19 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 notifyProgress(100, '0.00', 'merging');
                 mergeStarted = true;
                 try {
-                    if (experimentalMergeEnabled) {
-                        // 传入 signal：js-media 在分片/Cluster 边界检查，取消可中途生效
-                        await mergeBiliM4sToFile(videoPath, audioPath, outputPath, { title, signal });
-                        if (signal.aborted) throw createCancelError();
-                    } else {
-                        // 修复 macOS/Linux 下的执行权限问题
-                        if (process.platform === 'darwin' || process.platform === 'linux') {
-                            try {
-                                fs.chmodSync(ffmpeg, 0o755);
-                            } catch (chmodErr) {
-                                console.warn('⚠️ 尝试赋予 ffmpeg 执行权限失败，可能会影响合并:', chmodErr);
-                            }
-                        }
-
-                        const ffmpegArgs = [
-                            '-y',
-                            '-i', videoPath,
-                            '-i', audioPath,
-                            '-c:v', 'copy',
-                            '-c:a', 'copy',
-                            outputPath
-                        ];
-                        await execFileAsync(ffmpeg, ffmpegArgs, { signal });
-                    }
+                    // 传入 signal：js-media 在分片/Cluster 边界检查，取消可中途生效
+                    await mergeBiliM4sToFile(videoPath, audioPath, outputPath, { title, signal });
+                    if (signal.aborted) throw createCancelError();
                     console.log(`✅ [${title}] 转换完成`);
                 } catch (err) {
                     if (signal.aborted) throw createCancelError();
                     console.error(`❌ [${title}] 合并出错`);
                     console.error('err.message:', err.message);
-                    console.error('err.stderr:', err.stderr);
-                    console.error('err.stdout:', err.stdout);
                     console.error('full err:', err);
 
                     return {
                         success: false,
-                        message: err.stderr || err.message || '音视频合并失败'
+                        message: err.message || '音视频合并失败'
                     };
                 }
             }
@@ -401,7 +320,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             if (isCancelError(err) || signal.aborted) {
                 console.log(`🛑 [${title}] 下载已取消，清理文件`);
                 const partialPaths = [videoPath, audioPath, ...(mergeStarted ? [outputPath, m4aOutputPath] : [])].flatMap(p => [
-                    p, `${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`
+                    p, `${p}.tmp`, `${p}.dstate.json`
                 ]);
                 await removeFilesWithRetry(partialPaths);
                 return { success: false, cancelled: true, message: '下载已取消' };
@@ -409,7 +328,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             console.error(`❌ [${title}] 出错：`, err);
             keepPartial = isMultiEngine;
             if (!keepPartial) {
-                await removeFilesWithRetry([videoPath, audioPath].flatMap(p => [`${p}.tmp`, `${p}.dstate.json`, `${p}.aria2`]));
+                await removeFilesWithRetry([videoPath, audioPath].flatMap(p => [`${p}.tmp`, `${p}.dstate.json`]));
             }
             return {
                 success: false,

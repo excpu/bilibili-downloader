@@ -6,77 +6,14 @@ const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const registerIpc = require('./ipc');
 const { hasActiveDownloads } = require('./ipc/download');
-const { getAriaBinaryPath } = require('./modules/bin_path');
 const theme = require('./modules/theme');
 const Setting = require('./modules/config_setting');
 
 // // 禁用 User-Agent Client Hints，防止部分请求被拒绝
 // app.commandLine.appendSwitch('disable-features', 'UserAgentClientHint');
 
-// 启动 aria2
-let aria2Process = null;
-const aria2args = [
-    '--enable-rpc',               // 启用 RPC
-    '--rpc-listen-all=false',      // 仅允许本地访问 (安全)
-    '--rpc-listen-port=6818',      // 端口 6818
-    '--rpc-allow-origin-all',      // 允许跨域 (方便渲染进程调用)
-    '--max-connection-per-server=8', // 最大连接数
-    '--split=8',
-    '--min-split-size=8M',
-    '--quiet=true',                // 静默模式，减少日志输出
-    '--continue=true',             // 断点续传
-    '--check-certificate=false',
-    // 额外速度配置
-    '--timeout=10',
-    '--connect-timeout=10',
-    // max-tries 原先为 0（无限重试），导致下载失败时 aria2 一直重试而永远不会进入 error 状态，
-    // 使上层误以为下载仍在正常进行，最终可能拿到不完整的文件去合并。改为有限次数，确保错误能被及时暴露。
-    '--max-tries=15',
-    '--retry-wait=10',
-    '--max-file-not-found=3',
-    '--http-accept-gzip=true',
-    '--content-disposition-default-utf8=true',
-    // 磁盘配置
-    '--disk-cache=64M',
-    '--file-allocation=falloc',
-    '--no-file-allocation-limit=64M',
-];
-const aria2BinaryPath = getAriaBinaryPath();
-// const { chmodSync } = require('fs');
-const { spawn } = require('child_process');
-
-// if (process.platform === 'darwin' || process.platform === 'linux') {
-//     try {
-//         chmodSync(aria2BinaryPath, 0o755);
-//     } catch (err) {
-//         // 即使 chmod 失败（比如只读文件系统或权限不足），也只打日志，不阻断后续执行
-//         console.warn('[Aria2] 尝试赋予执行权限失败 (可能已具备权限或目录只读):', err.message);
-//     }
-// }
-
-aria2Process = spawn(aria2BinaryPath, aria2args);
-
-// 监听启动错误 (比如文件没权限、路径不对)
-aria2Process.on('error', (err) => {
-    console.error('无法启动 Aria2:', err);
-});
-
-// 监听标准输出 (用于调试)
-aria2Process.stdout.on('data', (data) => {
-    console.log(`Aria2 Log: ${data}`);
-});
-
-// 监听进程退出
-aria2Process.on('close', (code) => {
-    console.log(`Aria2 进程已退出，状态码: ${code}`);
-});
-
-if (aria2Process && aria2Process.pid) {
-    console.log(`✅ Aria2 正在运行，进程 PID: ${aria2Process.pid}`);
-} else {
-    console.log('❌ Aria2 进程未启动');
-}
-
+// 下载与音视频转封装全部由纯 JS 实现（Node.js HTTP 多连接下载 + js-media 封装），
+// 不再启动 aria2 子进程，也不再调用 ffmpeg。
 
 app.commandLine.appendSwitch('log-level', '3') // 只输出错误日志，减少控制台噪音
 

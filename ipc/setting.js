@@ -28,12 +28,6 @@ module.exports = function registerSettingIpc(mainWindow) {
 
     ipcMain.handle('setOutputFormat', (event, format) => setting.updateOutputFormat(format));
 
-    ipcMain.handle('getExperimentalMergeEnabled', () => setting.getExperimentalMergeEnabled());
-
-    ipcMain.handle('setExperimentalMergeEnabled', (event, enabled) =>
-        setting.updateExperimentalMergeEnabled(enabled)
-    );
-
         ipcMain.handle('getMp4AllowNonStandardAudio', () => setting.getMp4AllowNonStandardAudio());
 
         ipcMain.handle('setMp4AllowNonStandardAudio', (event, enabled) =>
@@ -44,12 +38,12 @@ module.exports = function registerSettingIpc(mainWindow) {
     ipcMain.handle('setNodeResumeEnabled', (event, enabled) => {
         setting.updateNodeResumeEnabled(enabled);
     });
-    ipcMain.handle('getAria2Concurrency', () => {
-        return setting.getAria2Concurrency();
+    ipcMain.handle('getConcurrency', () => {
+        return setting.getConcurrency();
     });
 
-    ipcMain.handle('setAria2Concurrency', (event, concurrency) => {
-        setting.updateAria2Concurrency(concurrency);
+    ipcMain.handle('setConcurrency', (event, concurrency) => {
+        setting.updateConcurrency(concurrency);
     });
 
     ipcMain.handle('getDanmuDownloadMethod', () => {

@@ -2,8 +2,8 @@ function createSettingWeb() {
     const settingModel = document.getElementById('settingModel');
     const $saveSettingBtn = document.getElementById('saveSettingBtn');
     const $downloadEngineSelect = document.getElementById('downloadEngineSelect');
-    const $aria2ConcurrencySetting = document.getElementById('aria2ConcurrencySetting');
-    const $aria2ConcurrencySelect = document.getElementById('aria2ConcurrencySelect');
+    const $concurrencySetting = document.getElementById('concurrencySetting');
+    const $concurrencySelect = document.getElementById('concurrencySelect');
     const $nodeResumeCheckbox = document.getElementById('nodeResumeCheckbox');
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $themeSelect = document.getElementById('themeSelect');
@@ -14,7 +14,6 @@ function createSettingWeb() {
     const $downloadFolderNestingCheckbox = document.getElementById('downloadFolderNestingCheckbox');
     const $cdnSelect = document.getElementById('cdnSelect');
     const $outputFormatSelect = document.getElementById('outputFormatSelect');
-    const $experimentalMergeCheckbox = document.getElementById('experimentalMergeCheckbox');
     const $mp4NonStandardAudioSetting = document.getElementById('mp4NonStandardAudioSetting');
     const $mp4NonStandardAudioHint = document.getElementById('mp4NonStandardAudioHint');
     const $mp4NonStandardAudioCheckbox = document.getElementById('mp4NonStandardAudioCheckbox');
@@ -35,7 +34,7 @@ function createSettingWeb() {
         await loadDownloadPath();
         await loadFolderSettings();
         await loadDownloadEngine();
-        await loadAria2Concurrency();
+        await loadConcurrency();
         await loadDanmuDownloadMethod();
         await loadTheme();
         await loadCdnList();
@@ -59,17 +58,14 @@ function createSettingWeb() {
         $avatarDisplay.src = avatarUrl;
     }
 
-    function updateAria2ConcurrencyVisibility() {
-        if ($aria2ConcurrencySetting && $downloadEngineSelect) {
+    // 并发线程数只对多线程引擎有意义
+    function updateConcurrencyVisibility() {
+        if ($concurrencySetting && $downloadEngineSelect) {
             const engine = $downloadEngineSelect.value;
-            const isMulti = engine === 'aria2' || engine === 'node-multi';
-            $aria2ConcurrencySetting.hidden = !isMulti;
+            const isMulti = engine === 'node-multi';
+            $concurrencySetting.hidden = !isMulti;
             const $resume = document.getElementById('nodeResumeSetting');
             if ($resume) $resume.classList.toggle('hidden', engine !== 'node-multi');
-            const $label = document.getElementById('concurrencySettingLabel') || $aria2ConcurrencySetting.querySelector('label');
-            if ($label) {
-                $label.textContent = engine === 'aria2' ? 'Aria2 并发数：' : '并发线程数：';
-            }
         }
     }
 
@@ -81,13 +77,13 @@ function createSettingWeb() {
         if ($nodeResumeCheckbox) {
             $nodeResumeCheckbox.checked = await window.electronAPI.invoke('getNodeResumeEnabled');
         }
-        updateAria2ConcurrencyVisibility();
+        updateConcurrencyVisibility();
     }
 
-    async function loadAria2Concurrency() {
-        const concurrency = await window.electronAPI.invoke('getAria2Concurrency');
-        if (concurrency && $aria2ConcurrencySelect) {
-            $aria2ConcurrencySelect.value = String(concurrency);
+    async function loadConcurrency() {
+        const concurrency = await window.electronAPI.invoke('getConcurrency');
+        if (concurrency && $concurrencySelect) {
+            $concurrencySelect.value = String(concurrency);
         }
     }
 
@@ -106,16 +102,12 @@ function createSettingWeb() {
     }
 
     async function loadOutputFormat() {
-        const [format, allowNonStandard, experimentalMergeEnabled] = await Promise.all([
+        const [format, allowNonStandard] = await Promise.all([
             window.electronAPI.invoke('getOutputFormat'),
-            window.electronAPI.invoke('getMp4AllowNonStandardAudio'),
-            window.electronAPI.invoke('getExperimentalMergeEnabled')
+            window.electronAPI.invoke('getMp4AllowNonStandardAudio')
         ]);
         if (format && $outputFormatSelect) {
             $outputFormatSelect.value = format;
-        }
-        if ($experimentalMergeCheckbox) {
-            $experimentalMergeCheckbox.checked = experimentalMergeEnabled === true;
         }
         if ($mp4NonStandardAudioCheckbox) {
             $mp4NonStandardAudioCheckbox.checked = allowNonStandard !== false;
@@ -333,12 +325,12 @@ function createSettingWeb() {
     $downloadEngineSelect.addEventListener('change', (event) => {
         const selectedEngine = event.target.value;
         window.electronAPI.invoke('setDownloadEngine', selectedEngine);
-        updateAria2ConcurrencyVisibility();
+        updateConcurrencyVisibility();
     });
 
-    if ($aria2ConcurrencySelect) {
-        $aria2ConcurrencySelect.addEventListener('change', (event) => {
-            window.electronAPI.invoke('setAria2Concurrency', event.target.value);
+    if ($concurrencySelect) {
+        $concurrencySelect.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setConcurrency', event.target.value);
         });
     }
 
@@ -389,13 +381,6 @@ function createSettingWeb() {
         $outputFormatSelect.addEventListener('change', (event) => {
             window.electronAPI.invoke('setOutputFormat', event.target.value);
             updateMp4NonStandardAudioVisibility();
-        });
-    }
-
-    if ($experimentalMergeCheckbox) {
-        $experimentalMergeCheckbox.addEventListener('change', async (event) => {
-            await window.electronAPI.invoke('setExperimentalMergeEnabled', event.target.checked);
-            await loadOutputFormat();
         });
     }
 

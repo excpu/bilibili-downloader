@@ -5,8 +5,11 @@ const path = require('path');
 const { DEFAULT_OPTIONS: DEFAULT_DANMAKU_ASS_OPTIONS } = require('./xml2ass');
 const { sanitizePath } = require('./sanitize_path');
 
-const ARIA2_CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
-const DEFAULT_ARIA2_CONCURRENCY = 2;
+const CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
+const DEFAULT_CONCURRENCY = 2;
+// 下载引擎：node（单连接流式）/ node-multi（多连接分片）
+const DOWNLOAD_ENGINE_VALUES = ['node', 'node-multi'];
+const DEFAULT_DOWNLOAD_ENGINE = 'node-multi';
 // 界面主题取值：跟随系统 / 浅色 / 深色
 const THEME_VALUES = ['system', 'light', 'dark'];
 // 最终输出视频容器格式
@@ -54,14 +57,13 @@ class Setting {
             theme: 'system',  // 界面主题：system / light / dark
             downloadInFolder: false,  // 是否在下载目录中创建与视频/集合同名的子文件夹
             downloadFolderNesting: false,  // 是否启用文件夹嵌套（分P、合集分层保存）
-            downloadEngine: "node-multi", // 下载引擎，node aria2 node-multi
+            downloadEngine: DEFAULT_DOWNLOAD_ENGINE, // 下载引擎，node / node-multi（纯 JS）
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
             outputFormat: DEFAULT_OUTPUT_FORMAT, // 合并后输出格式：mp4 / mkv
             mp4AllowNonStandardAudio: DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO, // MP4 是否允许非标封装 FLAC / 杜比全景声
-            experimentalMergeEnabled: false, // 是否使用实验性 js-media 合并工具
-            aria2Concurrency: DEFAULT_ARIA2_CONCURRENCY,
+            concurrency: DEFAULT_CONCURRENCY, // 多线程下载的并发连接数
             subtitleSettings: DEFAULT_SUBTITLE_SETTINGS,
             danmakuSettings: DEFAULT_DANMAKU_SETTINGS,
         };
@@ -96,13 +98,19 @@ class Setting {
 
     updateDownloadEngine(engine) {
         const data = this.load() || {};
-        data.downloadEngine = engine;
+        data.downloadEngine = DOWNLOAD_ENGINE_VALUES.includes(engine) ? engine : DEFAULT_DOWNLOAD_ENGINE;
         this.save(data);
+        return data.downloadEngine;
     }
 
     getDownloadEngine() {
         const data = this.load();
-        return data ? data.downloadEngine : this.defaultData.downloadEngine;
+        const engine = data ? data.downloadEngine : this.defaultData.downloadEngine;
+        // 纯 JS 版本已移除 aria2：旧配置里的 aria2 一律回落到多线程引擎
+        if (engine === 'aria2' || !DOWNLOAD_ENGINE_VALUES.includes(engine)) {
+            return DEFAULT_DOWNLOAD_ENGINE;
+        }
+        return engine;
     }
 
     updateTheme(theme) {
@@ -128,19 +136,7 @@ class Setting {
         return OUTPUT_FORMAT_VALUES.includes(format) ? format : DEFAULT_OUTPUT_FORMAT;
     }
 
-    updateExperimentalMergeEnabled(enabled) {
-        const data = this.load() || {};
-        data.experimentalMergeEnabled = enabled === true;
-        this.save(data);
-        return data.experimentalMergeEnabled;
-    }
-
-    getExperimentalMergeEnabled() {
-        const data = this.load() || {};
-        return data.experimentalMergeEnabled === true;
-    }
-
-        updateMp4AllowNonStandardAudio(enabled) {
+    updateMp4AllowNonStandardAudio(enabled) {
             const data = this.load() || {};
             data.mp4AllowNonStandardAudio = enabled !== false;
             this.save(data);
@@ -171,7 +167,7 @@ class Setting {
     /**
      * 结合输出格式设置与当前音轨，解析本次实际使用的容器格式。
      * 选择 MP4 且未勾选"允许非标封装"时，遇到 FLAC / 杜比全景声自动改用 MKV。
-     * 实验性合并工具同样支持 MKV（Matroska 封装），因此这里不再强制改写为 MP4。
+     * js-media 同样支持 MKV（Matroska 封装），因此这里不再强制改写为 MP4。
      * @param {{audioId?: number|string, audioCodec?: string}} [audioInfo]
      * @param {string} [format] 指定的输出格式，缺省读取设置
      * @returns {'mp4'|'mkv'}
@@ -205,21 +201,22 @@ class Setting {
         return data.nodeResumeEnabled !== false;
     }
 
-    updateAria2Concurrency(concurrency) {
+    updateConcurrency(concurrency) {
         const value = Number(concurrency);
         const data = this.load() || {};
-        data.aria2Concurrency = ARIA2_CONCURRENCY_VALUES.includes(value)
+        data.concurrency = CONCURRENCY_VALUES.includes(value)
             ? value
-            : DEFAULT_ARIA2_CONCURRENCY;
+            : DEFAULT_CONCURRENCY;
         this.save(data);
     }
 
-    getAria2Concurrency() {
+    getConcurrency() {
         const data = this.load() || {};
-        const value = Number(data.aria2Concurrency);
-        return ARIA2_CONCURRENCY_VALUES.includes(value)
+        // 兼容旧配置里的 aria2Concurrency 字段
+        const value = Number(data.concurrency ?? data.aria2Concurrency);
+        return CONCURRENCY_VALUES.includes(value)
             ? value
-            : DEFAULT_ARIA2_CONCURRENCY;
+            : DEFAULT_CONCURRENCY;
     }
 
     updateDanmuDownloadMethod(method) {

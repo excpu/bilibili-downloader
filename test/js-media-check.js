@@ -7,13 +7,13 @@
  *      mp4box 的 DataStream.writeUint8Array 在 memcpy 快路径里源地址固定取
  *      array.buffer 的偏移 0，完全忽略 array.byteOffset；而我们的载荷是 Node
  *      内存池上的 Buffer 视图，导致写出的 avcC 变成内存池开头的无关字节
- *      （甚至是一整段 Bilibili CDN 的 JSON），ffmpeg 报
+ *      （甚至是一整段 Bilibili CDN 的 JSON），解码器报
  *      "No start code is found / Error splitting the input into NAL units /
  *      unspecified pixel format"。仓库里没有 H.264 的 .m4s 样例，
  *      所以这里用合成夹具把这个行为锁死。
  *   2. 真实样例（assets/sample/test/*.m4s）的样本数 / 关键帧 / dependsOn 回归，
- *      外加合并后配置 Box 一致 + ffmpeg 有界解码无报错。
- *   3. 对照 ffmpeg mov.c 实现的边界用例：nonSync、open GOP、trun 计数被夸大、
+ *      外加合并后配置 Box 一致。
+ *   3. 对照解封装边界行为的用例：nonSync、open GOP、trun 计数被夸大、
  *      高位无符号 cts、文件被截断。
  *
  * 约定：全部通过时退出码 0，任何一项失败为非 0。
@@ -21,7 +21,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const demux = require(path.join(ROOT, 'modules/js-media/demux-m4s'));
@@ -315,7 +314,7 @@ async function testAvcCIdentity() {
 
 /**
  * 用例 2：真实样例回归 —— 样本数 / 关键帧判定 / dependsOn，
- * 再合并成 MP4 校验配置 Box 一致 + ffmpeg 有界解码无报错。
+ * 再合并成 MP4 校验配置 Box 一致。
  */
 async function testRealFixtures() {
     console.log('== 2. 真实样例（av01 + mp4a）回归 ==');
@@ -337,25 +336,12 @@ async function testRealFixtures() {
     compareConfigBoxes('合并输出配置 Box 与源逐字节一致',
         fs.readFileSync(VIDEO_FIXTURE), fs.readFileSync(outPath));
 
-    // AV1 软解很慢，取前 20 秒足以暴露配置记录问题
-    let ffPath = null;
-    try { ffPath = require('ffmpeg-static'); } catch (_) { ffPath = null; }
-    if (!ffPath || !fs.existsSync(ffPath)) {
-        console.log('  SKIP ffmpeg 解码校验（未找到 ffmpeg-static 可执行文件）');
-    } else {
-        const r = spawnSync(ffPath,
-            ['-v', 'error', '-xerror', '-nostats', '-t', '20', '-i', outPath, '-f', 'null', '-'],
-            { encoding: 'utf8' });
-        const err = (r.stderr || '').trim();
-        ok('ffmpeg 解码无报错', r.status === 0 && !err, 'exit=' + r.status + ' ' + err.slice(0, 300));
-    }
-
     v.close();
     a.close();
 }
 
 /**
- * 用例 3：对照 ffmpeg mov.c 的边界行为（清单落地后的守卫逻辑）。
+ * 用例 3：解封装边界行为的守卫用例（清单落地后的边界逻辑）。
  */
 async function testEdgeCases() {
     console.log('== 3. 边界用例 ==');

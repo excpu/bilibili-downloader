@@ -1,9 +1,8 @@
-const { app, ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
 const Setting = require('../../modules/config_setting');
-const { mergeBiliM4sToFile } = require('../../modules/js-media/media');
+const { mergeBiliM4sToFile, probeAudioCodec } = require('../../modules/js-media/media');
 
 // ================== 工具函数 ==================
 
@@ -217,90 +216,7 @@ function collectEntries(inputRoot, sendLog) {
 }
 
 // ================== 核心执行逻辑 ==================
-// ffmpeg 用于合并Dash 音视频
-let ffmpeg = require('ffmpeg-static');
-// asar 修正
-if (app.isPackaged && ffmpeg.includes('app.asar')) {
-    ffmpeg = ffmpeg.replace('app.asar', 'app.asar.unpacked');
-}
-
-function parseTimeToSeconds(value) {
-    const match = /^(\d+):(\d+):(\d+(?:\.\d+)?)$/.exec(value);
-    if (!match) return null;
-
-    return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
-}
-
-// 读取音频文件编码，用于判断 FLAC / 杜比全景声是否需要改用 MKV 容器
-function probeAudioCodec(audioPath) {
-    return new Promise(resolve => {
-        const child = spawn(ffmpeg, ['-hide_banner', '-i', audioPath], { windowsHide: true });
-        let output = '';
-        child.stderr.on('data', data => {
-            output += data.toString();
-        });
-        child.on('error', () => resolve(''));
-        child.on('close', () => {
-            const match = /Stream #\d+:\d+.*: Audio: ([\w-]+)/i.exec(output);
-            resolve(match ? match[1].toLowerCase() : '');
-        });
-    });
-}
-
-function runFFmpeg(videoPath, audioPath, outputPath, onProgress) {
-    return new Promise((resolve, reject) => {
-        // 如果环境变量或者根目录有特定 ffmpeg，你可以改这里，默认调系统环境变量
-        const ffmpegCmd = ffmpeg;
-        const args = [
-            '-y',
-            '-i', videoPath,
-            '-i', audioPath,
-            '-c', 'copy',
-            '-progress', 'pipe:2',
-            '-nostats',
-            outputPath
-        ];
-
-        // windowsHide: true 对应 Python 版的 CREATE_NO_WINDOW
-        const child = spawn(ffmpegCmd, args, { windowsHide: true });
-
-        let errLog = '';
-        // 打印日志并且获取进度
-        let stderrBuffer = '';
-        let durationSeconds = null;
-        child.stderr.on('data', data => {
-            const chunk = data.toString();
-            errLog += chunk;
-            stderrBuffer += chunk;
-
-            const lines = stderrBuffer.split(/\r?\n/);
-            stderrBuffer = lines.pop();
-
-            for (const line of lines) {
-                const durationMatch = /Duration:\s*(\d+:\d+:\d+(?:\.\d+)?)/.exec(line);
-                if (durationMatch) {
-                    durationSeconds = parseTimeToSeconds(durationMatch[1]);
-                    continue;
-                }
-
-                const progressMatch = /^out_time_us=(\d+)$/.exec(line);
-                if (progressMatch && durationSeconds && onProgress) {
-                    const elapsedSeconds = Number(progressMatch[1]) / 1000000;
-                    onProgress(Math.min(elapsedSeconds / durationSeconds, 0.999));
-                }
-            }
-        });
-
-        child.on('close', code => {
-            if (code === 0) resolve();
-            else reject(new Error(`Exit code ${code}\n${errLog.slice(-1000)}`));
-        });
-
-        child.on('error', err => {
-            reject(new Error(`启动失败(请检查系统是否安装FFmpeg): ${err.message}`));
-        });
-    });
-}
+// 合并全部由纯 JS 的 js-media 完成（MP4 走分片 MP4 封装，MKV 走 Matroska 封装），不依赖 ffmpeg。
 
 module.exports = function registerMergeIpc() {
     const setting = new Setting();
@@ -323,14 +239,13 @@ module.exports = function registerMergeIpc() {
         const sendLog = (msg) => event.sender.send('log', msg);
 
         const { inputDir, outputDir, namingMode, addPrefix, copyDanmaku, copyCover } = config;
-        const experimentalMergeEnabled = setting.getExperimentalMergeEnabled();
         const outputFormat = setting.getOutputFormat();
         const allowNonStandardAudio = setting.getMp4AllowNonStandardAudio();
         // 仅在选择了 MP4 且不允许非标封装时才需要探测音轨编码
         const needProbeAudioCodec = outputFormat === 'mp4' && !allowNonStandardAudio;
         sendLog("[INFO] 开始任务...");
         sendLog(`[INFO] 输出格式: ${outputFormat.toUpperCase()}${needProbeAudioCodec ? '（遇到 FLAC / 杜比全景声将改用 MKV）' : ''}`);
-        sendLog(`[INFO] 合并工具: ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'}`);
+        sendLog("[INFO] 合并工具: js-media（纯 JS）");
 
         sendLog(`[INFO] 输入目录: ${inputDir}`);
         sendLog(`[INFO] 输出目录: ${outputDir}`);
@@ -417,7 +332,8 @@ module.exports = function registerMergeIpc() {
             // 逐个文件判定容器：FLAC / 杜比全景声在未允许非标封装时用 MKV
             let itemFormat = outputFormat;
             if (needProbeAudioCodec) {
-                const audioCodec = await probeAudioCodec(audioPath);
+                // js-media 的探测是同步解析 MP4 Box，不启动外部进程
+                const audioCodec = probeAudioCodec(audioPath);
                 itemFormat = setting.resolveOutputFormat({ audioCodec }, outputFormat);
                 if (itemFormat !== outputFormat) {
                     sendLog(`[INFO] 检测到 ${audioCodec.toUpperCase() || '特殊'} 音轨，改用 MKV 容器`);
@@ -458,27 +374,18 @@ module.exports = function registerMergeIpc() {
             }
 
             try {
-                if (experimentalMergeEnabled) {
-                    await mergeBiliM4sToFile(videoPath, audioPath, outputPath, {
-                        title: item.entry.title || null,
-                        onProgress: (progress) => {
-                            event.sender.send('merge-progress', {
-                                current: i + progress,
-                                total: items.length
-                            });
-                        },
-                    });
-                } else {
-                    await runFFmpeg(videoPath, audioPath, outputPath, (progress) => {
+                await mergeBiliM4sToFile(videoPath, audioPath, outputPath, {
+                    title: item.entry.title || null,
+                    onProgress: (progress) => {
                         event.sender.send('merge-progress', {
                             current: i + progress,
                             total: items.length
                         });
-                    });
-                }
-                sendLog(`[OK] ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'} 合成成功: ${outputPath}`);
+                    },
+                });
+                sendLog(`[OK] js-media 合成成功: ${outputPath}`);
             } catch (err) {
-                sendLog(`[ERROR] ${experimentalMergeEnabled ? 'js-media' : 'ffmpeg'} 合成失败: ${err.message}`);
+                sendLog(`[ERROR] js-media 合成失败: ${err.message}`);
             }
         }
 

@@ -50,17 +50,6 @@ jobs:
       - name: Build renderer
         run: npm run build --if-present
 
-      - name: Debug mac runner / ffmpeg
-        if: startsWith(matrix.os, 'macos')
-        shell: bash
-        run: |
-          echo "Runner OS: $RUNNER_OS"
-          uname -a
-          arch
-          node -p "process.platform + ' ' + process.arch"
-          node -p "require('ffmpeg-static')"
-          file "$(node -p "require('ffmpeg-static')")"
-
       - name: Build on Windows
         if: matrix.build_target == 'win'
         run: npx electron-builder --win

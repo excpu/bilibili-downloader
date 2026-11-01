@@ -39,7 +39,7 @@ function readConfiguredConcurrency() {
     try {
         const Setting = require('./config_setting');
         const setting = new Setting();
-        const concurrency = setting.getAria2Concurrency();
+        const concurrency = setting.getConcurrency();
         if (typeof concurrency === 'number' && concurrency > 0) {
             return concurrency;
         }
@@ -54,8 +54,10 @@ function readConfiguredConcurrency() {
             const configPath = path.join(appData, 'bilibili.downloader.app', 'config.json');
             if (fs.existsSync(configPath)) {
                 const conf = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                if (conf && conf.aria2Concurrency) {
-                    return Number(conf.aria2Concurrency);
+                // 兼容旧配置里的 aria2Concurrency 字段
+                const value = conf ? (conf.concurrency ?? conf.aria2Concurrency) : null;
+                if (value) {
+                    return Number(value);
                 }
             }
         } catch {}

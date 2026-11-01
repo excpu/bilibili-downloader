@@ -12,6 +12,51 @@ const { createFileWriter } = require('./stream-writer');
 // 写盘聚合阈值：把细碎的小帧（音频帧可能只有几百字节）聚成较大的写入块，减少 write 次数
 const FLUSH_THRESHOLD = 1 << 20;
 
+// 单个分片的最短时长（秒）。没有 stss 或整段都是关键帧时，只按关键帧切分会退化成
+// 逐帧分片，moof 开销能占到文件体积的两成以上，所以关键帧过密时按这个时长强制合并。
+const MIN_FRAGMENT_SECONDS = 4;
+
+// AC-3 / E-AC-3 的 fscod -> 采样率（DVB/ATSC A/52 表 5.3）
+const AC3_SAMPLING_RATES = [48000, 44100, 32000];
+// acmod -> 不含 LFE 的声道数（A/52 表 5.5A）
+const AC3_ACMOD_CHANNELS = [1, 1, 2, 3, 3, 4, 4, 5];
+
+/**
+ * 从 dac3 / dec3 配置 Box 里取音频参数。
+ *
+ * AC-3 / E-AC-3 的 stsd 里 samplerate 字段按规范写 0，MP4Box 的
+ * info.audio.sample_rate 因此是 0，直接兜底成 timescale 会得到完全错误的采样率。
+ * @param {object} stsdEntry
+ * @returns {{sampleRate: number, channelCount: number}|null}
+ */
+function audioParamsFromDolbyBox(stsdEntry) {
+    if (!stsdEntry) return null;
+    const boxes = Array.isArray(stsdEntry.boxes) ? stsdEntry.boxes : [];
+    const find = (type) =>
+        boxes.find((b) => b && b.type === type) || stsdEntry[type] || null;
+
+    const dac3 = find('dac3');
+    if (dac3 && Number.isInteger(dac3.fscod) && dac3.fscod < AC3_SAMPLING_RATES.length) {
+        const channels = AC3_ACMOD_CHANNELS[dac3.acmod] ?? 2;
+        return {
+            sampleRate: AC3_SAMPLING_RATES[dac3.fscod],
+            channelCount: channels + (dac3.lfeon ? 1 : 0),
+        };
+    }
+
+    const dec3 = find('dec3');
+    const sub = dec3 && Array.isArray(dec3.ind_subs) ? dec3.ind_subs[0] : null;
+    if (sub && Number.isInteger(sub.fscod) && sub.fscod < AC3_SAMPLING_RATES.length) {
+        const channels = AC3_ACMOD_CHANNELS[sub.acmod] ?? 2;
+        return {
+            sampleRate: AC3_SAMPLING_RATES[sub.fscod],
+            channelCount: channels + (sub.lfeon ? 1 : 0),
+        };
+    }
+
+    return null;
+}
+
 /**
  * 由 TrackSource 构造 MP4Box 的输出轨道参数
  * @param {object} source TrackSource
@@ -30,9 +75,15 @@ function buildTrackOptions(source, hdlr) {
         opts.width = info.video ? info.video.width : info.track_width;
         opts.height = info.video ? info.video.height : info.track_height;
     } else {
-        opts.samplerate = info.audio ? info.audio.sample_rate : info.timescale;
-        opts.channel_count = info.audio ? info.audio.channel_count : 2;
-        opts.samplesize = info.audio ? info.audio.sample_size : 16;
+        // stsd 里的采样率为 0（AC-3/E-AC-3）时改用配置 Box 的真实值，
+        // 两者都拿不到才退回 timescale / 立体声 / 16 bit 的猜测
+        const audio = info.audio || {};
+        const dolby = audioParamsFromDolbyBox(source.stsdEntry);
+        opts.samplerate = audio.sample_rate || (dolby && dolby.sampleRate) || info.timescale;
+        opts.channel_count =
+            audio.channel_count || (dolby && dolby.channelCount) || 2;
+        // stsd 里没写位深时按 PCM 惯例给 16 bit，与原行为一致
+        opts.samplesize = audio.sample_size || 16;
     }
 
     // FLAC 等编码需要把源 esds 作为 description 传给 MP4Box
@@ -70,23 +121,9 @@ function copyCodecConfigBoxes(outFile, outTrackId, srcStsdEntry) {
         dstEntry.boxes = [];
     }
 
-    // 1. 同步 srcStsdEntry.boxes 中的所有子 Box
-    if (Array.isArray(srcStsdEntry.boxes)) {
-        for (const box of srcStsdEntry.boxes) {
-            if (!box || !box.type) continue;
-            dstEntry[box.type] = box;
-            const existingIdx = dstEntry.boxes.findIndex(
-                (b) => b && b.type === box.type
-            );
-            if (existingIdx !== -1) {
-                dstEntry.boxes[existingIdx] = box;
-            } else {
-                dstEntry.boxes.push(box);
-            }
-        }
-    }
-
-    // 2. 兜底同步常见属性挂载的解码器配置 Box
+    // 按源文件里的子 Box 顺序重建目标 boxes：MP4Box 自己创建的 Box（如 mp4a 的
+    // esds）位置可能与源不一致，而部分解码器要求配置 Box（avcC/hvcC/esds）排在前面。
+    // 源里以属性挂载、但不在 boxes 数组里的配置 Box 也要一起搬过来。
     const configBoxNames = [
         'avcC',
         'hvcC',
@@ -99,13 +136,34 @@ function copyCodecConfigBoxes(outFile, outTrackId, srcStsdEntry) {
         'colr',
         'pasp',
     ];
+    const srcBoxes = Array.isArray(srcStsdEntry.boxes)
+        ? srcStsdEntry.boxes.filter((b) => b && b.type)
+        : [];
+    const seen = new Set();
+    const ordered = [];
+    for (const box of srcBoxes) {
+        if (seen.has(box.type)) continue;
+        seen.add(box.type);
+        ordered.push(box);
+    }
     for (const name of configBoxNames) {
-        if (srcStsdEntry[name]) {
-            dstEntry[name] = srcStsdEntry[name];
-            if (!dstEntry.boxes.includes(srcStsdEntry[name])) {
-                dstEntry.boxes.push(srcStsdEntry[name]);
-            }
+        const box = srcStsdEntry[name];
+        if (!box || seen.has(box.type || name)) continue;
+        seen.add(box.type || name);
+        ordered.push(box);
+    }
+
+    // 目标里 MP4Box 额外生成、源中没有对应类型的 Box 保留在后面
+    for (const box of dstEntry.boxes) {
+        if (box && box.type && !seen.has(box.type)) {
+            seen.add(box.type);
+            ordered.push(box);
         }
+    }
+
+    dstEntry.boxes = ordered;
+    for (const box of ordered) {
+        dstEntry[box.type] = box;
     }
 }
 
@@ -148,6 +206,15 @@ function fillDurations(outFile, tracks) {
     }
 }
 
+/** trun 里各字段的可写范围检查，越界时报出字段名而不是让 Buffer 抛 RangeError */
+function checkWriteRange(name, value, min, max) {
+    if (!Number.isInteger(value) || value < min || value > max) {
+        throw new Error(
+            `Sample 的 ${name} 超出 trun 可写范围 [${min}, ${max}]: ${value}`
+        );
+    }
+}
+
 function buildTraf(trackId, baseDts, samples, isVideo) {
     const n = samples.length;
     const trunSize = 20 + n * 16;
@@ -169,6 +236,11 @@ function buildTraf(trackId, baseDts, samples, isVideo) {
     const dataOffsetPos = p + 16;
     p += 20;
     for (const s of samples) {
+        // 三个字段分别用 writeUInt32BE / writeUInt32BE / writeInt32BE 写出，
+        // 越界只会得到 Node 的 RangeError（不带 Sample 序号），这里提前给出可定位的报错
+        checkWriteRange('duration', s.duration, 0, 0xffffffff);
+        checkWriteRange('size', s.size, 1, 0xffffffff);
+        checkWriteRange('cts - dts', s.cts - s.dts, -0x80000000, 0x7fffffff);
         b.writeUInt32BE(s.duration, p);
         b.writeUInt32BE(s.size, p + 4);
         // 视频：关键帧 depends_on=2；非关键帧 depends_on=1 + non_sync
@@ -178,6 +250,46 @@ function buildTraf(trackId, baseDts, samples, isVideo) {
         p += 16;
     }
     return { buf: b, dataOffsetPos };
+}
+
+/**
+ * 选择每个分片的起始视频帧。
+ *
+ * 默认在视频关键帧处切分。但关键帧密度异常时（源没有 stss 导致 MP4Box 把
+ * 每一帧都标成关键帧，或编码本身就是全 I 帧）逐帧分片会让 moof 头开销占到
+ * 文件体积的两成以上。因此当"平均每个分片不足 MIN_FRAGMENT_SECONDS"时，
+ * 改成只在关键帧且距上一个分片点已满最短时长时才切分：既能合并过密的关键帧，
+ * 又保证每个分片仍从关键帧开始（sidx 声明的 SAP 才不会说谎）；
+ * 正常 GOP 的内容保持原有的逐关键帧切分不变。
+ * @param {Array<object>} vs 视频 Sample 列表
+ * @param {number} timescale 视频轨道时间尺度
+ * @returns {number[]} 分片起始帧下标（严格递增，首元素为 0）
+ */
+function pickFragmentStarts(vs, timescale) {
+    const starts = [];
+    for (let i = 0; i < vs.length; i++) {
+        if (i === 0 || vs[i].keyframe) starts.push(i);
+    }
+    if (starts.length < 2) return starts;
+
+    const scale = timescale > 0 ? timescale : 1000;
+    let totalDuration = 0;
+    for (const s of vs) totalDuration += Number.isFinite(s.duration) ? s.duration : 0;
+    const avgSeconds = totalDuration / scale / (starts.length - 1);
+    if (avgSeconds >= MIN_FRAGMENT_SECONDS) return starts;
+
+    // 关键帧过密：按最短分片时长合并
+    const minDuration = Math.max(1, Math.round(MIN_FRAGMENT_SECONDS * scale));
+    const merged = [0];
+    let accumulated = 0;
+    for (let i = 1; i < vs.length; i++) {
+        if (vs[i].keyframe && accumulated >= minDuration) {
+            merged.push(i);
+            accumulated = 0;
+        }
+        accumulated += Number.isFinite(vs[i].duration) ? vs[i].duration : 0;
+    }
+    return merged;
 }
 
 /**
@@ -194,16 +306,32 @@ function buildTraf(trackId, baseDts, samples, isVideo) {
 function buildFragments(video, audio) {
     const vs = video.samples;
     const as = audio.samples;
-    const starts = [];
-    for (let i = 0; i < vs.length; i++) {
-        if (i === 0 || vs[i].keyframe) starts.push(i);
+    const starts = pickFragmentStarts(vs, video.timescale);
+    const ends = [];
+    for (let k = 0; k < starts.length; k++) {
+        ends.push(k + 1 < starts.length ? starts[k + 1] : vs.length);
+    }
+    // DTS 必须非递减，否则 tfdt / sidx 的时间基准会倒序、解码顺序错乱
+    for (let i = 1; i < vs.length; i++) {
+        if (vs[i].dts < vs[i - 1].dts) {
+            throw new Error(
+                `视频 Sample 的 DTS 出现回退：第 ${i - 1} 帧 dts=${vs[i - 1].dts}，` +
+                    `第 ${i} 帧 dts=${vs[i].dts}`
+            );
+        }
+    }
+    // 每个分片以关键帧开头（tfdt 基准时间递增由上面的 DTS 检查保证）
+    for (const start of starts) {
+        if (start !== 0 && !vs[start].keyframe) {
+            throw new Error(`分片起点第 ${start} 帧不是关键帧，sidx 的 SAP 声明会不成立`);
+        }
     }
 
     const fragments = [];
     let ai = 0;
     for (let k = 0; k < starts.length; k++) {
         const vFrom = starts[k];
-        const vTo = k + 1 < starts.length ? starts[k + 1] : vs.length;
+        const vTo = ends[k];
         const vSeg = vs.slice(vFrom, vTo);
         const isLast = k + 1 === starts.length;
 
@@ -240,10 +368,16 @@ function buildFragments(video, audio) {
             }
         }
 
-        let minPts = Infinity;
+        // sidx 的 first_presentation_time 是"该范围内第一个随机访问点的呈现时间"，
+        // 也就是分片首帧（关键帧）的 cts，而不是整段里的最小 cts
+        let earliestPts = Infinity;
+        if (vSeg.length > 0) {
+            earliestPts = vSeg[0].cts;
+        } else if (aSeg.length > 0) {
+            earliestPts = aSeg[0].cts;
+        }
         let duration = 0;
         for (const s of vSeg) {
-            minPts = Math.min(minPts, s.cts);
             duration += s.duration;
         }
         fragments.push({
@@ -252,7 +386,7 @@ function buildFragments(video, audio) {
             videoSamples: vSeg,
             audioSamples: aSeg,
             duration,
-            earliestPts: minPts,
+            earliestPts: Number.isFinite(earliestPts) ? earliestPts : 0,
         });
     }
     return fragments;
@@ -260,6 +394,9 @@ function buildFragments(video, audio) {
 
 /**
  * 生成索引视频轨的 sidx（version 1），每个引用对应一个以关键帧开头的分片
+ *
+ * starts_with_SAP / SAP_type 由分片首帧实际是不是随机访问点决定，
+ * 不再一律写死 "SAP=1"；否则没有 stss 的源会谎报每个分片都可独立解码。
  */
 function buildSidx(trackId, timescale, fragments) {
     const n = fragments.length;
@@ -269,15 +406,43 @@ function buildSidx(trackId, timescale, fragments) {
     b.writeUInt32BE(0x01000000, 8);
     b.writeUInt32BE(trackId, 12);
     b.writeUInt32BE(timescale, 16);
-    b.writeBigUInt64BE(BigInt(fragments[0].earliestPts), 20);
+    // first_presentation_time 是 64 位无符号，负数（cts 偏移异常）会直接写坏 Box
+    const firstPts = fragments.length > 0 ? fragments[0].earliestPts : 0;
+    if (!Number.isSafeInteger(firstPts) || firstPts < 0) {
+        throw new Error(
+            `sidx 的 first_presentation_time 无法表示（需要非负整数，实际 ${firstPts}），` +
+                '通常是 trun 的合成时间偏移异常'
+        );
+    }
+    b.writeBigUInt64BE(BigInt(firstPts), 20);
     b.writeBigUInt64BE(0n, 28);
     b.writeUInt16BE(0, 36);
     b.writeUInt16BE(n, 38);
     let p = 40;
-    for (const f of fragments) {
-        b.writeUInt32BE((f.moof.length + f.mdatSize) & 0x7fffffff, p);
+    for (let i = 0; i < fragments.length; i++) {
+        const f = fragments[i];
+        const refSize = f.moof.length + f.mdatSize;
+        // reference_size 只有 31 位可用，超过就没法用 sidx 索引了
+        if (refSize > 0x7fffffff) {
+            throw new Error(
+                `第 ${i + 1} 个分片过大（${refSize} 字节），超出 sidx 单个引用的 31 位长度上限`
+            );
+        }
+        if (!Number.isInteger(f.duration) || f.duration < 0 || f.duration > 0xffffffff) {
+            throw new Error(
+                `第 ${i + 1} 个分片的时长无法用 sidx 表示（32 位无符号，实际 ${f.duration}）`
+            );
+        }
+        const first = f.videoSamples.length > 0 ? f.videoSamples[0] : null;
+        // 分片首帧是关键帧时，本封装写出的 sample_flags 是 depends_on=2 且非 non_sync，
+        // 属于闭合 GOP 的随机访问点（SAP_type=1）；否则该分片不能独立起播
+        const isSap = !first || first.keyframe;
+        const sapType = isSap ? 1 : 0;
+        // 第 3 个 32 位字：starts_with_SAP(1) | SAP_type(3) | SAP_delta_time(28)
+        const word = ((isSap ? 0x80000000 : 0) | (sapType << 28)) >>> 0;
+        b.writeUInt32BE(refSize, p);
         b.writeUInt32BE(f.duration, p + 4);
-        b.writeUInt32BE(0x90000000, p + 8); // starts_with_SAP=1, SAP_type=1, delta=0
+        b.writeUInt32BE(word, p + 8); // starts_with_SAP | SAP_type | delta=0
         p += 12;
     }
     return b;

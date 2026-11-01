@@ -16,7 +16,7 @@ const fs = require('fs');
  *
  * @param {string} filePath
  * @param {object} [options]
- * @param {string} [options.errorLabel] 报错文案的开头（含"失败"二字），
+ * @param {string} [options.errorLabel] 报错文案的开头，需自带"失败"二字，
  *   默认 "读取输入失败"；解封装层传 "读取 Sample 失败" 以保留原有提示语
  * @returns {{
  *   filePath: string,
@@ -27,7 +27,9 @@ const fs = require('fs');
  * }}
  */
 function createFileReader(filePath, options = {}) {
-    const errorLabel = options.errorLabel || '读取输入失败';
+    const rawLabel = options.errorLabel || '读取输入';
+    // 允许调用方传带或不带"失败"的文案，避免出现"读取 Sample 失败失败"
+    const errorLabel = rawLabel.endsWith('失败') ? rawLabel : `${rawLabel}失败`;
     const fd = fs.openSync(filePath, 'r');
     const size = fs.fstatSync(fd).size;
     let closed = false;
@@ -42,7 +44,16 @@ function createFileReader(filePath, options = {}) {
 
         read(offset, length) {
             if (closed) {
-                throw new Error(`${errorLabel}失败 (${filePath} @${offset})：文件已关闭`);
+                throw new Error(`${errorLabel} (${filePath} @${offset})：文件已关闭`);
+            }
+            if (!Number.isInteger(offset) || offset < 0) {
+                throw new Error(`${errorLabel} (${filePath} @${offset})：读取偏移量无效`);
+            }
+            if (offset + length > size) {
+                throw new Error(
+                    `${errorLabel} (${filePath} @${offset})：读取范围超出文件末尾 ` +
+                        `(需要 ${length} 字节，文件共 ${size} 字节)`
+                );
             }
             if (length <= 0) return Buffer.alloc(0);
             const buf = Buffer.allocUnsafe(length);
@@ -51,7 +62,7 @@ function createFileReader(filePath, options = {}) {
                 const got = fs.readSync(fd, buf, filled, length - filled, offset + filled);
                 if (got <= 0) {
                     throw new Error(
-                        `${errorLabel}失败 (${filePath} @${offset + filled})：文件可能已被截断`
+                        `${errorLabel} (${filePath} @${offset + filled})：文件可能已被截断`
                     );
                 }
                 filled += got;
@@ -73,6 +84,9 @@ function createFileReader(filePath, options = {}) {
 
 /**
  * 用 Buffer 冒充读取器，供内存输入复用同一套解析/封装逻辑
+ *
+ * 与 createFileReader 一样做严格的边界检查：越界读取直接抛错而不是
+ * 返回一个短 Buffer，否则短读会一路传到封装层产出损坏的文件。
  * @param {Buffer|Uint8Array} buffer
  * @returns {{ size: number, closed: boolean, read: Function, close: Function }}
  */
@@ -81,6 +95,13 @@ function createBufferReader(buffer) {
         size: buffer.length,
         closed: false,
         read(offset, length) {
+            if (length <= 0) return buffer.subarray(offset, offset);
+            if (!Number.isInteger(offset) || offset < 0 || offset + length > buffer.length) {
+                throw new Error(
+                    `读取数据失败 (@${offset})：读取范围超出缓冲区末尾 ` +
+                        `(需要 ${length} 字节，缓冲区共 ${buffer.length} 字节)`
+                );
+            }
             return buffer.subarray(offset, offset + length);
         },
         close() {},

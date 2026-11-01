@@ -11,7 +11,8 @@
 //     trackInfo,                    MP4Box getInfo().tracks[0]（原样透传）
 //     stsdEntry,                    原始 Sample Entry Box，其配置子 Box 已标记"原样输出"
 //     timescale, codec, codecSubtype,
-//     samples: [ { dts, cts, duration, size, keyframe, offset?, data? } ],
+//     samples: [ { dts, cts, duration, size, keyframe, nonSync, dependsOn,
+//                  offset?, data? } ],
 //     streamed,                     true = 帧数据不在内存里，必须用 readSample() 取
 //     readSample(sample) => Buffer, 取某一帧的原始字节（两种模式都可用）
 //     sampleBytes(sample) => Buffer,取任意契约内 Sample 的字节
@@ -56,6 +57,19 @@ function toBuffer(value) {
     return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
 }
 
+const UINT32_MAX = 0xffffffff;
+const INT32_MIN = -0x80000000;
+const INT32_MAX = 0x7fffffff;
+
+/** MP4 里除 tfdt 外几乎所有数值字段都是 32 位，越界要提前报错而不是让写盘抛 RangeError */
+function checkUint32(value, name, label, index) {
+    if (!Number.isInteger(value) || value < 0 || value > UINT32_MAX) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的 ${name} 超出 32 位无符号范围: ${value}`
+        );
+    }
+}
+
 function normalizeSample(raw, label, index) {
     if (!raw || typeof raw !== 'object') {
         throw new Error(`TrackSource(${label}): 第 ${index} 个 Sample 无效`);
@@ -65,17 +79,53 @@ function normalizeSample(raw, label, index) {
     const duration = Number.isFinite(raw.duration) ? raw.duration : 0;
     const data = raw.data || null;
     const size = Number.isFinite(raw.size) ? raw.size : data ? data.length : NaN;
-    if (!Number.isFinite(size) || size < 0) {
-        throw new Error(`TrackSource(${label}): 第 ${index} 个 Sample 缺少有效 size`);
+    // ffmpeg 的 mov_read_trun 对 size == 0 的 Sample 直接判为非法数据，
+    // 否则多个零长度 Sample 会共用同一个 offset，读出来的字节属于别的帧
+    if (!Number.isInteger(size) || size <= 0) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的 size 无效 (size=${size})，` +
+                '分片信息（trun）可能被截断或计数被夸大'
+        );
+    }
+    if (!Number.isInteger(dts) || !Number.isInteger(cts) || !Number.isInteger(duration)) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的时间戳不是整数 ` +
+                `(dts=${raw.dts}, cts=${raw.cts}, duration=${raw.duration})`
+        );
+    }
+    if (duration < 0) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的 duration 为负数: ${duration}`
+        );
+    }
+    // 下面三项都会被 mp4.js 用 writeUInt32BE / writeInt32BE 原样写出
+    checkUint32(duration, 'duration', label, index);
+    checkUint32(size, 'size', label, index);
+    const ctsOffset = cts - dts;
+    if (ctsOffset < INT32_MIN || ctsOffset > INT32_MAX) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的合成时间偏移 (cts - dts) 超出 ` +
+                `32 位有符号范围: ${ctsOffset}（cts=${cts}, dts=${dts}）。` +
+                '常见于 trun version 0 把无符号偏移当成了有符号值'
+        );
+    }
+    // tfdt 用 64 位写 baseDts，但 JS 只在 2^53 以内精确
+    if (Math.abs(dts) > Number.MAX_SAFE_INTEGER) {
+        throw new Error(
+            `TrackSource(${label}): 第 ${index} 个 Sample 的 dts 超出安全整数范围: ${dts}`
+        );
     }
 
-    const sample = {
-        dts,
-        cts,
-        duration,
-        size,
-        keyframe: Boolean(raw.keyframe ?? raw.is_sync),
-    };
+    // 关键帧判定同时看 non_sync 与 depends_on（对齐 ffmpeg 的
+    // !(MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC | MOV_FRAG_SAMPLE_FLAG_DEPENDS_YES)），
+    // open GOP 里依赖后续帧的 IDR 不能当作随机访问点
+    const nonSync = Number.isFinite(raw.nonSync) ? raw.nonSync : raw.is_sync === false ? 1 : 0;
+    const dependsOn = Number.isFinite(raw.dependsOn) ? raw.dependsOn : 0;
+    const keyframe = raw.keyframe !== undefined
+        ? Boolean(raw.keyframe)
+        : raw.is_sync !== false && (dependsOn & 1) === 0;
+
+    const sample = { dts, cts, duration, size, keyframe, nonSync, dependsOn };
     // 流式模式记录源文件偏移，内存模式直接带上帧数据
     if (Number.isFinite(raw.offset)) sample.offset = raw.offset;
     if (data) sample.data = data;

@@ -53,7 +53,20 @@ function normalizeM4sBuffer(nodeBuffer) {
  * @param {Uint8Array} payload Box 原始载荷（不含 Box 头）
  */
 function makeBoxVerbatim(box, payload) {
-    box.data = payload;
+    // MP4Box 的 DataStream.writeUint8Array 在走 memcpy 快路径时，源地址固定取
+    // array.buffer 的偏移 0（完全忽略 array.byteOffset）。Node 的
+    // Buffer.allocUnsafe / buffer.slice 返回的都是共享内存池上的视图，
+    // byteOffset 通常不为 0，直接交给 MP4Box 会把内存池开头的无关字节
+    // （例如 CDN 返回的 JSON）当成载荷写出去，导致 avcC 等配置 Box 全坏，
+    // ffmpeg 报 "No start code is found / Error splitting the input into NAL units"。
+    // 因此这里统一规整成 byteOffset 为 0 的独立副本。
+    // 注意不能用 payload.slice()：Node 的 Buffer 把 slice 重定义成了
+    // subarray（共享内存的视图，byteOffset 不变），必须用 TypedArray
+    // 构造函数逐元素拷贝才能真正独立。
+    box.data =
+        payload instanceof Uint8Array && payload.byteOffset === 0
+            ? payload
+            : new Uint8Array(payload);
     // 基类 write() 会按 "载荷长度 + 8 字节头" 重新计算 size，
     // 清掉源文件可能带的 64-bit 扩展尺寸标记，保证走标准 8 字节头路径
     box.original_size = undefined;
@@ -118,14 +131,224 @@ function readBoxPayloadVerbatim(reader, dataStart, box) {
 }
 
 /** 沿 mdia.minf.stbl.stsd 路径取轨道的原始 Sample Entry */
-function getStsdEntry(mp4boxfile, trackId) {
+function getStsdEntry(mp4boxfile, trackId, descriptionIndex = 0) {
     const rawTrak = mp4boxfile.getTrackById(trackId);
     const stbl =
         rawTrak && rawTrak.mdia && rawTrak.mdia.minf && rawTrak.mdia.minf.stbl;
-    if (stbl && stbl.stsd && stbl.stsd.entries && stbl.stsd.entries.length > 0) {
-        return stbl.stsd.entries[0];
+    if (!stbl || !stbl.stsd || !Array.isArray(stbl.stsd.entries)) return null;
+    const entries = stbl.stsd.entries;
+    if (entries.length === 0) return null;
+    // MP4Box 内部按 0-based 的 description_index 取 entry（tfhd/trex 里的值是 1-based，
+    // 调用方负责换算），多 Sample Description 的轨道不能一律取 entries[0]
+    const index = Number.isInteger(descriptionIndex) && descriptionIndex >= 0 &&
+        descriptionIndex < entries.length ? descriptionIndex : 0;
+    return entries[index];
+}
+
+/** 取 mvex.trex 里该轨道的缺省值（MP4Box 对缺失的 trex 会静默用 0 兜底） */
+function findTrex(mp4boxfile, trackId) {
+    const mvex = mp4boxfile.moov && mp4boxfile.moov.mvex;
+    if (!mvex) return null;
+    const trexs = Array.isArray(mvex.trexs)
+        ? mvex.trexs
+        : Array.isArray(mvex.boxes)
+          ? mvex.boxes.filter((b) => b && b.type === 'trex')
+          : [];
+    return trexs.find((t) => t && t.track_id === trackId) || null;
+}
+
+/**
+ * 检查分片是否依赖 MP4Box 会静默置 0 的缺省值。
+ *
+ * ffmpeg 的 mov_read_trun 在没有 tfhd 时直接丢弃整个 traf；MP4Box 只是把
+ * default_sample_{duration,size,flags} 当成 0，结果是所有帧 duration 为 0、
+ * is_sync 恒为 true。这里把这种情况报出来，避免产出时长错误、逐帧关键帧的文件。
+ * @param {object} mp4boxfile
+ * @param {number} trackId
+ * @returns {string[]} 问题描述列表（空数组表示没问题）
+ */
+function checkFragmentDefaults(mp4boxfile, trackId) {
+    const problems = [];
+    const moofs = Array.isArray(mp4boxfile.moofs) ? mp4boxfile.moofs : [];
+    for (const moof of moofs) {
+        const trafs = Array.isArray(moof.trafs) ? moof.trafs : [];
+        for (const traf of trafs) {
+            const tfhd = traf.tfhd;
+            if (!tfhd || tfhd.track_id !== trackId) continue;
+            const trex = findTrex(mp4boxfile, tfhd.track_id);
+            if (trex) continue;
+            const truns = Array.isArray(traf.truns) ? traf.truns : [];
+            for (const trun of truns) {
+                const noDuration = !(tfhd.flags & 8) && !(trun.flags & 256);
+                const noSize = !(tfhd.flags & 16) && !(trun.flags & 512);
+                const noFlags =
+                    !(tfhd.flags & 32) && !(trun.flags & 1024) && !(trun.flags & 4);
+                if (!noDuration && !noSize && !noFlags) continue;
+                const missing = [];
+                if (noDuration) missing.push('duration');
+                if (noSize) missing.push('size');
+                if (noFlags) missing.push('sample_flags');
+                problems.push(
+                    `track_id=${tfhd.track_id} 的 traf 既没有对应的 trex，trun/tfhd 也未提供 ` +
+                        `${missing.join('、')} 缺省值，MP4Box 会把这些字段当成 0 处理`
+                );
+                break;
+            }
+        }
+    }
+    return problems;
+}
+
+/**
+ * 校验 trun 声明的 sample_count 是否真的能由输入文件容纳。
+ *
+ * MP4Box 的 trun 解析只检查 Box 头，不检查每个条目，声明值大于实际可读条目时
+ * 会一路读到别的 Box 里（拿到 NaN 或垃圾数据）却不报错，等价于 ffmpeg 在
+ * mov_read_trun 里的 "trun sample count %u exceeds ... AVERROR_INVALIDDATA"。
+ * @param {object} mp4boxfile
+ * @param {number} trackId
+ * @param {number} availableSamples 解析后可用的 Sample 数
+ * @returns {string|null} 问题描述
+ */
+function checkTrunSampleCounts(mp4boxfile, trackId, availableSamples) {
+    const moofs = Array.isArray(mp4boxfile.moofs) ? mp4boxfile.moofs : [];
+    let declared = 0;
+    let readable = 0;
+    for (const moof of moofs) {
+        const trafs = Array.isArray(moof.trafs) ? moof.trafs : [];
+        for (const traf of trafs) {
+            if (!traf.tfhd || traf.tfhd.track_id !== trackId) continue;
+            const truns = Array.isArray(traf.truns) ? traf.truns : [];
+            for (const trun of truns) {
+                // 取 trun 实际解析出的第一个数组字段，finite 的条目才是真读到了数据
+                const arrays = [
+                    trun.sample_size,
+                    trun.sample_duration,
+                    trun.sample_flags,
+                    trun.sample_composition_time_offset,
+                ];
+                const arr = arrays.find((a) => Array.isArray(a) && a.length > 0);
+                // 没有任何逐 Sample 数组的 trun（全部字段走 tfhd/trex 默认值）
+                // 无法通过数组长度判断是否被截断，跳过，避免把默认计数误报成夸大
+                if (!arr) continue;
+                declared += trun.sample_count || 0;
+                for (let i = 0; i < trun.sample_count; i++) {
+                    if (Number.isFinite(arr[i])) readable++;
+                }
+            }
+        }
+    }
+    if (declared === 0) return null;
+    if (readable < declared) {
+        return (
+            `trun 声明了 ${declared} 个 Sample，但输入文件只装得下 ${readable} 个` +
+            `（实际解析出 ${availableSamples} 个），文件可能被截断或 trun 计数被夸大`
+        );
     }
     return null;
+}
+
+/**
+ * 挑选主媒体轨道：Bilibili 的 .m4s 只有一条音视频轨，但带字幕/数据轨的文件
+ * 不能直接取 tracks[0]（MP4Box 的 info.tracks[i].type 是 'video' / 'audio' / …）
+ */
+function pickTrackInfo(info, filePath) {
+    const tracks = info && Array.isArray(info.tracks) ? info.tracks : [];
+    if (tracks.length === 0) {
+        throw new Error(`未在文件中找到媒体轨道: ${filePath}`);
+    }
+    const media = tracks.find((t) => t && (t.type === 'video' || t.type === 'audio'));
+    return media || tracks[0];
+}
+
+/**
+ * 按 ffmpeg 的规则判定随机访问点：
+ * keyframe = !(sample_flags & (IS_NON_SYNC | DEPENDS_YES))
+ * IS_NON_SYNC 是 bit 16（对应 MP4Box 的 is_sync === false），
+ * DEPENDS_YES 是 depends_on 字段的 bit 0（值 1，以及保留值 3）。
+ * open GOP 里依赖后续帧的 IDR 不能当作随机访问点。
+ * @param {object} sample
+ * @returns {boolean}
+ */
+function isKeyframeSample(sample) {
+    const dependsOn = Number.isFinite(sample.depends_on) ? sample.depends_on : 0;
+    return sample.is_sync !== false && (dependsOn & 1) === 0;
+}
+
+/** 把 MP4Box 的 Sample 转成契约字段（附带源文件偏移，供流式模式使用） */
+function toContractSample(sample, descriptionIndexGetter) {
+    return {
+        dts: sample.dts,
+        cts: sample.cts,
+        duration: sample.duration,
+        size: sample.size,
+        offset: sample.offset,
+        data: sample.data || null,
+        keyframe: isKeyframeSample(sample),
+        nonSync: sample.is_sync === false ? 1 : 0,
+        dependsOn: Number.isFinite(sample.depends_on) ? sample.depends_on : 0,
+        descriptionIndex: descriptionIndexGetter(sample),
+    };
+}
+
+/**
+ * 校验 Sample 偏移表是否真的落在数据流范围内。
+ *
+ * MP4Box 对 stco/co64 条目不足、trun 计数夸大等情况都不会报错，只会给出
+ * undefined / NaN 的偏移，或指向别的 Box 的字节；等到写盘阶段才失败会浪费
+ * 已经下载好的整段数据，所以在解封装结束时就检查一次。
+ *
+ * @param {Array<object>} samples 契约 Sample 列表
+ * @param {number} dataSize 去掉 Bilibili 前缀后的数据流长度
+ * @param {string} filePath
+ * @returns {string|null}
+ */
+function checkSampleOffsets(samples, dataSize, filePath) {
+    let maxEnd = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const s = samples[i];
+        if (!Number.isInteger(s.offset) || s.offset < 0) {
+            return (
+                `第 ${i} 个 Sample 的偏移量无效 (offset=${s.offset})，` +
+                `stco/co64 条目数可能与 Sample 数不匹配: ${filePath}`
+            );
+        }
+        const end = s.offset + s.size;
+        if (end > maxEnd) maxEnd = end;
+    }
+    // 正常文件的最后一个 Sample 恰好写到数据流末尾，所以这里用 >，不是 >=
+    if (maxEnd > dataSize) {
+        return (
+            `Sample 偏移表超出数据流范围（最大结束偏移 ${maxEnd} > 数据长度 ${dataSize}），` +
+            `文件可能被截断或 trun/stsz 计数被夸大: ${filePath}`
+        );
+    }
+    return null;
+}
+
+/**
+ * 用 stts 末段时长补齐末帧 duration。
+ *
+ * 非分片 MP4 走 MP4Box 的 progressive 路径时，末帧 duration 是按
+ * mdhd.duration - 已累计时长算出来的；Bilibili 的 mdhd.duration 恒为 0，
+ * 末帧时长会变成 0，导致总时长、mvhd/mehd 和 sidx 末段全部偏小。
+ * @param {object} mp4boxfile
+ * @param {number} trackId
+ * @param {Array<object>} samples
+ */
+function repairLastSampleDuration(mp4boxfile, trackId, samples) {
+    const last = samples[samples.length - 1];
+    if (!last || last.duration !== 0) return;
+    const rawTrak = mp4boxfile.getTrackById(trackId);
+    const stts = rawTrak && rawTrak.mdia && rawTrak.mdia.minf &&
+        rawTrak.mdia.minf.stbl && rawTrak.mdia.minf.stbl.stts;
+    const deltas = stts && Array.isArray(stts.sample_deltas) ? stts.sample_deltas : [];
+    for (let i = deltas.length - 1; i >= 0; i--) {
+        if (Number.isInteger(deltas[i]) && deltas[i] > 0) {
+            last.duration = deltas[i];
+            return;
+        }
+    }
 }
 
 /**
@@ -151,19 +374,23 @@ function demuxM4s(filePath) {
             // 必须传入 true (keepMdatData = true)，否则在 start() 前解析完的 mdat 帧数据会被丢弃
             const mp4boxfile = MP4Box.createFile(true);
             const collectedSamples = [];
+            let droppedSamples = 0;
             let trackInfo = null;
             let stsdEntry = null;
             let cleanBuffer = null;
+            let rejectOnce = null;
 
             mp4boxfile.onError = (err) => {
                 reject(new Error(`MP4Box 解析失败 (${filePath}): ${err}`));
             };
 
             mp4boxfile.onReady = (info) => {
-                if (!info.tracks || info.tracks.length === 0) {
-                    return reject(new Error(`未在文件中找到媒体轨道: ${filePath}`));
+                try {
+                    trackInfo = pickTrackInfo(info, filePath);
+                } catch (err) {
+                    rejectOnce = err;
+                    return;
                 }
-                trackInfo = info.tracks[0];
                 stsdEntry = getStsdEntry(mp4boxfile, trackInfo.id);
                 // 把解码器配置子 Box（avcC / hvcC / av1C / esds / dac3 / dec3 / dfLa 等）
                 // 标记为"原样输出源文件字节"，避免 MP4Box 回写时丢字段（如 hvcC 保留位）
@@ -179,7 +406,12 @@ function demuxM4s(filePath) {
             mp4boxfile.onSamples = (id, user, samples) => {
                 for (let i = 0; i < samples.length; i++) {
                     const s = samples[i];
-                    if (!s || !s.data) continue;
+                    // MP4Box 取不到帧数据时给的是 undefined，这里计数后统一报错，
+                    // 不再静默丢帧（丢帧会让时长与 Sample 数都对不上）
+                    if (!s || !s.data) {
+                        droppedSamples++;
+                        continue;
+                    }
 
                     // 浅拷贝生成独立对象保存 s.data 引用，防止后续 releaseUsedSamples 原地清空 s.data
                     collectedSamples.push({
@@ -187,7 +419,10 @@ function demuxM4s(filePath) {
                         duration: s.duration,
                         dts: s.dts,
                         cts: s.cts,
-                        keyframe: s.is_sync,
+                        size: s.size,
+                        keyframe: isKeyframeSample(s),
+                        nonSync: s.is_sync === false ? 1 : 0,
+                        dependsOn: Number.isFinite(s.depends_on) ? s.depends_on : 0,
                     });
                 }
 
@@ -208,12 +443,43 @@ function demuxM4s(filePath) {
                 mp4boxfile.flush();
                 cleanBuffer = null;
 
+                if (rejectOnce) {
+                    return reject(rejectOnce);
+                }
                 if (!trackInfo) {
                     return reject(new Error(`未能完成 moov 头解析: ${filePath}`));
                 }
+
+                // 与索引模式一致的结构性校验：缺省值缺失、trun 计数被夸大
+                const defaults = checkFragmentDefaults(mp4boxfile, trackInfo.id);
+                if (defaults.length > 0) {
+                    return reject(
+                        new Error(`分片缺少缺省 Sample 信息: ${filePath}: ${defaults[0]}`)
+                    );
+                }
+                const trunProblem = checkTrunSampleCounts(
+                    mp4boxfile,
+                    trackInfo.id,
+                    collectedSamples.length + droppedSamples
+                );
+                if (trunProblem) {
+                    return reject(
+                        new Error(`分片 Sample 数量异常 (${filePath}): ${trunProblem}`)
+                    );
+                }
+
                 if (collectedSamples.length === 0) {
                     return reject(
                         new Error(`未能提取到有效媒体帧 (sample.data 为空): ${filePath}`)
+                    );
+                }
+                if (droppedSamples > 0) {
+                    return reject(
+                        new Error(
+                            `有 ${droppedSamples} 个 Sample 在数据流中找不到对应的帧数据` +
+                                `（共 ${collectedSamples.length + droppedSamples} 个，` +
+                                `文件可能被截断或 mdat 缺失）: ${filePath}`
+                        )
                     );
                 }
 
@@ -262,6 +528,7 @@ function demuxM4sIndex(filePath) {
             const prefix = biliPrefix.detectPrefixInReader(reader);
             // fileStart 坐标以去掉前缀后的数据流为 0，Sample 偏移可直接用于 Seek
             const dataStart = prefix;
+            const dataSize = fileSize - dataStart;
 
             const mp4boxfile = MP4Box.createFile(false);
             let trackInfo = null;
@@ -279,7 +546,7 @@ function demuxM4sIndex(filePath) {
                 try {
                     chunk = reader.read(pos, len);
                 } catch (_) {
-                    // 文件被截断：停止追加，交给后面的 moov 校验给出明确错误
+                    // 文件被截断：停止追加，交给后面的校验给出明确错误
                     break;
                 }
                 const arrayBuffer = chunk.buffer.slice(
@@ -293,7 +560,7 @@ function demuxM4sIndex(filePath) {
                 if (!trackInfo) {
                     const info = mp4boxfile.moov ? mp4boxfile.getInfo() : null;
                     if (info && info.tracks && info.tracks.length > 0) {
-                        trackInfo = info.tracks[0];
+                        trackInfo = pickTrackInfo(info, filePath);
                         stsdEntry = getStsdEntry(mp4boxfile, trackInfo.id);
                     }
                 }
@@ -303,6 +570,23 @@ function demuxM4sIndex(filePath) {
             if (parseError) return fail(parseError);
             if (!trackInfo) {
                 return fail(new Error(`未能完成 moov 头解析: ${filePath}`));
+            }
+
+            // 循环里拿到的是 moov 刚解析完时的快照，之后追加的分片还没统计进去；
+            // 全部解析完再取一次，轨道上的 nb_samples / duration 才是完整值
+            {
+                const finalInfo = mp4boxfile.moov ? mp4boxfile.getInfo() : null;
+                if (finalInfo && finalInfo.tracks && finalInfo.tracks.length > 0) {
+                    trackInfo = pickTrackInfo(finalInfo, filePath);
+                }
+            }
+
+            // 分片缺省值检查必须在 cleanBuffers() 之前（依赖 moof/traf 结构）
+            const defaults = checkFragmentDefaults(mp4boxfile, trackInfo.id);
+            if (defaults.length > 0) {
+                return fail(
+                    new Error(`分片缺少缺省 Sample 信息: ${filePath}: ${defaults[0]}`)
+                );
             }
 
             // 趁输入还没关闭，把解码器配置子 Box（avcC/hvcC/av1C/esds/dfLa 等）
@@ -318,6 +602,53 @@ function demuxM4sIndex(filePath) {
                 return fail(new Error(`未能提取到有效媒体帧: ${filePath}`));
             }
 
+            // trun.sample_count 被夸大时，MP4Box 会读到 Box 之外的垃圾数据但仍然成功建表
+            const trunProblem = checkTrunSampleCounts(
+                mp4boxfile,
+                trackInfo.id,
+                rawSamples.length
+            );
+            if (trunProblem) {
+                return fail(new Error(`分片 Sample 数量异常 (${filePath}): ${trunProblem}`));
+            }
+            if (
+                Number.isInteger(trackInfo.nb_samples) &&
+                trackInfo.nb_samples > 0 &&
+                trackInfo.nb_samples !== rawSamples.length
+            ) {
+                return fail(
+                    new Error(
+                        `轨道声明的 Sample 数 (${trackInfo.nb_samples}) 与实际解析出的数量 ` +
+                            `(${rawSamples.length}) 不一致，文件可能不完整: ${filePath}`
+                    )
+                );
+            }
+
+            // 非分片文件（progressive 路径）的末帧 duration 依赖 mdhd.duration，
+            // Bilibili 的 m4s 里 mdhd.duration 恒为 0，需要用 stts 末段时长补回
+            repairLastSampleDuration(mp4boxfile, trackInfo.id, rawSamples);
+
+            const samples = rawSamples.map(
+                (s) => toContractSample(s, () => s.description_index)
+            );
+
+            const offsetProblem = checkSampleOffsets(samples, dataSize, filePath);
+            if (offsetProblem) {
+                return fail(new Error(`Sample 偏移表无效: ${offsetProblem}`));
+            }
+
+            // 多 Sample Description 的轨道，配置 Box 要按帧自己的 description_index 取
+            if (
+                stsdEntry &&
+                stsdEntry.boxes &&
+                samples.some((s) => s.descriptionIndex > 0)
+            ) {
+                const firstIndex = samples[0].descriptionIndex;
+                if (firstIndex > 0) {
+                    stsdEntry = getStsdEntry(mp4boxfile, trackInfo.id, firstIndex);
+                }
+            }
+
             const readSample = (sample) => {
                 if (reader.closed) throw new Error('M4S 文件已关闭，无法读取 Sample');
                 return reader.read(dataStart + sample.offset, sample.size);
@@ -330,7 +661,7 @@ function demuxM4sIndex(filePath) {
                 createTrackSource({
                     trackInfo,
                     stsdEntry,
-                    samples: rawSamples,
+                    samples,
                     readSample,
                     close: reader.close,
                     label: filePath,

@@ -492,32 +492,42 @@ async function writeFragments({
     writtenBytes += initSegment.length + sidx.length;
     report();
 
+    // 攒数据本身是同步的，只有真正触发 flush 时才 await：避免每帧（长视频可达
+    // 十万级帧）都创建一个 Promise；flush 触发点和写出的 chunk 序列与原来一致
     let pending = [];
     let pendingSize = 0;
-    const push = async (buf) => {
+    const flush = async () => {
+        const chunk = pending.length === 1 ? pending[0] : Buffer.concat(pending, pendingSize);
+        pending = [];
+        pendingSize = 0;
+        await write(chunk);
+        report();
+    };
+    const push = (buf) => {
         pending.push(buf);
         pendingSize += buf.length;
         writtenBytes += buf.length;
-        if (pendingSize >= FLUSH_THRESHOLD) {
-            const chunk = pending.length === 1 ? pending[0] : Buffer.concat(pending, pendingSize);
-            pending = [];
-            pendingSize = 0;
-            await write(chunk);
-            report();
-        }
     };
 
     for (const fragment of fragments) {
         abortIfRequested();
-        await push(fragment.moof);
+        push(fragment.moof);
+        if (pendingSize >= FLUSH_THRESHOLD) await flush();
 
         const header = Buffer.alloc(8);
         header.writeUInt32BE(fragment.mdatSize, 0);
         header.write('mdat', 4, 'latin1');
-        await push(header);
+        push(header);
+        if (pendingSize >= FLUSH_THRESHOLD) await flush();
 
-        for (const s of fragment.videoSamples) await push(readVideoSample(s));
-        for (const s of fragment.audioSamples) await push(readAudioSample(s));
+        for (const s of fragment.videoSamples) {
+            push(readVideoSample(s));
+            if (pendingSize >= FLUSH_THRESHOLD) await flush();
+        }
+        for (const s of fragment.audioSamples) {
+            push(readAudioSample(s));
+            if (pendingSize >= FLUSH_THRESHOLD) await flush();
+        }
     }
 
     if (pendingSize > 0) {

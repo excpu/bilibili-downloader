@@ -723,14 +723,15 @@ function buildClusters(tracks) {
             let end = start;
             while (end < arr.length && arr[end].timeMs < limit) end++;
             pointers.set(t.number, end);
-            return { track: t, samples: arr.slice(start, end) };
+            return { track: t, samples: arr, index: start, end };
         });
 
         const blocks = [];
         const emitReady = (limitMs) => {
             for (const o of othersSlice) {
-                while (o.samples.length > 0 && o.samples[0].timeMs <= limitMs) {
-                    blocks.push({ track: o.track, sample: o.samples.shift() });
+                while (o.index < o.end && o.samples[o.index].timeMs <= limitMs) {
+                    blocks.push({ track: o.track, sample: o.samples[o.index] });
+                    o.index++;
                 }
             }
         };

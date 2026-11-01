@@ -37,6 +37,12 @@
         "directories": {
             "output": "dist"
         },
+        "compression": "maximum",
+        "electronLanguages": [
+            "zh-CN",
+            "zh-TW",
+            "en-US"
+        ],
         "win": {
             "target": [
                 {
@@ -80,11 +86,20 @@
         },
         "files": [
             "**/*",
-            "!/assets/doc/**",
-            "!/assets/guide/**",
-            "!/assets/sample/**",
-            "!/images/**",
-            "!/test/**"
+            "!assets/doc{,/**/*}",
+            "!assets/guide{,/**/*}",
+            "!assets/sample{,/**/*}",
+            "!images{,/**/*}",
+            "!test{,/**/*}",
+            "!web/deprecated{,/**/*}",
+            "!assets/icon/Raw.png",
+            "!web/assets/loading-placeholder.png",
+            "!README.md",
+            "!**/*.map",
+            "!**/*.d.mts",
+            "!**/*.d.cts",
+            "!node_modules/protobufjs/dist{,/**/*}",
+            "!node_modules/protobufjs/ext{,/**/*}"
         ]
     }
 }

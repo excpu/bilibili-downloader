@@ -451,7 +451,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             };
             const wbiQuery = encWbi(params, wbiKeys.img_key, wbiKeys.sub_key);
             const url = `https://api.bilibili.com/x/player/wbi/playurl?${wbiQuery}`;
-            const credentialCookie = await auth.getConstructedCookie();
+            const credentialCookie = auth.getConstructedCookie();
 
             const response = await fetch(url, {
                 headers: {

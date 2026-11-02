@@ -21,7 +21,7 @@
     "description": "帮助你下载bilibili的视频",
     "devDependencies": {
         "cross-env": "^10.1.0",
-        "electron": "^45.2.0",
+        "electron": "39.8.10",
         "electron-builder": "^26.0.12"
     },
     "dependencies": {

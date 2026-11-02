@@ -40,6 +40,60 @@ function stsdBoxPayload(stsdEntry, type) {
     return boxPayloadBytes(findStsdBox(stsdEntry, type));
 }
 
+const AC3_SAMPLING_RATES = [48000, 44100, 32000];
+// acmod -> 不含 LFE 的声道数（A/52 表 5.5A）
+const AC3_ACMOD_CHANNELS = [1, 1, 2, 3, 3, 4, 4, 5];
+
+/**
+ * 从 dac3 / dec3 配置 Box 里取 AC-3 / E-AC-3 的真实音频参数。
+ *
+ * 杜比（AC-3 / E-AC-3）的 stsd 里 samplerate 字段按规范写 0，声道数也常被写成 2，
+ * MP4Box 的 info.audio 因此不可信（B 站杜比全景声是 5.1，读出来却是 2.0）。
+ * 真实值只能从配置 Box 里解出来，MP4 / MKV 两条封装路径都必须用它。
+ * @param {object} stsdEntry
+ * @returns {{sampleRate: number, channelCount: number}|null}
+ */
+function dolbyAudioParams(stsdEntry) {
+    if (!stsdEntry) return null;
+
+    const dac3 = findStsdBox(stsdEntry, 'dac3');
+    if (dac3 && Number.isInteger(dac3.fscod) && dac3.fscod < AC3_SAMPLING_RATES.length) {
+        const channels = AC3_ACMOD_CHANNELS[dac3.acmod] ?? 2;
+        return {
+            sampleRate: AC3_SAMPLING_RATES[dac3.fscod],
+            channelCount: channels + (dac3.lfeon ? 1 : 0),
+        };
+    }
+
+    const dec3 = findStsdBox(stsdEntry, 'dec3');
+    const sub = dec3 && Array.isArray(dec3.ind_subs) ? dec3.ind_subs[0] : null;
+    if (sub && Number.isInteger(sub.fscod) && sub.fscod < AC3_SAMPLING_RATES.length) {
+        const channels = AC3_ACMOD_CHANNELS[sub.acmod] ?? 2;
+        return {
+            sampleRate: AC3_SAMPLING_RATES[sub.fscod],
+            channelCount: channels + (sub.lfeon ? 1 : 0),
+        };
+    }
+
+    return null;
+}
+
+/**
+ * 轨道的音频参数：优先用配置 Box 解出的真实值，再退回 MP4Box 的解析结果
+ * @param {object} trackInfo
+ * @param {object} stsdEntry
+ * @returns {{sampleRate: number, channelCount: number}}
+ */
+function audioTrackParams(trackInfo, stsdEntry) {
+    const info = trackInfo || {};
+    const audio = info.audio || {};
+    const dolby = dolbyAudioParams(stsdEntry);
+    return {
+        sampleRate: dolby ? dolby.sampleRate : audio.sample_rate || info.timescale || 44100,
+        channelCount: dolby ? dolby.channelCount : audio.channel_count || 2,
+    };
+}
+
 /** Sample 的字节（内存模式取 data，流式模式调用 read()），并校验长度 */
 function sampleBytes(sample) {
     let data;
@@ -213,4 +267,6 @@ module.exports = {
     boxPayloadBytes,
     findStsdBox,
     stsdBoxPayload,
+    dolbyAudioParams,
+    audioTrackParams,
 };

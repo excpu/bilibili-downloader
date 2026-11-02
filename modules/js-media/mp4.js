@@ -8,6 +8,7 @@
 
 const MP4Box = require('mp4box');
 const { createFileWriter } = require('./stream-writer');
+const { audioTrackParams } = require('./track-source');
 
 // 写盘聚合阈值：把细碎的小帧（音频帧可能只有几百字节）聚成较大的写入块，减少 write 次数
 const FLUSH_THRESHOLD = 1 << 20;
@@ -15,47 +16,6 @@ const FLUSH_THRESHOLD = 1 << 20;
 // 单个分片的最短时长（秒）。没有 stss 或整段都是关键帧时，只按关键帧切分会退化成
 // 逐帧分片，moof 开销能占到文件体积的两成以上，所以关键帧过密时按这个时长强制合并。
 const MIN_FRAGMENT_SECONDS = 4;
-
-// AC-3 / E-AC-3 的 fscod -> 采样率（DVB/ATSC A/52 表 5.3）
-const AC3_SAMPLING_RATES = [48000, 44100, 32000];
-// acmod -> 不含 LFE 的声道数（A/52 表 5.5A）
-const AC3_ACMOD_CHANNELS = [1, 1, 2, 3, 3, 4, 4, 5];
-
-/**
- * 从 dac3 / dec3 配置 Box 里取音频参数。
- *
- * AC-3 / E-AC-3 的 stsd 里 samplerate 字段按规范写 0，MP4Box 的
- * info.audio.sample_rate 因此是 0，直接兜底成 timescale 会得到完全错误的采样率。
- * @param {object} stsdEntry
- * @returns {{sampleRate: number, channelCount: number}|null}
- */
-function audioParamsFromDolbyBox(stsdEntry) {
-    if (!stsdEntry) return null;
-    const boxes = Array.isArray(stsdEntry.boxes) ? stsdEntry.boxes : [];
-    const find = (type) =>
-        boxes.find((b) => b && b.type === type) || stsdEntry[type] || null;
-
-    const dac3 = find('dac3');
-    if (dac3 && Number.isInteger(dac3.fscod) && dac3.fscod < AC3_SAMPLING_RATES.length) {
-        const channels = AC3_ACMOD_CHANNELS[dac3.acmod] ?? 2;
-        return {
-            sampleRate: AC3_SAMPLING_RATES[dac3.fscod],
-            channelCount: channels + (dac3.lfeon ? 1 : 0),
-        };
-    }
-
-    const dec3 = find('dec3');
-    const sub = dec3 && Array.isArray(dec3.ind_subs) ? dec3.ind_subs[0] : null;
-    if (sub && Number.isInteger(sub.fscod) && sub.fscod < AC3_SAMPLING_RATES.length) {
-        const channels = AC3_ACMOD_CHANNELS[sub.acmod] ?? 2;
-        return {
-            sampleRate: AC3_SAMPLING_RATES[sub.fscod],
-            channelCount: channels + (sub.lfeon ? 1 : 0),
-        };
-    }
-
-    return null;
-}
 
 /**
  * 由 TrackSource 构造 MP4Box 的输出轨道参数
@@ -75,13 +35,12 @@ function buildTrackOptions(source, hdlr) {
         opts.width = info.video ? info.video.width : info.track_width;
         opts.height = info.video ? info.video.height : info.track_height;
     } else {
-        // stsd 里的采样率为 0（AC-3/E-AC-3）时改用配置 Box 的真实值，
-        // 两者都拿不到才退回 timescale / 立体声 / 16 bit 的猜测
+        // 音频参数统一走 track-source 的解析：杜比（AC-3/E-AC-3）的 stsd 字段不可信，
+        // 必须从 dac3 / dec3 里取真实采样率与声道数
         const audio = info.audio || {};
-        const dolby = audioParamsFromDolbyBox(source.stsdEntry);
-        opts.samplerate = audio.sample_rate || (dolby && dolby.sampleRate) || info.timescale;
-        opts.channel_count =
-            audio.channel_count || (dolby && dolby.channelCount) || 2;
+        const params = audioTrackParams(info, source.stsdEntry);
+        opts.samplerate = params.sampleRate;
+        opts.channel_count = params.channelCount;
         // stsd 里没写位深时按 PCM 惯例给 16 bit，与原行为一致
         opts.samplesize = audio.sample_size || 16;
     }

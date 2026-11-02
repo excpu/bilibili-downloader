@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { createFileWriter } = require('./stream-writer');
 // 输入统一为 track-source.js 定义的 TrackSource 契约，不直接依赖解封装实现
-const { sampleBytes, stsdBoxPayload, toBuffer } = require('./track-source');
+const { sampleBytes, stsdBoxPayload, toBuffer, audioTrackParams } = require('./track-source');
 
 // ================== EBML 基础写入 ==================
 
@@ -43,10 +43,16 @@ const ID = {
     Language: 0x22b59c,
     CodecID: 0x86,
     CodecPrivate: 0x63a2,
+        MaxBlockAdditionID: 0x55ee,
+        BlockAdditionMapping: 0x41e4,
+        BlockAddIDName: 0x41a4,
+        BlockAddIDType: 0x41e7,
+        BlockAddIDValue: 0x41f0,
+        BlockAddIDExtraData: 0x41ed,
 
-    Video: 0xe0,
-    PixelWidth: 0xb0,
-    PixelHeight: 0xba,
+        Video: 0xe0,
+        PixelWidth: 0xb0,
+        PixelHeight: 0xba,
 
     Audio: 0xe1,
     SamplingFrequency: 0xb5,
@@ -499,8 +505,30 @@ function buildFlacCodecPrivate(dfLa) {
 }
 
 /**
+ * 从 stsd 里取杜比视界配置记录（dvcC / dvvC）。
+ *
+ * 杜比视界在 MP4 里靠 stsd 子 Box 传递，Matroska 没有对应位置，
+ * 只能按官方推荐的 BlockAdditionMapping 方式挂到 TrackEntry 上，
+ * 否则播放器会把这条 HEVC 当成普通 HDR10，丢失杜比视界信息。
+ * @returns {Array<{ name: string, type: string, extraData: Buffer }>}
+ */
+function dolbyVisionBlockAdditions(stsdEntry) {
+    for (const type of ['dvcC', 'dvvC']) {
+        const extraData = configPayload(stsdEntry, type);
+        if (extraData && extraData.length > 0) {
+            return [{ name: 'Dolby Vision configuration', type, extraData }];
+        }
+    }
+    return [];
+}
+
+/**
  * 根据视频轨信息得到 Matroska 的 CodecID 与 CodecPrivate
- * @returns {{ codecId: string, codecPrivate: Buffer|null }}
+ *
+ * 杜比视界（dvh1 / dvhe）在 Matroska 里仍以 V_MPEGH/ISO/HEVC 存放，
+ * 差别是把 dvcC 配置记录写成 BlockAdditionMapping，这样播放器才知道
+ * 视频自带 Dolby Vision 增强层（否则只能当作普通 HDR10 解码）。
+ * @returns {{ codecId: string, codecPrivate: Buffer|null, blockAdditions?: Array<object> }}
  */
 function videoCodecInfo(trackInfo, stsdEntry) {
     const subtype = String(trackInfo.codec || '').split('.')[0].toLowerCase();
@@ -510,7 +538,13 @@ function videoCodecInfo(trackInfo, stsdEntry) {
             return { codecId: 'V_MPEG4/ISO/AVC', codecPrivate: configPayload(stsdEntry, 'avcC') };
         case 'hev1':
         case 'hvc1':
-            return { codecId: 'V_MPEGH/ISO/HEVC', codecPrivate: configPayload(stsdEntry, 'hvcC') };
+        case 'dvh1':
+        case 'dvhe':
+            return {
+                codecId: 'V_MPEGH/ISO/HEVC',
+                codecPrivate: configPayload(stsdEntry, 'hvcC'),
+                blockAdditions: dolbyVisionBlockAdditions(stsdEntry),
+            };
         case 'av01':
             return { codecId: 'V_AV1', codecPrivate: configPayload(stsdEntry, 'av1C') };
         default:
@@ -524,8 +558,7 @@ function videoCodecInfo(trackInfo, stsdEntry) {
  */
 function audioCodecInfo(trackInfo, stsdEntry) {
     const subtype = String(trackInfo.codec || '').split('.')[0].toLowerCase();
-    const sampleRate = trackInfo.audio ? trackInfo.audio.sample_rate : trackInfo.timescale;
-    const channels = trackInfo.audio ? trackInfo.audio.channel_count : 2;
+    const { sampleRate, channelCount: channels } = audioTrackParams(trackInfo, stsdEntry);
 
     switch (subtype) {
         case 'mp4a': {
@@ -619,7 +652,29 @@ function buildTrackEntry(track) {
         if (track.bitDepth) audioParts.push(elUint(ID.BitDepth, track.bitDepth));
         parts.push(el(ID.Audio, Buffer.concat(audioParts)));
     }
+    if (track.blockAdditions && track.blockAdditions.length > 0) {
+        // MaxBlockAdditionID 与 ffmpeg 保持一致写 0：配置只登记在映射表里，不出现在 Block 中
+        parts.push(elUint(ID.MaxBlockAdditionID, 0));
+        for (const addition of track.blockAdditions) {
+            parts.push(buildBlockAdditionMapping(addition));
+        }
+    }
     return el(ID.TrackEntry, Buffer.concat(parts));
+}
+
+/**
+ * BlockAdditionMapping：把 MP4 侧的解码器额外配置（如杜比视界的 dvcC）
+ * 以 Matroska 官方约定的形式挂到轨道上
+ */
+function buildBlockAdditionMapping(addition) {
+    const mapping = [
+        elString(ID.BlockAddIDName, addition.name),
+        elString(ID.BlockAddIDType, addition.type),
+    ];
+    if (addition.extraData && addition.extraData.length > 0) {
+        mapping.push(elBinary(ID.BlockAddIDExtraData, addition.extraData));
+    }
+    return el(ID.BlockAdditionMapping, Buffer.concat(mapping));
 }
 
 /** 块载荷长度：TrackNumber(vint) + 相对时间码(2) + flags(1) + 帧数据 */
@@ -1007,6 +1062,7 @@ function buildTracks(video, audio, subtitle) {
             type: TRACK_TYPE.VIDEO,
             codecId: vCodec.codecId,
             codecPrivate: vCodec.codecPrivate,
+                        blockAdditions: vCodec.blockAdditions,
             isDefault: true,
             language: 'und',
             width: vInfo.video ? vInfo.video.width : vInfo.track_width,
@@ -1019,21 +1075,22 @@ function buildTracks(video, audio, subtitle) {
     if (audio) {
         const aCodec = audioCodecInfo(audio.trackInfo, audio.stsdEntry);
         const aInfo = audio.trackInfo;
-        tracks.push({
-            number: nextNumber,
-            uid: nextNumber,
-            type: TRACK_TYPE.AUDIO,
-            codecId: aCodec.codecId,
-            codecPrivate: aCodec.codecPrivate,
-            isDefault: true,
-            language: 'und',
-            sampleRate: aInfo.audio ? aInfo.audio.sample_rate : aInfo.timescale,
-            channels: aInfo.audio ? aInfo.audio.channel_count : 2,
-            bitDepth: aInfo.audio ? aInfo.audio.sample_size : 16,
-            samples: demuxSamplesToMkv(audio, false),
-        });
-        nextNumber++;
-    }
+            const aParams = audioTrackParams(aInfo, audio.stsdEntry);
+            tracks.push({
+                number: nextNumber,
+                uid: nextNumber,
+                type: TRACK_TYPE.AUDIO,
+                codecId: aCodec.codecId,
+                codecPrivate: aCodec.codecPrivate,
+                isDefault: true,
+                language: 'und',
+                sampleRate: aParams.sampleRate,
+                channels: aParams.channelCount,
+                bitDepth: aInfo.audio ? aInfo.audio.sample_size : 16,
+                samples: demuxSamplesToMkv(audio, false),
+            });
+            nextNumber++;
+        }
 
     if (subtitle) {
         tracks.push({

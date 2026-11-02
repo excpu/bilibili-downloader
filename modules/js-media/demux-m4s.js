@@ -13,6 +13,7 @@ const biliPrefix = require('./bili-prefix');
 
 // B 站 PC 客户端缓存的 .m4s 文件头带 9 个 ASCII '0' (0x30) 混淆字节
 const M4S_PREFIX_LENGTH = biliPrefix.PREFIX_LENGTH;
+const MAX_BATCH_READ_SIZE = 1 << 20;
 
 /**
  * 判断一段字节开头是否是 Bilibili 的 9 字节 '0' 前缀
@@ -653,6 +654,33 @@ function demuxM4sIndex(filePath) {
                 if (reader.closed) throw new Error('M4S 文件已关闭，无法读取 Sample');
                 return reader.read(dataStart + sample.offset, sample.size);
             };
+            const readSamples = (requestedSamples) => {
+                const result = new Array(requestedSamples.length);
+                let i = 0;
+                while (i < requestedSamples.length) {
+                    let end = i + 1;
+                    let runSize = requestedSamples[i].size;
+                    while (
+                        end < requestedSamples.length &&
+                        runSize + requestedSamples[end].size <= MAX_BATCH_READ_SIZE &&
+                        requestedSamples[end].offset ===
+                            requestedSamples[end - 1].offset + requestedSamples[end - 1].size
+                    ) {
+                        runSize += requestedSamples[end].size;
+                        end++;
+                    }
+
+                    const run = reader.read(dataStart + requestedSamples[i].offset, runSize);
+                    let offset = 0;
+                    for (let j = i; j < end; j++) {
+                        const size = requestedSamples[j].size;
+                        result[j] = run.subarray(offset, offset + size);
+                        offset += size;
+                    }
+                    i = end;
+                }
+                return result;
+            };
 
             // mp4box 已不再需要底层 Buffer，及时释放
             mp4boxfile.stream.cleanBuffers();
@@ -663,6 +691,7 @@ function demuxM4sIndex(filePath) {
                     stsdEntry,
                     samples,
                     readSample,
+                    readSamples,
                     close: reader.close,
                     label: filePath,
                 })

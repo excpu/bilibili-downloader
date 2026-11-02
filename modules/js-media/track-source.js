@@ -15,6 +15,7 @@
 //                  offset?, data? } ],
 //     streamed,                     true = 帧数据不在内存里，必须用 readSample() 取
 //     readSample(sample) => Buffer, 取某一帧的原始字节（两种模式都可用）
+//     readSamples(samples) => Buffer[], 批量读取样本
 //     sampleBytes(sample) => Buffer,取任意契约内 Sample 的字节
 //     durationUnits(),              最后一帧的结束时间（以 timescale 为单位）
 //     close(),                      释放底层资源（文件句柄等），可重复调用
@@ -202,6 +203,7 @@ function createTrackSource({
     stsdEntry = null,
     samples,
     readSample = null,
+    readSamples = null,
     close = null,
     label = 'unknown',
 }) {
@@ -230,6 +232,13 @@ function createTrackSource({
             if (streamed) return readSample(sample);
             if (sample && sample.data) return toBuffer(sample.data);
             throw new Error(`TrackSource(${label}): Sample 缺少 data，无法读取帧数据`);
+        },
+
+        readSamples: (requestedSamples) => {
+            if (streamed && typeof readSamples === 'function') {
+                return readSamples(requestedSamples);
+            }
+            return requestedSamples.map((sample) => source.readSample(sample));
         },
 
         sampleBytes: (sample) => {

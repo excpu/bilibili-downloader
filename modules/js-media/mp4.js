@@ -429,6 +429,8 @@ async function writeFragments({
     fragments,
     readVideoSample,
     readAudioSample,
+    readVideoSamples = null,
+    readAudioSamples = null,
     write,
     onProgress = null,
     signal = null,
@@ -468,6 +470,28 @@ async function writeFragments({
         writtenBytes += buf.length;
     };
 
+    const pushSamples = async (samples, readSample, readSamples) => {
+        for (let start = 0; start < samples.length;) {
+            let end = start;
+            let batchSize = 0;
+            while (end < samples.length) {
+                const size = samples[end].size;
+                if (end > start && batchSize + size > FLUSH_THRESHOLD) break;
+                batchSize += size;
+                end++;
+                if (batchSize >= FLUSH_THRESHOLD) break;
+            }
+
+            const batch = samples.slice(start, end);
+            const data = readSamples ? readSamples(batch) : batch.map(readSample);
+            for (const sampleData of data) {
+                push(sampleData);
+                if (pendingSize >= FLUSH_THRESHOLD) await flush();
+            }
+            start = end;
+        }
+    };
+
     for (const fragment of fragments) {
         abortIfRequested();
         push(fragment.moof);
@@ -479,14 +503,8 @@ async function writeFragments({
         push(header);
         if (pendingSize >= FLUSH_THRESHOLD) await flush();
 
-        for (const s of fragment.videoSamples) {
-            push(readVideoSample(s));
-            if (pendingSize >= FLUSH_THRESHOLD) await flush();
-        }
-        for (const s of fragment.audioSamples) {
-            push(readAudioSample(s));
-            if (pendingSize >= FLUSH_THRESHOLD) await flush();
-        }
+        await pushSamples(fragment.videoSamples, readVideoSample, readVideoSamples);
+        await pushSamples(fragment.audioSamples, readAudioSample, readAudioSamples);
     }
 
     if (pendingSize > 0) {
@@ -552,6 +570,8 @@ async function muxFragmentedMp4({ video, audio, outputPath, onProgress = null, s
             fragments,
             readVideoSample: video.readSample,
             readAudioSample: audio.readSample,
+            readVideoSamples: video.readSamples,
+            readAudioSamples: audio.readSamples,
             write: writer.write,
             onProgress,
             signal,

@@ -111,12 +111,6 @@ function uintPayload(n) {
     return Buffer.from(bytes);
 }
 
-function int16(v) {
-    const b = Buffer.alloc(2);
-    b.writeInt16BE(v, 0);
-    return b;
-}
-
 function el(id, payload) {
     return Buffer.concat([idBytes(id), ebmlVint(payload.length), payload]);
 }
@@ -682,17 +676,18 @@ function blockPayloadLength(trackNumber, sample) {
     return vintLength(trackNumber) + 3 + sample.size;
 }
 
-function simpleBlock(trackNumber, relativeTimecode, sample) {
-    const flags = sample.keyframe ? 0x80 : 0x00;
-    return el(
-        ID.SimpleBlock,
-        Buffer.concat([
-            ebmlVint(trackNumber),
-            int16(relativeTimecode),
-            Buffer.from([flags]),
-            sampleBytes(sample),
-        ])
-    );
+function simpleBlock(trackNumber, relativeTimecode, sample, data = sampleBytes(sample)) {
+    const track = ebmlVint(trackNumber);
+    const payloadLength = track.length + 3 + data.length;
+    const result = Buffer.allocUnsafe(elLength(ID.SimpleBlock, payloadLength));
+    let p = writeElementHeader(result, 0, ID.SimpleBlock, payloadLength);
+    track.copy(result, p);
+    p += track.length;
+    result.writeInt16BE(relativeTimecode, p);
+    p += 2;
+    result[p++] = sample.keyframe ? 0x80 : 0x00;
+    data.copy(result, p);
+    return result;
 }
 
 function simpleBlockLength(trackNumber, sample) {
@@ -700,17 +695,32 @@ function simpleBlockLength(trackNumber, sample) {
 }
 
 /** 字幕需要 BlockDuration 才能控制显示时长，因此用 BlockGroup 而不是 SimpleBlock */
-function blockGroup(trackNumber, relativeTimecode, sample) {
-    const block = Buffer.concat([
-        ebmlVint(trackNumber),
-        int16(relativeTimecode),
-        Buffer.from([0x00]),
-        sampleBytes(sample),
-    ]);
-    return el(
-        ID.BlockGroup,
-        Buffer.concat([el(ID.Block, block), elUint(ID.BlockDuration, Math.max(sample.durMs, 1))])
-    );
+function blockGroup(trackNumber, relativeTimecode, sample, data = sampleBytes(sample)) {
+    const track = ebmlVint(trackNumber);
+    const blockPayloadLength = track.length + 3 + data.length;
+    const blockLength = elLength(ID.Block, blockPayloadLength);
+    const durationElement = elUint(ID.BlockDuration, Math.max(sample.durMs, 1));
+    const groupPayloadLength = blockLength + durationElement.length;
+    const result = Buffer.allocUnsafe(elLength(ID.BlockGroup, groupPayloadLength));
+    let p = writeElementHeader(result, 0, ID.BlockGroup, groupPayloadLength);
+    p = writeElementHeader(result, p, ID.Block, blockPayloadLength);
+    track.copy(result, p);
+    p += track.length;
+    result.writeInt16BE(relativeTimecode, p);
+    p += 2;
+    result[p++] = 0;
+    data.copy(result, p);
+    p += data.length;
+    durationElement.copy(result, p);
+    return result;
+}
+
+function writeElementHeader(target, offset, id, payloadLength) {
+    const idBuffer = idBytes(id);
+    const sizeBuffer = ebmlVint(payloadLength);
+    idBuffer.copy(target, offset);
+    sizeBuffer.copy(target, offset + idBuffer.length);
+    return offset + idBuffer.length + sizeBuffer.length;
 }
 
 function blockGroupLength(trackNumber, sample) {
@@ -725,6 +735,7 @@ function blockGroupLength(trackNumber, sample) {
  * 这里取 30 s 上限，保证即使块时间有抖动也不会溢出。
  */
 const MAX_CLUSTER_DURATION_MS = 30000;
+const MAX_CLUSTER_WRITE_SIZE = 1 << 20;
 
 /**
  * 把音轨/字幕按时间窗切成 Cluster，并保持视频 Sample 的解码顺序
@@ -849,16 +860,39 @@ function clusterLength(cluster) {
 function* clusterChunks(cluster) {
     yield elHeader(ID.Cluster, clusterPayloadLength(cluster));
     yield elUint(ID.Timestamp, cluster.ts);
-    for (const { track, sample } of cluster.blocks) {
-        const rel = sample.timeMs - cluster.ts;
-        if (rel < -32768 || rel > 32767) {
-            throw new Error(`Sample 相对时间超出 Cluster 范围 (${rel} ms)`);
+    const blocks = cluster.blocks;
+    for (let i = 0; i < blocks.length;) {
+        const { track, sample } = blocks[i];
+        let end = i + 1;
+        let runSize = sample.size || 0;
+        while (
+            typeof track.readSamples === 'function' &&
+            Number.isFinite(sample.offset) &&
+            end < blocks.length &&
+            blocks[end].track === track &&
+            blocks[end].sample.offset === blocks[end - 1].sample.offset + blocks[end - 1].sample.size &&
+            runSize + blocks[end].sample.size <= MAX_CLUSTER_WRITE_SIZE
+        ) {
+            runSize += blocks[end].sample.size;
+            end++;
         }
-        if (track.type === TRACK_TYPE.SUBTITLE) {
-            yield blockGroup(track.number, rel, sample);
-        } else {
-            yield simpleBlock(track.number, rel, sample);
+
+        const run = blocks.slice(i, end);
+        const data =
+            run.length > 1 ? track.readSamples(run.map((block) => block.sample)) : null;
+        for (let j = 0; j < run.length; j++) {
+            const block = run[j];
+            const rel = block.sample.timeMs - cluster.ts;
+            if (rel < -32768 || rel > 32767) {
+                throw new Error(`Sample 相对时间超出 Cluster 范围 (${rel} ms)`);
+            }
+            if (block.track.type === TRACK_TYPE.SUBTITLE) {
+                yield blockGroup(block.track.number, rel, block.sample, data ? data[j] : undefined);
+            } else {
+                yield simpleBlock(block.track.number, rel, block.sample, data ? data[j] : undefined);
+            }
         }
+        i = end;
     }
 }
 
@@ -888,7 +922,7 @@ function buildSeekHead(infoPos, tracksPos, cuesPos) {
  * 分块把完整的 mkv 写出去（流式落盘核心）
  *
  * 相比一次性返回 Buffer，这里不把整个文件放进内存：
- * 先算出 Cluster 布局和 Cues，再按 Cluster 边界逐块交给 write()。
+ * 先算出 Cluster 布局和 Cues，再按 Cluster 边界聚合后交给 write()。
  * 字幕/Sample 数据在需要时通过 sample.read() 从源文件读，写完即释放。
  *
  * @param {object} params
@@ -999,9 +1033,24 @@ async function muxMatroskaToWriter({ tracks, title = null, onProgress = null, si
         await emit(info);
         await emit(tracksBuf);
 
+        let pending = [];
+        let pendingSize = 0;
+        const flushCluster = async () => {
+            if (pendingSize === 0) return;
+            const chunk = pending.length === 1 ? pending[0] : Buffer.concat(pending, pendingSize);
+            pending = [];
+            pendingSize = 0;
+            await emit(chunk);
+        };
+
         for (let i = 0; i < clusters.length; i++) {
             if (signal && signal.aborted) throw new Error('转封装已取消');
-            for (const chunk of clusterChunks(clusters[i])) await emit(chunk);
+            for (const chunk of clusterChunks(clusters[i])) {
+                pending.push(chunk);
+                pendingSize += chunk.length;
+                if (pendingSize >= MAX_CLUSTER_WRITE_SIZE) await flushCluster();
+            }
+            await flushCluster();
             report();
         }
 
@@ -1068,6 +1117,7 @@ function buildTracks(video, audio, subtitle) {
             width: vInfo.video ? vInfo.video.width : vInfo.track_width,
             height: vInfo.video ? vInfo.video.height : vInfo.track_height,
             samples: demuxSamplesToMkv(video, true),
+            readSamples: video.readSamples,
         });
         nextNumber++;
     }
@@ -1088,6 +1138,7 @@ function buildTracks(video, audio, subtitle) {
                 channels: aParams.channelCount,
                 bitDepth: aInfo.audio ? aInfo.audio.sample_size : 16,
                 samples: demuxSamplesToMkv(audio, false),
+                readSamples: audio.readSamples,
             });
             nextNumber++;
         }

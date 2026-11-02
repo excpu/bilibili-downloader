@@ -1,0 +1,63 @@
+/* ==========================================================================
+   加载态的场景样式（图标本体见 micon-spin.css）
+
+   - 封面加载中：在封面原位显示转圈图标，替代原来的占位图
+   - 按钮加载中：按钮文字 + 小号转圈图标
+   ========================================================================== */
+
+/* ---- 封面 ---- */
+
+.video-info .thumbnail-loading {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+    color: var(--brand);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    background: var(--surface-sunken, #f0f0f0);
+    pointer-events: none;
+}
+
+.video-info .thumbnail-inner.is-loading .thumbnail-loading {
+    display: grid;
+    animation: micon-fade-in .2s ease-out;
+}
+
+@keyframes micon-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+.btn.is-loading .micon-spin {
+    animation: micon-spin .9s linear infinite, micon-fade-in .2s ease-out;
+}
+
+.video-info .thumbnail-inner #videoThumbnail {
+    transition: opacity .15s ease;
+}
+
+/* 加载时保留封面尺寸，只把旧图隐藏，避免布局跳动 */
+.video-info .thumbnail-inner.is-loading #videoThumbnail {
+    opacity: 0;
+}
+
+/* 加载中不显示悬浮播放按钮，也不提示可点击 */
+.video-info .thumbnail-inner.is-loading {
+    cursor: default;
+}
+
+.video-info .thumbnail-inner.is-loading::before,
+.video-info .thumbnail-inner.is-loading::after {
+    opacity: 0;
+}
+
+/* ---- 按钮 ---- */
+
+.btn.is-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}

@@ -1,5 +1,27 @@
 /* 设置弹出框样式 */
 
+/* 固定弹窗尺寸：否则宽度/高度由当前选项卡内容撑开，切换选项卡时卡片会跟着变化 */
+#settingModel .model-content {
+    width: 80%;
+    height: min(680px, 90vh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#settingModel .model-header {
+    flex-shrink: 0;
+}
+
+/* 内容在固定高度内滚动；滚动条槽位常驻，避免切换选项卡时内容宽度变化 */
+#settingModelBody {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
 /* 设置分区 */
 .setting-tabs {
     display: flex;

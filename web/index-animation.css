@@ -1,0 +1,477 @@
+/* ==========================================================================
+   index-animation.css — 界面过渡动画层
+
+   设计要点：
+   - 只负责过渡与入场动画，不改变布局和配色；颜色全部跟随现有 CSS token。
+   - 必须在 index.css / model.css / setting.css / library.css / index-dark.css
+     之后引入，才能覆盖各文件里零散的 transition 并接管弹窗动画。
+   - 依赖 Chromium 129+ 的 @starting-style 与 transition-behavior: allow-discrete，
+     用于让 display: none 的显隐也能平滑过渡。本项目 Electron 39 满足要求。
+   ========================================================================== */
+
+:root {
+    --ui-fast: 120ms;
+    --ui-base: 200ms;
+    --ui-slow: 300ms;
+    --ui-ease: cubic-bezier(.2, .7, .2, 1);
+    --ui-ease-out: cubic-bezier(.16, 1, .3, 1);
+    --ui-ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+}
+
+/* --------------------------------------------------------------------------
+   1. 页面、主题与基础控件
+   -------------------------------------------------------------------------- */
+
+/* 主题切换时让窗口底色和文字颜色平滑过渡 */
+body {
+    transition:
+        background-color var(--ui-slow) var(--ui-ease),
+        color var(--ui-base) var(--ui-ease);
+}
+
+.topbar {
+    transition:
+        background-color var(--ui-base) var(--ui-ease),
+        border-color var(--ui-base) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease);
+}
+
+/* 卡片：首次出现、被 .hidden 隐藏后再次显示，都走同一套淡入上浮过渡 */
+.card {
+    transition:
+        opacity var(--ui-base) var(--ui-ease),
+        translate var(--ui-slow) var(--ui-ease-out),
+        background-color var(--ui-slow) var(--ui-ease),
+        border-color var(--ui-base) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        display var(--ui-base) allow-discrete;
+}
+
+.card.hidden {
+    opacity: 0;
+    translate: 0 -8px;
+}
+
+@starting-style {
+    .card {
+        opacity: 0;
+        translate: 0 12px;
+    }
+}
+
+/* 按钮：悬停轻抬、按下回弹 */
+.btn {
+    transition:
+        background-color var(--ui-fast) var(--ui-ease),
+        color var(--ui-fast) var(--ui-ease),
+        border-color var(--ui-fast) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        opacity var(--ui-fast) var(--ui-ease),
+        transform var(--ui-fast) var(--ui-ease);
+}
+
+.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(0) scale(.97);
+}
+
+.btn.brand:hover:not(:disabled) {
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--brand) 28%, transparent);
+}
+
+/* 顶栏胶囊入口 */
+.pill {
+    transition:
+        background-color var(--ui-fast) var(--ui-ease),
+        border-color var(--ui-fast) var(--ui-ease),
+        color var(--ui-fast) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        transform var(--ui-fast) var(--ui-ease);
+}
+
+.pill.clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--brand) 16%, transparent);
+}
+
+.pill.clickable:active {
+    transform: translateY(0) scale(.97);
+}
+
+/* 头像 */
+.avatar {
+    transition:
+        background-color var(--ui-base) var(--ui-ease),
+        border-color var(--ui-fast) var(--ui-ease),
+        color var(--ui-base) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        transform var(--ui-base) var(--ui-ease-spring);
+}
+
+.avatar:hover {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+    transform: scale(1.06);
+}
+
+.avatar img {
+    animation: ui-fade-in var(--ui-slow) var(--ui-ease);
+}
+
+/* 输入框与下拉框 */
+.field input,
+.path-input,
+.setting-select {
+    transition:
+        background-color var(--ui-base) var(--ui-ease),
+        border-color var(--ui-fast) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        color var(--ui-base) var(--ui-ease);
+}
+
+.field input:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+.field .suffix,
+.clickable {
+    transition:
+        color var(--ui-fast) var(--ui-ease),
+        opacity var(--ui-fast) var(--ui-ease);
+}
+
+/* --------------------------------------------------------------------------
+   2. 下载任务
+   -------------------------------------------------------------------------- */
+
+.task {
+    animation: ui-enter-up var(--ui-slow) var(--ui-ease-out);
+    transition:
+        background-color var(--ui-slow) var(--ui-ease),
+        border-color var(--ui-base) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        transform var(--ui-base) var(--ui-ease);
+}
+
+.task:hover {
+    transform: translateY(-1px);
+}
+
+.progress > i {
+    transition:
+        width 300ms linear,
+        background-color var(--ui-base) var(--ui-ease);
+}
+
+/* --------------------------------------------------------------------------
+   3. 通知消息
+   -------------------------------------------------------------------------- */
+
+.notification {
+    animation: ui-notification-in var(--ui-slow) var(--ui-ease-out);
+}
+
+.notification-hide {
+    animation: ui-notification-out var(--ui-base) var(--ui-ease) forwards;
+}
+
+@keyframes ui-notification-in {
+    from {
+        opacity: 0;
+        translate: 0 -12px;
+        scale: .96;
+    }
+
+    to {
+        opacity: 1;
+        translate: 0 0;
+        scale: 1;
+    }
+}
+
+@keyframes ui-notification-out {
+    to {
+        opacity: 0;
+        translate: 0 -10px;
+        scale: .96;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   4. 弹出框（工具 / 收藏 / 设置）
+   -------------------------------------------------------------------------- */
+
+/* 用可逆过渡替换 model.css 的一次性 fadeIn / popUp，关闭时也能播放动画 */
+.model {
+    animation: none;
+    opacity: 0;
+    transition:
+        background-color var(--ui-base) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        display var(--ui-base) allow-discrete;
+}
+
+.model:not(.hidden) {
+    opacity: 1;
+}
+
+.model.hidden {
+    opacity: 0;
+}
+
+@starting-style {
+    .model:not(.hidden) {
+        opacity: 0;
+    }
+}
+
+.model-content {
+    animation: none;
+    opacity: 1;
+    scale: 1;
+    transition:
+        background-color var(--ui-slow) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        scale var(--ui-slow) var(--ui-ease-spring);
+}
+
+.model.hidden .model-content {
+    opacity: 0;
+    scale: .96;
+}
+
+@starting-style {
+    .model:not(.hidden) .model-content {
+        opacity: 0;
+        scale: .96;
+    }
+}
+
+/* 设置分区、设置项、收藏夹切换等由 .hidden 控制的显隐 */
+.setting-tab-panel,
+.setting-item,
+.setting-checkbox,
+.setting-section,
+.collection-parts,
+.library-fav-list,
+#subtitleSelection,
+.multi-part-selector {
+    transition:
+        background-color var(--ui-slow) var(--ui-ease),
+        border-color var(--ui-base) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        translate var(--ui-base) var(--ui-ease-out),
+        display var(--ui-base) allow-discrete;
+}
+
+.setting-tab-panel.hidden,
+.setting-item.hidden,
+.setting-checkbox.hidden,
+.setting-section.hidden,
+.collection-parts.hidden,
+.library-fav-list.hidden,
+#subtitleSelection.hidden,
+.multi-part-selector.hidden {
+    opacity: 0;
+    translate: 0 -4px;
+}
+
+@starting-style {
+
+    .setting-tab-panel:not(.hidden),
+    .setting-item:not(.hidden),
+    .setting-checkbox:not(.hidden),
+    .setting-section:not(.hidden),
+    .collection-parts:not(.hidden),
+    .library-fav-list:not(.hidden),
+    #subtitleSelection:not(.hidden),
+    .multi-part-selector:not(.hidden) {
+        opacity: 0;
+        translate: 0 -4px;
+    }
+}
+
+/* 设置标签页 */
+/* 选项卡面板整块切换：旧面板立即移出布局，只对新面板做淡入。
+   否则 display 的离散过渡会让新旧面板同时占位约 200ms，内容被向下顶开再回弹。 */
+.setting-tab-panel {
+    transition:
+        opacity var(--ui-base) var(--ui-ease),
+        translate var(--ui-base) var(--ui-ease-out);
+}
+
+.setting-tab {
+    transition:
+        opacity var(--ui-fast) var(--ui-ease),
+        color var(--ui-fast) var(--ui-ease),
+        background-color var(--ui-fast) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        transform var(--ui-fast) var(--ui-ease);
+}
+
+.setting-tab:hover {
+    transform: translateY(-1px);
+}
+
+.setting-tab.active {
+    box-shadow: 0 1px 6px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+/* 设置里的条件提示、错误提示 */
+.setting-hint,
+.setting-checkbox {
+    transition:
+        color var(--ui-fast) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        translate var(--ui-base) var(--ui-ease-out),
+        display var(--ui-base) allow-discrete;
+}
+
+/* 工具弹窗格子 */
+.tool-slot {
+    transition:
+        border-color var(--ui-fast) var(--ui-ease),
+        box-shadow var(--ui-base) var(--ui-ease),
+        transform var(--ui-base) var(--ui-ease);
+}
+
+.tool-slot:hover {
+    border-color: var(--brand-2);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--brand) 10%, transparent);
+    transform: translateY(-2px);
+}
+
+.tool-slot:active {
+    transform: translateY(0) scale(.99);
+}
+
+/* --------------------------------------------------------------------------
+   5. 收藏 / 历史记录
+   -------------------------------------------------------------------------- */
+
+.fav-folder {
+    animation: ui-enter-left var(--ui-base) var(--ui-ease-out);
+    transition:
+        background-color var(--ui-fast) var(--ui-ease),
+        color var(--ui-fast) var(--ui-ease),
+        transform var(--ui-fast) var(--ui-ease);
+}
+
+.fav-folder:not(.active):hover {
+    transform: translateX(2px);
+}
+
+.library-item {
+    animation: ui-enter-up var(--ui-base) var(--ui-ease-out);
+    transition:
+        background-color var(--ui-fast) var(--ui-ease),
+        filter var(--ui-base) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        transform var(--ui-base) var(--ui-ease);
+}
+
+.library-item:not(.invalid):not(.picking):hover {
+    transform: translateX(2px);
+}
+
+.library-item.picking {
+    animation: ui-pulse 1.2s var(--ui-ease) infinite;
+}
+
+.library-thumb {
+    transition: background-color var(--ui-base) var(--ui-ease);
+}
+
+.library-thumb img {
+    transition: transform var(--ui-slow) var(--ui-ease-out);
+}
+
+.library-item:not(.invalid):hover .library-thumb img {
+    transform: scale(1.04);
+}
+
+.library-status,
+.library-footer,
+.library-group-title {
+    animation: ui-fade-in var(--ui-base) var(--ui-ease);
+}
+
+/* --------------------------------------------------------------------------
+   6. 入口动画关键帧
+   -------------------------------------------------------------------------- */
+
+@keyframes ui-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes ui-enter-up {
+    from {
+        opacity: 0;
+        translate: 0 8px;
+    }
+}
+
+@keyframes ui-enter-left {
+    from {
+        opacity: 0;
+        translate: -6px 0;
+    }
+}
+
+@keyframes ui-pulse {
+
+    0%,
+    100% {
+        opacity: .55;
+    }
+
+    50% {
+        opacity: .35;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   7. 无障碍：用户要求减少动态效果时关闭装饰性动画
+      （保留加载转圈等必要的状态反馈）
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .card,
+    .btn,
+    .pill,
+    .avatar,
+    .avatar img,
+    .field input,
+    .path-input,
+    .setting-select,
+    .task,
+    .progress > i,
+    .notification,
+    .model,
+    .model-content,
+    .setting-tab,
+    .setting-tab-panel,
+    .setting-item,
+    .setting-checkbox,
+    .setting-section,
+    .collection-parts,
+    .library-fav-list,
+    #subtitleSelection,
+    .multi-part-selector,
+    .tool-slot,
+    .fav-folder,
+    .library-item,
+    .library-thumb,
+    .library-thumb img,
+    .library-status,
+    .library-footer,
+    .library-group-title {
+        animation: none !important;
+        transition: none !important;
+    }
+}

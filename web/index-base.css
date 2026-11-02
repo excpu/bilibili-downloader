@@ -26,10 +26,24 @@
 
 html,
 body {
-    /* 用 min-height 而不是 height：body 高度被固定成窗口高度时，
-       内容会溢出到 body 之外，sticky 顶栏只能在 body 盒内吸附，
-       页面一滚动就会跟着消失。 */
-    min-height: 100%;
+    height: 100%;
+}
+
+/* 滚动发生在顶栏下方的 .page-scroll 内：滚动条不再延伸到右上角，
+   不会与 Windows 的 titleBarOverlay 窗口控制按钮重叠。 */
+body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.page-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: scroll;
+    /* 滚动条槽位常驻：卡片显隐动画期间内容高度会连续变化，
+       滚动条若时有时无会让宽度反复跳变，打断动画。 */
+    scrollbar-gutter: stable both-edges;
 }
 
 body {
@@ -42,8 +56,8 @@ body {
 }
 
 .topbar {
-    position: sticky;
-    top: 0;
+    flex: none;
+    position: relative;
     z-index: 50;
     display: flex;
     align-items: center;
@@ -193,6 +207,19 @@ html[data-platform="linux"] .topbar {
 
 .btn:hover {
     background: #e9e9e9
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+}
+
+/* 普通禁用态整体淡化；带转圈图标的按钮保持清晰，避免图标被一起调淡看不清 */
+.btn:disabled:not(.is-loading) {
+    opacity: .6;
+}
+
+.btn:disabled:hover {
+    background: var(--surface, #f0f0f0);
 }
 
 .btn.brand {

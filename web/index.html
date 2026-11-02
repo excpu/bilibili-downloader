@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="library.css">
     <!-- 主题层：必须在上面三个样式表之后，靠加载顺序覆盖写死浅色的规则 -->
     <link rel="stylesheet" href="index-dark.css">
+    <!-- 动效层：最后加载，统一接管各组件过渡与弹窗显隐动画 -->
+    <link rel="stylesheet" href="index-animation.css">
 </head>
 
 <body>
@@ -30,6 +32,7 @@
         <div class="avatar" id="avatar">登录</div>
     </div>
 
+    <div class="page-scroll">
     <main class="container">
         <!-- 链接输入 -->
         <section class="card">
@@ -70,7 +73,11 @@
             <div class="video-info" id="videoInfo">
                 <div class="thumbnail">
                     <span class="thumbnail-inner">
-                        <img id="videoThumbnail" src="./assets/compressed-loading-placeholder.jpg" />
+                        <img id="videoThumbnail" alt="" />
+                        <!-- 封面加载中：CSS 绘制的转圈图标（样式见 index-micon） -->
+                        <span class="thumbnail-loading" aria-hidden="true">
+                            <span class="micon-spin"></span>
+                        </span>
                     </span>
                 </div>
                 <div class="details">
@@ -567,6 +574,7 @@
 
         <div class="hidden">
     </main>
+    </div>
     <div class="spacer"></div>
     <script src="bv_enc.js"></script>
     <script src="folder_structure.js"></script>

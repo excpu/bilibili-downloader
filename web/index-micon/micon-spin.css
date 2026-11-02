@@ -1,0 +1,62 @@
+/* ==========================================================================
+   转圈加载图标（纯 CSS 绘制，不依赖图片、字体或 JS）
+
+   用法：<span class="micon-spin"></span>，可选 .micon-spin--sm 缩小。
+   颜色跟随 currentColor，尺寸/粗细可用 --micon-size / --micon-thickness 覆盖。
+   ========================================================================== */
+
+.micon-spin {
+    --micon-size: 24px;
+    --micon-thickness: 3px;
+    /* 圆头半宽对应的圆心角，须约等于 (thickness/2) / (半径 - thickness/2) */
+    --micon-cap: .025turn;
+    position: relative;
+    display: inline-block;
+    flex: none;
+    width: var(--micon-size);
+    height: var(--micon-size);
+    border-radius: 50%;
+    /* 用 conic-gradient 画出一段渐隐的弧，再用径向遮罩挖空中心，得到纯 CSS 的转圈环；弧在头部前一个圆头半宽处收尾，由下方圆点补成圆头 */
+    background: conic-gradient(from 0turn, transparent 0turn, currentColor calc(1turn - var(--micon-cap)), transparent calc(1turn - var(--micon-cap)));
+    -webkit-mask: radial-gradient(farthest-side,
+            transparent calc(100% - var(--micon-thickness)),
+            #000 calc(100% - var(--micon-thickness)),
+            #000 calc(100% - .5px),
+            transparent 100%);
+    mask: radial-gradient(farthest-side,
+            transparent calc(100% - var(--micon-thickness)),
+            #000 calc(100% - var(--micon-thickness)),
+            #000 calc(100% - .5px),
+            transparent 100%);
+    animation: micon-spin .9s linear infinite;
+}
+
+/* 圆头：圆点嵌在环带内（被同一个 mask 裁切），圆心落在弧尾上，右半边刚好到 0 度而不越过渐隐起点 */
+.micon-spin::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% calc(var(--micon-thickness) / 2),
+            currentColor calc(var(--micon-thickness) / 2 - .5px),
+            transparent calc(var(--micon-thickness) / 2));
+    transform: rotate(calc(-1 * var(--micon-cap)));
+}
+
+.micon-spin--sm {
+    --micon-size: 13px;
+    --micon-thickness: 2px;
+    --micon-cap: .03turn;
+}
+
+@keyframes micon-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+/* 尊重系统的减少动态效果偏好：放慢而不是完全停下，仍能表达“处理中” */
+@media (prefers-reduced-motion: reduce) {
+    .micon-spin {
+        animation-duration: 2.4s;
+    }
+}

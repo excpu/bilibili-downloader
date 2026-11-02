@@ -20,6 +20,7 @@ function isNonRetriableError(err) {
     if (err?.code && nonRetriableFsCodes.has(err.code)) return true;
 
     if (typeof err?.statusCode === 'number') {
+        if (err.statusCode === 567) return true; // 非标风控状态码，立即失败
         return err.statusCode >= 400 && err.statusCode < 500 && ![408, 409, 413, 429].includes(err.statusCode);
     }
 
@@ -174,10 +175,13 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                     // 仅接受 200（整文件响应）和 206（部分内容响应）。
                     // 其他状态码一律作为下载失败处理。
                     if (![200, 206].includes(statusCode)) {
-                        const httpError = new Error(`下载失败：HTTP ${statusCode}`);
+                        const isRiskControl = statusCode === 567;
+                        const httpError = new Error(isRiskControl
+                            ? '下载失败：HTTP 567（触发风控，已停止重试）'
+                            : `下载失败：HTTP ${statusCode}`);
                         httpError.code = 'HTTP_STATUS_ERROR';
                         httpError.statusCode = statusCode;
-                        httpError.nonRetriable = statusCode >= 400 && statusCode < 500 && ![408, 409, 413, 429].includes(statusCode);
+                        httpError.nonRetriable = isRiskControl || (statusCode >= 400 && statusCode < 500 && ![408, 409, 413, 429].includes(statusCode));
                         downloadStream.resume();
                         finish(httpError);
                         return;

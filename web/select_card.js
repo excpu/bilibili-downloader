@@ -92,19 +92,55 @@ function selectInfo() {
     // 展示缩略图
     function updateThumbnail(thumbnailUrl) {
         const $videoThumbnail = document.getElementById('videoThumbnail');
-        if (thumbnailUrl.startsWith("https:") || thumbnailUrl.startsWith("http:")) {
-            $videoThumbnail.src = thumbnailUrl;
+        if (typeof thumbnailUrl !== 'string' || !/^https?:/i.test(thumbnailUrl)) {
+            stopThumbnailLoading();
+            return;
         }
+        // 图片加载完成后再撤掉转圈图标，避免中间闪一帧空白
+        $videoThumbnail.onload = stopThumbnailLoading;
+        $videoThumbnail.onerror = () => {
+            // 加载失败时清掉 src，避免浏览器画出破图图标
+            $videoThumbnail.removeAttribute('src');
+            stopThumbnailLoading();
+        };
+        $videoThumbnail.src = thumbnailUrl;
+        if ($videoThumbnail.complete && $videoThumbnail.naturalWidth > 0) {
+            stopThumbnailLoading();
+        }
+    }
+    // 封面加载中：清掉旧封面，由 CSS 转圈图标顶替原来的占位图
+    function startThumbnailLoading() {
+        const $videoThumbnail = document.getElementById('videoThumbnail');
+        const $thumbnailInner = $videoThumbnail?.closest('.thumbnail-inner');
+        if (!$thumbnailInner) {
+            return;
+        }
+        $videoThumbnail.onload = null;
+        $videoThumbnail.onerror = null;
+        $videoThumbnail.removeAttribute('src');
+        $thumbnailInner.classList.add('is-loading');
+    }
+    // 封面加载完成（或失败）：隐藏转圈图标
+    function stopThumbnailLoading() {
+        const $videoThumbnail = document.getElementById('videoThumbnail');
+        const $thumbnailInner = $videoThumbnail?.closest('.thumbnail-inner');
+        if (!$thumbnailInner) {
+            return;
+        }
+        $videoThumbnail.onload = null;
+        $videoThumbnail.onerror = null;
+        $thumbnailInner.classList.remove('is-loading');
     }
     // 展示整个信息选择器
     function show() {
+        startThumbnailLoading();
         $videoInfoSection.classList.remove('hidden');
     }
     // 隐藏整个信息选择器
     function hide() {
+        stopThumbnailLoading();
         $videoInfoSection.classList.add('hidden');
     }
-    // 隐藏整个信息选择器
     // 在获取信息时禁用确认按钮，防止用户重复点击
     function disableConfirmBtn() {
     }
@@ -453,17 +489,54 @@ function selectInfo() {
         $searchCollectionBtn.onclick = () => openCollection(season.id, season.mid, season.ep_count, videoData);
     }
 
-    // 直接按合集ID搜索合集并应用到视频信息界面（供"搜索合集"按钮与收藏/历史选择器共用）
-    async function openCollection(seasonId, mid, epCount, sourceVideo) {
-        const seasondata = await window.electronAPI.invoke('searchCollection', seasonId, mid, epCount);
-        console.log('合集搜索结果:', seasondata);
+    // “搜索合集”按钮的忙闲状态：搜索期间禁用按钮并显示转圈图标，避免重复搜索
+    function setCollectionSearchBusy(busy) {
+        const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        if (!$searchCollectionBtn) {
+            return;
+        }
+        if (busy) {
+            if ($searchCollectionBtn.disabled) {
+                return;
+            }
+            $searchCollectionBtn.dataset.idleLabel = $searchCollectionBtn.textContent;
+            $searchCollectionBtn.textContent = '加载中';
+            const $spinner = document.createElement('span');
+            $spinner.className = 'micon-spin micon-spin--sm';
+            $spinner.setAttribute('aria-hidden', 'true');
+            $searchCollectionBtn.append($spinner);
+            $searchCollectionBtn.classList.add('is-loading');
+            $searchCollectionBtn.disabled = true;
+            return;
+        }
+        $searchCollectionBtn.classList.remove('is-loading');
+        $searchCollectionBtn.disabled = false;
+        $searchCollectionBtn.replaceChildren($searchCollectionBtn.dataset.idleLabel || '搜索合集');
+        delete $searchCollectionBtn.dataset.idleLabel;
+    }
 
-        if (!seasondata.success) {
-            alert(`合集搜索失败: ${seasondata.message || '未知错误'}`);
+    // 直接按合集ID搜索合集并应用到视频信息界面（供”搜索合集”按钮与收藏/历史选择器共用）
+    async function openCollection(seasonId, mid, epCount, sourceVideo) {
+        const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        // 搜索进行中再次触发时直接忽略，防止重复搜索
+        if ($searchCollectionBtn?.disabled) {
             return false;
         }
 
-        return applyCollectionSeason(seasondata, sourceVideo);
+        setCollectionSearchBusy(true);
+        try {
+            const seasondata = await window.electronAPI.invoke('searchCollection', seasonId, mid, epCount);
+            console.log('合集搜索结果:', seasondata);
+
+            if (!seasondata.success) {
+                alert(`合集搜索失败: ${seasondata.message || '未知错误'}`);
+                return false;
+            }
+
+            return applyCollectionSeason(seasondata, sourceVideo);
+        } finally {
+            setCollectionSearchBusy(false);
+        }
     }
 
     // 把合集搜索结果应用到视频信息界面，供"搜索合集"按钮和收藏/历史选择器共用
@@ -506,6 +579,8 @@ function selectInfo() {
 
     function hideCollectionSearch() {
         const $searchCollectionBtn = document.getElementById('searchCollectionBtn');
+        // 切换视频时清掉上一次搜索留下的忙态，避免新视频的按钮还是“加载中”
+        setCollectionSearchBusy(false);
         $searchCollectionBtn.classList.add('hidden');
         $searchCollectionBtn.onclick = null;
         $searchAllCollectionDetails.classList.add('hidden');
@@ -562,6 +637,8 @@ function selectInfo() {
         clearMultipart,
         updateMeta,
         updateThumbnail,
+        startThumbnailLoading,
+        stopThumbnailLoading,
         displayStreamOptions,
         show,
         hide,

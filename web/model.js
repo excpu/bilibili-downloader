@@ -21,9 +21,21 @@ function createModel() {
 
         setTimeout(() => {
             messageElement.classList.add('notification-hide');
+            // 同步折叠高度（含 gap），让后面的通知平滑上移补位而不是跳变
+            const height = messageElement.offsetHeight;
+            messageElement.style.boxSizing = 'border-box';
+            messageElement.style.height = `${height}px`;
+            messageElement.style.overflow = 'hidden';
+            void messageElement.offsetHeight;
+            messageElement.style.transition = 'height .3s ease, padding .3s ease, margin-bottom .3s ease, border-width .3s ease';
+            messageElement.style.height = '0px';
+            messageElement.style.paddingTop = '0px';
+            messageElement.style.paddingBottom = '0px';
+            messageElement.style.borderWidth = '0px';
+            messageElement.style.marginBottom = '-12px';
             setTimeout(() => {
                 messageElement.remove();
-            }, 300);
+            }, 320);
         }, second);
     }
 

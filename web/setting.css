@@ -97,6 +97,11 @@
     display: none;
 }
 
+/* 需显式覆盖上面的 display: flex，否则 .hidden 无法生效 */
+.setting-item.hidden {
+    display: none;
+}
+
 .setting-item label {
     font-size: 13px;
     font-weight: 500;
@@ -166,6 +171,11 @@
 
 .path-input::placeholder {
     color: var(--text-tertiary, rgba(0, 0, 0, 0.4));
+}
+
+/* 自定义 CDN：非法主机名时的行内提示 */
+.setting-hint.cdn-hint-error {
+    color: var(--err, #e74c3c);
 }
 
 /* 下载引擎选择 */

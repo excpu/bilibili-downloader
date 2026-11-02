@@ -23,4 +23,29 @@ async function fetchCdnList() {
     return cachedList;
 }
 
-module.exports = { fetchCdnList };
+// 规范化用户自定义的 CDN 主机：允许粘贴完整 URL，最终只保留主机名
+function normalizeCdnHost(raw) {
+    let value = String(raw ?? '').trim();
+    if (!value) return '';
+
+    // 去掉协议、userinfo、端口与路径，仅留下 hostname
+    value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+    value = value.split(/[/?#]/)[0];
+    value = value.slice(value.lastIndexOf('@') + 1);
+    value = value.split(':')[0].trim().toLowerCase();
+    value = value.replace(/\.+$/, '');
+
+    if (!value || value.length > 253) return '';
+
+    // 逐段校验标签长度与字符集，拒绝空白、通配符等非法主机名
+    const labels = value.split('.');
+    const valid = labels.every((label) =>
+        label.length > 0 &&
+        label.length <= 63 &&
+        /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label)
+    );
+
+    return valid ? value : '';
+}
+
+module.exports = { fetchCdnList, normalizeCdnHost };

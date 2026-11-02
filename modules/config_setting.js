@@ -4,6 +4,7 @@ const path = require('path');
 
 const { DEFAULT_OPTIONS: DEFAULT_DANMAKU_ASS_OPTIONS } = require('./xml2ass');
 const { sanitizePath } = require('./sanitize_path');
+const { normalizeCdnHost } = require('./cdn_source');
 
 const CONCURRENCY_VALUES = [1, 2, 4, 8, 16, 32, 64];
 const DEFAULT_CONCURRENCY = 2;
@@ -298,13 +299,16 @@ class Setting {
 
     updateCdnHost(cdnHost) {
         const data = this.load() || {};
-        data.cdnHost = cdnHost || '';
+        // 统一规范化，避免非法主机名写进配置导致下载链接无法替换
+        data.cdnHost = normalizeCdnHost(cdnHost);
         this.save(data);
     }
 
     getCdnHost() {
         const data = this.load();
-        return data ? (data.cdnHost || '') : this.defaultData.cdnHost;
+        const stored = data ? (data.cdnHost || '') : this.defaultData.cdnHost;
+        // 兼容历史配置：读取时同样规范化，非法值视为未设置
+        return normalizeCdnHost(stored);
     }
 
     updateSubtitleSettings(subtitleSettings) {

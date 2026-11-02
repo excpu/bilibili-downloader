@@ -233,6 +233,17 @@
                                     <option value="">默认（不替换）</option>
                                 </select>
                             </div>
+                            <!-- 仅在下拉框中选择"自定义 CDN…"后展开 -->
+                            <div class="setting-item hidden" id="cdnCustomHostSetting">
+                                <label for="cdnCustomHostInput">自定义 CDN 域名：</label>
+                                <div class="path-input-group">
+                                    <input type="text" id="cdnCustomHostInput" class="path-input"
+                                        placeholder="例如：upos-sz-mirrorcos.bilivideo.com" />
+                                    <button class="btn small" id="cdnCustomHostSaveBtn">保存</button>
+                                    <button class="btn small" id="cdnCustomHostCancelBtn">取消</button>
+                                </div>
+                                <p class="setting-hint" id="cdnCustomHostHint">可直接粘贴完整下载链接或域名，保存时只保留主机名。</p>
+                            </div>
                         </div>
                     </div>
 
@@ -384,8 +395,10 @@
                                 <input type="checkbox" id="mp4NonStandardAudioCheckbox">
                                 <span>将 FLAC、杜比全景声非标封装进 MP4</span>
                             </label>
-                            <p class="setting-hint" id="mp4NonStandardAudioHint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC 或杜比全景声时会自动改用 MKV 容器。</p>
-                            <p class="setting-hint">下载与音视频合成全部由纯 JS 的 js-media 完成：MP4 走分片 MP4 封装，MKV 走 Matroska 封装；仅音频下载时 AAC 转封装为 M4A、FLAC 转封装为原生 FLAC、杜比全景声等其余编码封装为纯音频 MKV。</p>
+                            <p class="setting-hint" id="mp4NonStandardAudioHint">MP4 兼容性最好；MKV 可容纳更多音视频编码。取消勾选后，音轨为 FLAC
+                                或杜比全景声时会自动改用 MKV 容器。</p>
+                            <p class="setting-hint">下载与音视频合成全部由纯 JS 的 js-media 完成：MP4 走分片 MP4 封装，MKV 走 Matroska
+                                封装；仅音频下载时 AAC 转封装为 M4A、FLAC 转封装为原生 FLAC、杜比全景声等其余编码封装为纯音频 MKV。</p>
                         </div>
                     </div>
 

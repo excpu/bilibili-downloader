@@ -26,7 +26,10 @@
 
 html,
 body {
-    height: 100%;
+    /* 用 min-height 而不是 height：body 高度被固定成窗口高度时，
+       内容会溢出到 body 之外，sticky 顶栏只能在 body 盒内吸附，
+       页面一滚动就会跟着消失。 */
+    min-height: 100%;
 }
 
 body {

@@ -1,6 +1,6 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const Setting = require('../modules/config_setting');
-const { fetchCdnList } = require('../modules/cdn_source');
+const { fetchCdnList, normalizeCdnHost } = require('../modules/cdn_source');
 const theme = require('../modules/theme');
 
 const setting = new Setting();
@@ -100,7 +100,11 @@ module.exports = function registerSettingIpc(mainWindow) {
 
     ipcMain.handle('setCdnHost', (event, cdnHost) => {
         setting.updateCdnHost(cdnHost);
+        // 返回规范化后的值，渲染进程据此回填输入框并提示非法输入
+        return setting.getCdnHost();
     });
+
+    ipcMain.handle('normalizeCdnHost', (event, cdnHost) => normalizeCdnHost(cdnHost));
 
     ipcMain.handle('getSubtitleSettings', () => setting.getSubtitleSettings());
 

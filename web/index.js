@@ -51,15 +51,17 @@ function getVideoInfo() {
     // 自动清空URL
     $urlInput.value = "";
     // 获取视频基本信息
-    return window.electronAPI.invoke('getVideoInfo', bv).then((videoInfo) => {
+    return window.electronAPI.invoke('getVideoInfo', bv).then(async (videoInfo) => {
         if (!videoInfo.success) {
             alert('获取视频信息失败：' + videoInfo.message);
+            downloadLock = false;
             infoSection.hide();
             return;
         }
         console.log('获取到视频信息:', videoInfo);
         // 有些视频会需要跳转
         if (videoInfo.data.need_jump_bv) {
+            downloadLock = false;
             infoSection.hide();
             alert('该视频需要跳转，当前版本暂不支持此类视频的下载。');
             return;
@@ -70,8 +72,8 @@ function getVideoInfo() {
         infoSection.updateTitle(videoInfo.data.title);
         // 更新UP主信息
         infoSection.updateMeta(videoInfo.data.owner.name);
-        // 更新缩略图
-        infoSection.updateThumbnail(videoInfo.data.pic);
+        // 更新缩略图（等待封面加载完成，与其他内容一起显示）
+        const thumbnailTask = infoSection.updateThumbnail(videoInfo.data.pic);
         // 判断视频是否有合集，若有合集显示合集搜索按钮
         infoSection.collectionSearch(videoInfo.data);
         // 清空之前的分P选项
@@ -82,16 +84,29 @@ function getVideoInfo() {
             infoSection.showMultipartSelector();
             // 列出分P
             infoSection.addMultipart(videoInfo.data.pages);
-
-            // 获取视频流信息时传入分P信息
-            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, videoInfo.data.pages, videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = true;
         } else {
-            // 非分P隐藏分P选择器，直接获取视频流信息
+            // 非分P隐藏分P选择器
             infoSection.hideMultipartSelector();
-            getVideoStreams(bv, videoInfo.data.cid, videoInfo.data.title, [], videoInfo.data.pic, videoInfo.data.duration);
             multiPartVideo = false;
         }
+        // 获取视频流信息时传入分P信息
+        const streamTask = getVideoStreams(
+            bv,
+            videoInfo.data.cid,
+            videoInfo.data.title,
+            multiPartVideo ? videoInfo.data.pages : [],
+            videoInfo.data.pic,
+            videoInfo.data.duration
+        );
+        // 等封面、画质/音频、字幕全部就绪后再一次性显示，避免内容分几次跳出来
+        await Promise.all([thumbnailTask, streamTask]);
+        infoSection.reveal();
+    }).catch((error) => {
+        console.error('获取视频信息失败:', error);
+        downloadLock = false;
+        alert(`获取视频信息失败：${error?.message || '未知错误'}`);
+        infoSection.hide();
     });
 }
 
@@ -173,17 +188,29 @@ function getVideoStreams(bvid, cid, title, p = [], coverUrl, duration) {
         coverUrl,
         duration
     };
-    window.electronAPI.invoke('getVideoStreams', { bvid, cid }).then((streamInfo) => {
+    return (async () => {
+        let streamInfo;
+        try {
+            streamInfo = await window.electronAPI.invoke('getVideoStreams', { bvid, cid });
+        } catch (error) {
+            streamInfo = { success: false, message: error?.message };
+        }
         console.log('获取到视频流信息:', streamInfo);
+        if (!streamInfo?.success || !streamInfo.data?.dash) {
+            alert(`获取视频流信息失败：${streamInfo?.message || '未知错误'}`);
+            // 没有画质信息时不允许下载，保留 downloadLock 让“确认下载”失效
+            return;
+        }
         // 渲染音频流和视频流
         infoSection.displayStreamOptions(streamInfo.data.dash);
         downloadLock = false;
 
-        infoSection.getSubtitleInfo(subtitleBvid, subtitleCid).catch((error) => {
+        // 字幕列表同样属于详情内容，等它渲染完再统一显示
+        await infoSection.getSubtitleInfo(subtitleBvid, subtitleCid).catch((error) => {
             console.error('获取字幕信息失败:', error);
             alert(`获取字幕信息失败：${error.message}`);
         });
-    });
+    })();
 }
 
 const $downloadSelectedSubtitleBtn = document.getElementById('downloadSelectedSubtitleBtn');
@@ -313,23 +340,59 @@ $cancelVideoInfo.addEventListener('click', () => {
     infoSection.hide();
 });
 
-// 启动时获取登录状态
+let globalUserInfo = null;
+
+// 登录状态未知时，头像显示转圈动画，避免先闪一下“登录”再变成头像
+let avatarLoadingTimeout = null;
+
+// 启动时获取登录状态（头像先播放加载动画，状态返回后再切换）
+setAvatarLoading();
 window.electronAPI.invoke('loginStatus').then((status) => {
     console.log('登录状态:', status);
     if (status) {
         fetchUserInfo();
+    } else {
+        renderLoggedOut();
     }
+}).catch((error) => {
+    console.error('获取登录状态失败:', error);
+    renderLoggedOut();
 });
 
+function setAvatarLoading() {
+    $avatar.classList.add('is-loading');
+    $avatar.setAttribute('aria-busy', 'true');
+    $avatar.title = '正在获取登录状态';
+    $avatar.innerHTML = '<span class="micon-spin avatar-spinner" aria-hidden="true"></span>';
+    if (avatarLoadingTimeout) {
+        clearTimeout(avatarLoadingTimeout);
+    }
+    // 兜底：状态迟迟不返回时按未登录展示，避免一直转圈
+    avatarLoadingTimeout = setTimeout(() => {
+        console.warn('获取登录状态超时，暂按未登录展示');
+        renderLoggedOut();
+    }, 8000);
+}
 
-let globalUserInfo = null;
+function clearAvatarLoading() {
+    if (avatarLoadingTimeout) {
+        clearTimeout(avatarLoadingTimeout);
+        avatarLoadingTimeout = null;
+    }
+    $avatar.classList.remove('is-loading');
+    $avatar.removeAttribute('aria-busy');
+    $avatar.removeAttribute('title');
+}
+
 function renderLoggedIn(userInfo) {
+    clearAvatarLoading();
     globalUserInfo = userInfo;
     globalLoginStatus = true;
     $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
 }
 
 function renderLoggedOut() {
+    clearAvatarLoading();
     globalUserInfo = null;
     globalLoginStatus = false;
     $avatar.textContent = '登录';
@@ -349,12 +412,20 @@ function fetchUserInfo() {
         } else {
             renderLoggedOut();
         }
+    }).catch((error) => {
+        console.error('获取用户信息失败:', error);
+        renderLoggedOut();
     });
 }
 
 // 点击头像区域触发登录
 $avatar.addEventListener('click', () => {
     console.log('点击了头像区域，触发登录流程');
+    // 登录状态还在获取中，先忽略点击，避免误弹登录框
+    if ($avatar.classList.contains('is-loading')) {
+        console.log('登录状态获取中，暂不处理点击');
+        return;
+    }
     if (globalLoginStatus) {
         console.log('用户已登录，无需重复登录');
         return;

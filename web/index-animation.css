@@ -10,6 +10,9 @@
    ========================================================================== */
 
 :root {
+    /* 允许 height: auto 与具体长度之间过渡（Chromium 129+），设置项折叠依赖它 */
+    interpolate-size: allow-keywords;
+
     --ui-fast: 120ms;
     --ui-base: 200ms;
     --ui-slow: 300ms;
@@ -118,6 +121,16 @@ body {
 
 .avatar img {
     animation: ui-fade-in var(--ui-slow) var(--ui-ease);
+}
+
+/* 加载态：只保留内部转圈，不加外发光 */
+.avatar.is-loading {
+    color: var(--muted);
+}
+
+/* 状态落定后内容淡入 */
+.avatar:not(.is-loading) {
+    animation: ui-fade-in var(--ui-base) var(--ui-ease);
 }
 
 /* 输入框与下拉框 */
@@ -251,9 +264,6 @@ body {
 
 /* 设置分区、设置项、收藏夹切换等由 .hidden 控制的显隐 */
 .setting-tab-panel,
-.setting-item,
-.setting-checkbox,
-.setting-section,
 .collection-parts,
 .library-fav-list,
 #subtitleSelection,
@@ -266,14 +276,64 @@ body {
         display var(--ui-base) allow-discrete;
 }
 
-.setting-tab-panel.hidden,
+/* 设置项折叠：隐藏时高度从 auto 收敛到 0，下方内容一起上移。
+   这类元素不能再靠 display: none 隐藏——离散过渡会把移除布局推迟到过渡结束，
+   下方内容先原地停住 200ms 再瞬间弹上去，就是"跳位"的来源。
+   改成 0 高度 + visibility: hidden 后，显示与隐藏两种状态都有盒子，
+   height 才能连续过渡（可见状态的高度仍是 auto，布局不受影响）。 */
+.setting-item,
+.setting-checkbox,
+.setting-section,
+.setting-hint {
+    overflow: clip;
+    overflow-clip-margin: 8px; /* 留出输入框聚焦时 3px 的外发光，避免被裁掉 */
+    transition:
+        color var(--ui-fast) var(--ui-ease),
+        background-color var(--ui-slow) var(--ui-ease),
+        border-color var(--ui-base) var(--ui-ease),
+        opacity var(--ui-base) var(--ui-ease),
+        translate var(--ui-base) var(--ui-ease-out),
+        height var(--ui-base) var(--ui-ease),
+        margin-block var(--ui-base) var(--ui-ease),
+        padding-block var(--ui-base) var(--ui-ease),
+        visibility var(--ui-base);
+}
+
+/* setting.css / index-utilities.css 里的 .hidden 会用 display: none 隐藏，
+   这里显式还原，否则折叠过程中没有盒子可动画。 */
 .setting-item.hidden,
-.setting-checkbox.hidden,
+.setting-checkbox.hidden {
+    display: flex;
+}
+
 .setting-section.hidden,
+.setting-hint.hidden {
+    display: block;
+}
+
+/* 折叠时容器高度变小，禁止设置项的子元素被压扁 */
+.setting-item>* {
+    flex-shrink: 0;
+}
+
+.setting-tab-panel.hidden,
 .collection-parts.hidden,
 .library-fav-list.hidden,
 #subtitleSelection.hidden,
 .multi-part-selector.hidden {
+    opacity: 0;
+    translate: 0 -4px;
+}
+
+.setting-item.hidden,
+.setting-checkbox.hidden,
+.setting-section.hidden,
+.setting-hint.hidden {
+    height: 0;
+    margin-block: 0;
+    padding-block: 0;
+    /* 不可见后同时移出焦点顺序与无障碍树 */
+    visibility: hidden;
     opacity: 0;
     translate: 0 -4px;
 }
@@ -317,16 +377,6 @@ body {
 
 .setting-tab.active {
     box-shadow: 0 1px 6px color-mix(in srgb, var(--brand) 14%, transparent);
-}
-
-/* 设置里的条件提示、错误提示 */
-.setting-hint,
-.setting-checkbox {
-    transition:
-        color var(--ui-fast) var(--ui-ease),
-        opacity var(--ui-base) var(--ui-ease),
-        translate var(--ui-base) var(--ui-ease-out),
-        display var(--ui-base) allow-discrete;
 }
 
 /* 工具弹窗格子 */
@@ -459,6 +509,7 @@ body {
     .setting-item,
     .setting-checkbox,
     .setting-section,
+    .setting-hint,
     .collection-parts,
     .library-fav-list,
     #subtitleSelection,

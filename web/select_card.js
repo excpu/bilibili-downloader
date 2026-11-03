@@ -2,6 +2,10 @@
 // infosection
 function selectInfo() {
     const $videoInfoSection = document.getElementById('videoInfoSection');
+    const $videoInfo = document.getElementById('videoInfo');
+    const $videoTitle = document.getElementById('videoTitle');
+    const $videoMeta = document.getElementById('videoMeta');
+    const $downloadBtn = document.getElementById('downloadBtn');
     const $multiPartSelector = document.getElementById('multiPartSelector');
     const $multiPartSelectorInner = document.getElementById("multiPartSelectorInner");
     const $searchAllCollectionDetails = document.getElementById('searchAllCollectionDetails');
@@ -79,34 +83,58 @@ function selectInfo() {
 
         return episode.loadingPromise;
     }
+    // 数据未就绪时整块显示骨架；就绪后一次性显示所有内容
+    function setPending(isPending) {
+        $videoInfo.classList.toggle('is-pending', isPending);
+        if ($downloadBtn) {
+            // 清晰度/音频还没渲染出来时不允许发起下载
+            $downloadBtn.disabled = isPending;
+        }
+    }
+    // 所有数据（封面、标题、UP主、清晰度、音频、字幕）都已渲染，统一显示
+    function reveal() {
+        setPending(false);
+    }
     // 更新视频标题
     function updateTitle(title) {
-        const $videoTitle = document.getElementById('videoTitle');
         $videoTitle.textContent = title;
     }
     // 更新视频信息
     function updateMeta(upName) {
-        const $videoMeta = document.getElementById('videoMeta');
         $videoMeta.textContent = `UP主: ${upName}`;
     }
-    // 展示缩略图
+    // 展示缩略图：返回在加载完成（或失败）后 resolve 的 Promise，供统一显示时等待
     function updateThumbnail(thumbnailUrl) {
         const $videoThumbnail = document.getElementById('videoThumbnail');
         if (typeof thumbnailUrl !== 'string' || !/^https?:/i.test(thumbnailUrl)) {
             stopThumbnailLoading();
-            return;
+            return Promise.resolve();
         }
-        // 图片加载完成后再撤掉转圈图标，避免中间闪一帧空白
-        $videoThumbnail.onload = stopThumbnailLoading;
-        $videoThumbnail.onerror = () => {
-            // 加载失败时清掉 src，避免浏览器画出破图图标
-            $videoThumbnail.removeAttribute('src');
-            stopThumbnailLoading();
-        };
-        $videoThumbnail.src = thumbnailUrl;
-        if ($videoThumbnail.complete && $videoThumbnail.naturalWidth > 0) {
-            stopThumbnailLoading();
-        }
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                clearTimeout(timer);
+                stopThumbnailLoading();
+                resolve();
+            };
+            // 封面网络异常时不阻塞整体显示
+            const timer = setTimeout(finish, 3000);
+            // 图片加载完成后再撤掉转圈图标，避免中间闪一帧空白
+            $videoThumbnail.onload = finish;
+            $videoThumbnail.onerror = () => {
+                // 加载失败时清掉 src，避免浏览器画出破图图标
+                $videoThumbnail.removeAttribute('src');
+                finish();
+            };
+            $videoThumbnail.src = thumbnailUrl;
+            if ($videoThumbnail.complete && $videoThumbnail.naturalWidth > 0) {
+                finish();
+            }
+        });
     }
     // 封面加载中：清掉旧封面，由 CSS 转圈图标顶替原来的占位图
     function startThumbnailLoading() {
@@ -131,13 +159,15 @@ function selectInfo() {
         $videoThumbnail.onerror = null;
         $thumbnailInner.classList.remove('is-loading');
     }
-    // 展示整个信息选择器
+    // 展示整个信息选择器：先只显示骨架，等数据到齐后由 reveal() 一次性显示内容
     function show() {
+        setPending(true);
         startThumbnailLoading();
         $videoInfoSection.classList.remove('hidden');
     }
     // 隐藏整个信息选择器
     function hide() {
+        setPending(false);
         stopThumbnailLoading();
         $videoInfoSection.classList.add('hidden');
     }
@@ -641,6 +671,7 @@ function selectInfo() {
         stopThumbnailLoading,
         displayStreamOptions,
         show,
+        reveal,
         hide,
         hideMultipartSelector,
         selectAllPart,

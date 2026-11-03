@@ -193,6 +193,20 @@ html[data-platform="linux"] .topbar {
     object-fit: cover;
 }
 
+/* 登录状态未知时：转圈提示，避免先闪一下“登录”再变成头像 */
+.avatar.is-loading {
+    cursor: progress;
+}
+
+.avatar.is-loading:hover {
+    transform: none;
+}
+
+.avatar-spinner {
+    --micon-size: 16px;
+    --micon-thickness: 2px;
+}
+
 .btn {
     cursor: pointer;
     border: 1px solid var(--stroke);

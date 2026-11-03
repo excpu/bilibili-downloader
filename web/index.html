@@ -29,7 +29,9 @@
             <!-- <span class="pill clickable" onclick="openMoreTools()">更多工具</span> -->
             <span class="pill clickable" onclick="settingWeb.openSetting()">设置</span>
         </div>
-        <div class="avatar" id="avatar">登录</div>
+        <div class="avatar is-loading" id="avatar" title="正在获取登录状态" aria-busy="true">
+            <span class="micon-spin avatar-spinner" aria-hidden="true"></span>
+        </div>
     </div>
 
     <div class="page-scroll">

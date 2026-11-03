@@ -53,6 +53,86 @@
     opacity: 0;
 }
 
+/* ---- 详情区骨架（标题 / UP主 / 各项选项） ---- */
+
+/* 详情区的数据（标题、UP主、清晰度、音频、字幕）来自不同请求，
+   加载期间整块挂在 .is-pending 上：真实内容隐藏、位置由骨架条占住，
+   数据全部到齐后移除 .is-pending，所有内容一次性出现且布局不跳动。 */
+.video-info.is-pending .details>.title,
+.video-info.is-pending .details>.meta,
+.video-info.is-pending .details>.quality-selection {
+    position: relative;
+}
+
+/* 文本行：文字透明，行高照旧 */
+.video-info.is-pending .details>.title,
+.video-info.is-pending .details>.meta {
+    color: transparent;
+    user-select: none;
+}
+
+/* 控件行：label / select / 复选框全部隐藏，但仍占住原高度 */
+.video-info.is-pending .details>.quality-selection>* {
+    visibility: hidden;
+}
+
+/* 分P / 合集列表体量大，等数据齐全后再连同其他内容一起出现 */
+.video-info.is-pending .details>.multi-part-selector {
+    display: none;
+    /* 关掉 display 的离散过渡，否则进入骨架态时列表会先闪一下再消失 */
+    transition: none;
+}
+
+.video-info.is-pending .details>.title::after,
+.video-info.is-pending .details>.meta::after,
+.video-info.is-pending .details>.quality-selection::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: var(--skeleton-width, min(58%, 320px));
+    height: var(--skeleton-height, .9em);
+    transform: translateY(-50%);
+    border-radius: 6px;
+    /* 经典三段式微光：底色 + 高光扫过 */
+    background-color: light-dark(#eef0f3, #2b2b2b);
+    background-image: linear-gradient(90deg,
+            transparent 25%,
+            light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.08)) 37%,
+            transparent 63%);
+    background-size: 400% 100%;
+    animation: video-info-skeleton 1.4s ease infinite;
+}
+
+.video-info.is-pending .details>.title::after {
+    --skeleton-width: min(78%, 420px);
+    --skeleton-height: 1.05em;
+}
+
+.video-info.is-pending .details>.meta::after {
+    --skeleton-width: min(52%, 260px);
+    --skeleton-height: .85em;
+}
+
+@keyframes video-info-skeleton {
+    from {
+        background-position: 100% 50%;
+    }
+
+    to {
+        background-position: 0 50%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .video-info.is-pending .details>.title::after,
+    .video-info.is-pending .details>.meta::after,
+    .video-info.is-pending .details>.quality-selection::after {
+        animation: none;
+    }
+}
+
 /* ---- 按钮 ---- */
 
 .btn.is-loading {

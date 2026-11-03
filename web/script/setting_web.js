@@ -75,9 +75,9 @@ function createSettingWeb() {
         if ($concurrencySetting && $downloadEngineSelect) {
             const engine = $downloadEngineSelect.value;
             const isMulti = engine === 'node-multi';
-            $concurrencySetting.hidden = !isMulti;
+            $concurrencySetting.classList.toggle('hidden', !isMulti);
             const $resume = document.getElementById('nodeResumeSetting');
-            if ($resume) $resume.classList.toggle('hidden', engine !== 'node-multi');
+            if ($resume) $resume.classList.toggle('hidden', !isMulti);
         }
     }
 

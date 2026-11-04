@@ -13,6 +13,8 @@ const DOWNLOAD_ENGINE_VALUES = ['node', 'node-multi'];
 const DEFAULT_DOWNLOAD_ENGINE = 'node-multi';
 // 界面主题取值：跟随系统 / 浅色 / 深色
 const THEME_VALUES = ['system', 'light', 'dark'];
+// 实验性：弹窗从触发按钮展开 / 收回的过渡动画，关闭后使用普通的淡入缩放动画
+const DEFAULT_MODAL_MORPH_ENABLED = true;
 // 最终输出视频容器格式
 const OUTPUT_FORMAT_VALUES = ['mp4', 'mkv'];
 const DEFAULT_OUTPUT_FORMAT = 'mp4';
@@ -56,6 +58,7 @@ class Setting {
         this.defaultDownloadPath = app.getPath('downloads');
         this.defaultData = {
             theme: 'system',  // 界面主题：system / light / dark
+            modalMorphEnabled: DEFAULT_MODAL_MORPH_ENABLED, // 实验性：弹窗从触发按钮展开/收回的过渡动画
             downloadInFolder: false,  // 是否在下载目录中创建与视频/集合同名的子文件夹
             downloadFolderNesting: false,  // 是否启用文件夹嵌套（分P、合集分层保存）
             downloadEngine: DEFAULT_DOWNLOAD_ENGINE, // 下载引擎，node / node-multi（纯 JS）
@@ -189,6 +192,18 @@ class Setting {
         const data = this.load();
         const theme = data ? data.theme : this.defaultData.theme;
         return THEME_VALUES.includes(theme) ? theme : 'system';
+    }
+
+    updateModalMorphEnabled(enabled) {
+        const data = this.load() || {};
+        data.modalMorphEnabled = enabled !== false;
+        this.save(data);
+        return data.modalMorphEnabled;
+    }
+
+    getModalMorphEnabled() {
+        const data = this.load() || {};
+        return data.modalMorphEnabled !== false;
     }
 
     updateNodeResumeEnabled(enabled) {

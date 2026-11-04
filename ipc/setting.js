@@ -16,6 +16,10 @@ module.exports = function registerSettingIpc(mainWindow) {
         return saved;
     });
 
+    ipcMain.handle('getModalMorphEnabled', () => setting.getModalMorphEnabled());
+
+    ipcMain.handle('setModalMorphEnabled', (event, enabled) => setting.updateModalMorphEnabled(enabled));
+
     ipcMain.handle('getDownloadEngine', () => {
         return setting.getDownloadEngine();
     });

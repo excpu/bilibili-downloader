@@ -322,7 +322,7 @@ const libraryPicker = (() => {
 
     // ---- 打开 / 关闭 ----
 
-    async function open(nextMode) {
+    async function open(nextMode, trigger = document.activeElement) {
         mode = nextMode;
         historyCursor = null;
         historyExhausted = false;
@@ -333,7 +333,7 @@ const libraryPicker = (() => {
         $libraryModelTitle.textContent = nextMode === 'history' ? '历史记录' : '我的收藏';
         $favList.classList.toggle('hidden', nextMode !== 'fav');
         setStatus('加载中…');
-        $libraryModel.classList.remove('hidden');
+        openModal($libraryModel, trigger);
 
         loading = true;
         try {
@@ -355,7 +355,7 @@ const libraryPicker = (() => {
 
     function close() {
         footerObserver?.disconnect();
-        $libraryModel.classList.add('hidden');
+        closeModal($libraryModel);
     }
 
     // ---- 选择视频 / 合集：填入输入框并复用链接下载流程 ----
@@ -426,8 +426,8 @@ const libraryPicker = (() => {
 
     // ---- 事件绑定 ----
 
-    document.getElementById('pickFromFavBtn').addEventListener('click', () => open('fav'));
-    document.getElementById('pickFromHistoryBtn').addEventListener('click', () => open('history'));
+    document.getElementById('pickFromFavBtn').addEventListener('click', (event) => open('fav', event.currentTarget));
+    document.getElementById('pickFromHistoryBtn').addEventListener('click', (event) => open('history', event.currentTarget));
     $libraryModelCloseBtn.addEventListener('click', close);
     $libraryModel.addEventListener('click', (event) => {
         if (event.target === $libraryModel) close();

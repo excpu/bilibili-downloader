@@ -16,9 +16,10 @@
     --ui-fast: 120ms;
     --ui-base: 200ms;
     --ui-slow: 300ms;
-    --ui-ease: cubic-bezier(.2, .7, .2, 1);
+    --ui-ease: cubic-bezier(.2, .8, .2, 1);
+    --ui-ease-in: cubic-bezier(.4, 0, 1, 1);
     --ui-ease-out: cubic-bezier(.16, 1, .3, 1);
-    --ui-ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+    --ui-ease-spring: cubic-bezier(.34, 1.45, .64, 1);
 }
 
 /* --------------------------------------------------------------------------
@@ -53,6 +54,7 @@ body {
 .card.hidden {
     opacity: 0;
     translate: 0 -8px;
+    transition-timing-function: var(--ui-ease-in);
 }
 
 @starting-style {
@@ -187,7 +189,7 @@ body {
 }
 
 .notification-hide {
-    animation: ui-notification-out var(--ui-base) var(--ui-ease) forwards;
+    animation: ui-notification-out var(--ui-base) var(--ui-ease-in) forwards;
 }
 
 @keyframes ui-notification-in {
@@ -216,50 +218,21 @@ body {
    4. 弹出框（工具 / 收藏 / 设置）
    -------------------------------------------------------------------------- */
 
-/* 用可逆过渡替换 model.css 的一次性 fadeIn / popUp，关闭时也能播放动画 */
+/* 弹窗的展开 / 收回由 model.js 的 openModal / closeModal 用 Web Animations 驱动，
+   这里只需关掉 model.css 的一次性入场动画，并在收回期间屏蔽点击。
+   不再对 .model 做 opacity / display 过渡——那会让弹窗在收回时被整体淡出。 */
 .model {
     animation: none;
-    opacity: 0;
-    transition:
-        background-color var(--ui-base) var(--ui-ease),
-        opacity var(--ui-base) var(--ui-ease),
-        display var(--ui-base) allow-discrete;
 }
 
-.model:not(.hidden) {
-    opacity: 1;
-}
-
-.model.hidden {
-    opacity: 0;
-}
-
-@starting-style {
-    .model:not(.hidden) {
-        opacity: 0;
-    }
+.model.is-closing {
+    pointer-events: none;
 }
 
 .model-content {
     animation: none;
-    opacity: 1;
-    scale: 1;
-    transition:
-        background-color var(--ui-slow) var(--ui-ease),
-        opacity var(--ui-base) var(--ui-ease),
-        scale var(--ui-slow) var(--ui-ease-spring);
-}
-
-.model.hidden .model-content {
-    opacity: 0;
-    scale: .96;
-}
-
-@starting-style {
-    .model:not(.hidden) .model-content {
-        opacity: 0;
-        scale: .96;
-    }
+    transform-origin: 50% 50%;
+    transition: background-color var(--ui-slow) var(--ui-ease);
 }
 
 /* 设置分区、设置项、收藏夹切换等由 .hidden 控制的显隐 */
@@ -296,7 +269,7 @@ body {
         height var(--ui-base) var(--ui-ease),
         margin-block var(--ui-base) var(--ui-ease),
         padding-block var(--ui-base) var(--ui-ease),
-        visibility var(--ui-base);
+        visibility var(--ui-base) var(--ui-ease);
 }
 
 /* setting.css / index-utilities.css 里的 .hidden 会用 display: none 隐藏，
@@ -336,6 +309,7 @@ body {
     visibility: hidden;
     opacity: 0;
     translate: 0 -4px;
+    transition-timing-function: var(--ui-ease-in);
 }
 
 @starting-style {
@@ -436,6 +410,12 @@ body {
 
 .library-thumb img {
     transition: transform var(--ui-slow) var(--ui-ease-out);
+}
+
+.library-entry {
+    transition:
+        color var(--ui-fast) var(--ui-ease),
+        transform var(--ui-fast) var(--ui-ease-out);
 }
 
 .library-item:not(.invalid):hover .library-thumb img {

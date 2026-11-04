@@ -58,12 +58,12 @@ function openToolModel(title) {
     }
 
     renderMoreTools();
-    $toolModel.classList.remove('hidden');
+    openModal($toolModel);
 }
 
 function closeToolModel() {
     if ($toolModel) {
-        $toolModel.classList.add('hidden');
+        closeModal($toolModel);
     }
 }
 
@@ -132,4 +132,3 @@ function openMergeTool() {
 function openMoreTools() {
     openToolModel('更多工具');
 }
-

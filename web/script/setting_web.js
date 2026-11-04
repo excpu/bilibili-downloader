@@ -7,6 +7,7 @@ function createSettingWeb() {
     const $nodeResumeCheckbox = document.getElementById('nodeResumeCheckbox');
     const $danmuDownloadMethodSelect = document.getElementById('danmuDownloadMethodSelect');
     const $themeSelect = document.getElementById('themeSelect');
+    const $modalMorphCheckbox = document.getElementById('modalMorphCheckbox');
     const $downloadPathInput = document.getElementById('downloadPathInput');
     const $selectDownloadPathBtn = document.getElementById('selectDownloadPathBtn');
     const $downloadInFolderCheckbox = document.getElementById('downloadInFolderCheckbox');
@@ -39,8 +40,8 @@ function createSettingWeb() {
     const $danmakuAssSettings = document.getElementById('danmakuAssSettings');
     const $danmakuOptionInputs = [...document.querySelectorAll('[data-danmaku-option]')];
 
-    async function openSetting() {
-        settingModel.classList.remove('hidden');
+    async function openSetting(trigger) {
+        openModal(settingModel, trigger);
         showUname(globalUserInfo ? globalUserInfo.data.uname : '未登录');
         showAvatar(globalUserInfo ? globalUserInfo.data.face : 'https://static.hdslb.com/images/akari.jpg');
         await loadDownloadPath();
@@ -49,6 +50,7 @@ function createSettingWeb() {
         await loadConcurrency();
         await loadDanmuDownloadMethod();
         await loadTheme();
+        await loadModalMorph();
         await loadCdnList();
         await loadOutputFormat();
         await loadSubtitleSettings();
@@ -57,7 +59,7 @@ function createSettingWeb() {
     }
 
     function closeSetting() {
-        settingModel.classList.add('hidden');
+        closeModal(settingModel);
     }
 
     function showUname(uname) {
@@ -111,6 +113,14 @@ function createSettingWeb() {
         if (theme && $themeSelect) {
             $themeSelect.value = theme;
         }
+    }
+
+    async function loadModalMorph() {
+        const enabled = await window.electronAPI.invoke('getModalMorphEnabled');
+        if ($modalMorphCheckbox) {
+            $modalMorphCheckbox.checked = enabled !== false;
+        }
+        setModalMorphEnabled(enabled !== false);
     }
 
     async function loadOutputFormat() {
@@ -478,6 +488,14 @@ function createSettingWeb() {
         $themeSelect.addEventListener('change', (event) => {
             // 主进程改写 nativeTheme.themeSource，CSS 的 light-dark() 随即整体切换
             window.electronAPI.invoke('setTheme', event.target.value);
+        });
+    }
+
+    if ($modalMorphCheckbox) {
+        $modalMorphCheckbox.addEventListener('change', (event) => {
+            // 立即生效，包括当前设置弹窗本身的关闭动画
+            setModalMorphEnabled(event.target.checked);
+            window.electronAPI.invoke('setModalMorphEnabled', event.target.checked);
         });
     }
 

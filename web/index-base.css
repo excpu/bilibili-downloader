@@ -146,7 +146,7 @@ html[data-platform="linux"] .topbar {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.75);
     font-size: 0.88rem;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(.2, .8, .2, 1);
     -webkit-app-region: no-drag;
 }
 
@@ -177,7 +177,7 @@ html[data-platform="linux"] .topbar {
     font-weight: 700;
     border: 1px solid var(--stroke);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(.2, .8, .2, 1);
     -webkit-app-region: no-drag;
 }
 
@@ -214,7 +214,7 @@ html[data-platform="linux"] .topbar {
     color: var(--text);
     padding: 10px 14px;
     border-radius: 8px;
-    transition: .15s ease;
+    transition: .15s cubic-bezier(.2, .8, .2, 1);
     font-weight: 600;
     -webkit-app-region: no-drag;
 }

@@ -210,7 +210,9 @@
     color: var(--text);
     font-family: inherit;
     cursor: pointer;
-    transition: border-color .15s ease, box-shadow .15s ease;
+    transition:
+        border-color .15s cubic-bezier(.2, .8, .2, 1),
+        box-shadow .15s cubic-bezier(.2, .8, .2, 1);
 }
 
 .setting-select:hover {

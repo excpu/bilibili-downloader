@@ -1,5 +1,21 @@
 const { ipcMain, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
+const theme = require('../modules/theme');
+
+// 播放器 / 合并工具窗口的原生外观配置，色值与各自 CSS 里 light-dark() 的取值一一对应，
+// 避免调整大小或加载时露出白边、标题栏与顶栏出现色差
+const PLAYER_THEME = {
+    height: 48,
+    background: { light: '#f6f7fb', dark: '#141414' },
+};
+
+// 合并工具的顶栏是不透明的品牌蓝，标题栏底色要跟随它一起切换，符号色恒为白色
+const MERGE_THEME = {
+    height: 40,
+    background: { light: '#f0f0f0', dark: '#181818' },
+    overlayColor: { light: '#3c78d8', dark: '#2b5da8' },
+    symbolColor: '#ffffff',
+};
 
 // 持有引用，防止重复打开
 let playerWindow = null; // 持有引用，防止重复打开
@@ -32,16 +48,7 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             width: 900,
             height: 640,
             icon: path.join(__dirname, '../assets/icon/player.png'),
-            ...(process.platform === 'linux' ? {} : {
-                titleBarStyle: 'hidden',
-                ...(process.platform === 'win32' ? {
-                    titleBarOverlay: {
-                        color: '#00000000',
-                        symbolColor: '#333333',
-                        height: 48
-                    }
-                } : {})
-            }),
+            ...theme.windowChromeOptions(PLAYER_THEME),
             webPreferences: {
                 preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,
@@ -49,6 +56,8 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             },
         });
         playerWindow.loadFile(path.join(__dirname, '../web/player/index.html'));
+        // 播放器 CSS 已支持深浅两套配色，跟随主界面的主题设置
+        theme.registerThemeAwareWindow(playerWindow, PLAYER_THEME);
 
         playerWindow.on('closed', () => {
             playerWindow = null;
@@ -78,16 +87,7 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             width: 924,
             height: 650,
             icon: path.join(__dirname, '../assets/icon/player.png'),
-            ...(process.platform === 'linux' ? {} : {
-                titleBarStyle: 'hidden',
-                ...(process.platform === 'win32' ? {
-                    titleBarOverlay: {
-                        color: '#3c78d8',
-                        symbolColor: '#ffffff',
-                        height: 40
-                    }
-                } : {})
-            }),
+            ...theme.windowChromeOptions(MERGE_THEME),
             webPreferences: {
                 preload: path.join(__dirname, '../preload.js'),
                 nodeIntegration: false,
@@ -95,6 +95,8 @@ module.exports = function registerNewWindowIpc(mainWindow) {
             },
         });
         mergeWindow.loadFile(path.join(__dirname, '../web/merge/index.html'));
+        // 合并工具 CSS 已支持深浅两套配色，跟随主界面的主题设置
+        theme.registerThemeAwareWindow(mergeWindow, MERGE_THEME);
 
         mergeWindow.on('closed', () => {
             mergeWindow = null;

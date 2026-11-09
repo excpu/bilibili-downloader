@@ -24,22 +24,14 @@ function createWindow() {
     let allowClose = false;
     // 先按已保存的偏好确定主题，窗口才能用正确的底色和标题栏符号色创建
     theme.applyThemePreference(new Setting().getTheme());
-    const titleBarOverlay = process.platform === 'win32' ? {
-        color: '#00000000',
-        symbolColor: theme.isDark() ? '#ffffff' : '#333333',
-        height: 52
-    } : null;
+    const themeOptions = { height: 52 };
     const win = new BrowserWindow({
         width: 1000,
         height: 700,
         minWidth: 730,
         minHeight: 520,
         icon: path.join(__dirname, 'assets/icon/icon.png'),
-        backgroundColor: theme.windowBackgroundColor(),
-        ...(process.platform === 'linux' ? {} : {
-            titleBarStyle: 'hidden',
-            ...(titleBarOverlay ? { titleBarOverlay } : {})
-        }),
+        ...theme.windowChromeOptions(themeOptions),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -48,7 +40,7 @@ function createWindow() {
         },
     });
     // 主窗口的 CSS 已支持深浅两套配色，因此让它的原生标题栏与底色跟随主题
-    theme.registerThemeAwareWindow(win, titleBarOverlay || {});
+    theme.registerThemeAwareWindow(win, themeOptions);
     win.setMenuBarVisibility(false);
     // 设置用户代理以防止头像屏蔽
     win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0');

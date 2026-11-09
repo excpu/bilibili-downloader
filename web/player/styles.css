@@ -1,3 +1,35 @@
+/* ==========================================================================
+   主题层（暗色支持）
+
+   与主界面 index-dark.css 的做法一致：`:root { color-scheme: light dark }` +
+   light-dark(浅色, 深色) 成对取色。主题由主进程的 nativeTheme.themeSource 驱动，
+   它会改写 prefers-color-scheme，所以这里不需要任何主题 JS，也不会有加载白闪。
+   浅色值全部等于改造前的硬编码值，未启用暗色时外观不变。
+   ========================================================================== */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: light-dark(#f6f7fb, #141414);
+    --panel: light-dark(#ffffff, #1f1f1f);
+    --text: light-dark(#333333, #e8e8e8);
+    --text-secondary: light-dark(#555555, #c4c4c4);
+    --muted: light-dark(#888888, #a0a0a0);
+    --faint: light-dark(#999999, #8f8f8f);
+    --stroke: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.12));
+    --stroke-soft: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1));
+    --topbar-bg: light-dark(rgba(255, 255, 255, 0.85), rgba(31, 31, 31, 0.85));
+    --topbar-btn-bg: light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
+    --surface: light-dark(#f5f5f5, #262626);
+    --accent: light-dark(#23ade5, #1e8fbf);
+    --accent-hover: light-dark(#1ca0d4, #23ade5);
+    --accent-2: light-dark(#764ba2, #5a3a7a);
+    --accent-2-hover: light-dark(#6a3d8f, #764ba2);
+    --accent-tint: light-dark(rgba(35, 173, 229, 0.1), rgba(35, 173, 229, 0.16));
+    --accent-ink: light-dark(#0078ff, #4da3ff);
+    --shadow-card: 0 10px 40px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -6,7 +38,8 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: #f6f7fb;
+    background-color: var(--bg);
+    color: var(--text);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -24,10 +57,10 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 148px 0 20px;
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--topbar-bg);
     backdrop-filter: saturate(180%) blur(16px);
     -webkit-backdrop-filter: saturate(180%) blur(16px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid var(--stroke);
     -webkit-app-region: drag;
     user-select: none;
     z-index: 100;
@@ -58,13 +91,13 @@ html[data-platform="linux"] .player-topbar {
     display: grid;
     place-items: center;
     font-size: 11px;
-    box-shadow: 0 2px 6px rgba(35, 173, 229, 0.3);
+    box-shadow: 0 2px 6px light-dark(rgba(35, 173, 229, 0.3), rgba(0, 0, 0, 0.45));
 }
 
 .topbar-title {
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--text);
     letter-spacing: 0.3px;
 }
 
@@ -76,9 +109,9 @@ html[data-platform="linux"] .player-topbar {
 
 .topbar-btn {
     padding: 5px 12px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    background: rgba(255, 255, 255, 0.7);
-    color: #555;
+    border: 1px solid var(--stroke);
+    background: var(--topbar-btn-bg);
+    color: var(--text-secondary);
     border-radius: 999px;
     font-size: 12px;
     font-weight: 500;
@@ -88,9 +121,9 @@ html[data-platform="linux"] .player-topbar {
 }
 
 .topbar-btn:hover {
-    background: rgba(35, 173, 229, 0.1);
+    background: var(--accent-tint);
     border-color: #23ade5;
-    color: #0078ff;
+    color: var(--accent-ink);
     transform: none;
     box-shadow: none;
 }
@@ -106,25 +139,25 @@ html[data-platform="linux"] .player-topbar {
 }
 
 .container {
-    background: white;
+    background: var(--panel);
     border-radius: 12px;
     padding: 40px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--stroke-soft);
     max-width: 500px;
     width: 100%;
 }
 
 h1 {
     text-align: center;
-    color: #333;
+    color: var(--text);
     margin-bottom: 10px;
     font-size: 26px;
 }
 
 .subtitle {
     text-align: center;
-    color: #888;
+    color: var(--muted);
     margin-bottom: 30px;
     font-size: 14px;
 }
@@ -151,25 +184,25 @@ button {
 }
 
 .btn-file {
-    background: #23ade5;
+    background: var(--accent);
     color: white;
 }
 
 .btn-file:hover {
-    background: #1ca0d4;
+    background: var(--accent-hover);
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(35, 173, 229, 0.3);
+    box-shadow: 0 10px 20px light-dark(rgba(35, 173, 229, 0.3), rgba(0, 0, 0, 0.45));
 }
 
 .btn-folder {
-    background: #764ba2;
+    background: var(--accent-2);
     color: white;
 }
 
 .btn-folder:hover {
-    background: #6a3d8f;
+    background: var(--accent-2-hover);
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(118, 75, 162, 0.3);
+    box-shadow: 0 10px 20px light-dark(rgba(118, 75, 162, 0.3), rgba(0, 0, 0, 0.45));
 }
 
 .file-input {
@@ -179,7 +212,7 @@ button {
 .selected-info {
     margin-top: 20px;
     padding: 15px;
-    background: #f5f5f5;
+    background: var(--surface);
     border-radius: 8px;
     display: none;
 }
@@ -190,13 +223,13 @@ button {
 
 .info-label {
     font-size: 12px;
-    color: #999;
+    color: var(--faint);
     margin-bottom: 5px;
 }
 
 .info-content {
     font-size: 14px;
-    color: #333;
+    color: var(--text);
     word-break: break-all;
     font-family: 'Courier New', monospace;
 }

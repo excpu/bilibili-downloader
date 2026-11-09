@@ -1,3 +1,31 @@
+/* ==========================================================================
+   合并工具样式（支持深浅两套配色）
+
+   与主界面 index-dark.css 的做法一致：`:root { color-scheme: light dark }` +
+   light-dark(浅色, 深色) 成对取色。主题由主进程的 nativeTheme.themeSource 驱动，
+   它会改写 prefers-color-scheme，所以这里不需要任何主题 JS，也不会有加载白闪。
+   浅色值全部等于改造前的硬编码值，未启用暗色时外观不变。
+   ========================================================================== */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: light-dark(#f0f0f0, #181818);
+    --text: light-dark(#000000, #e8e8e8);
+    --text-secondary: light-dark(#333333, #c4c4c4);
+    --stroke: light-dark(#a0a0a0, rgba(255, 255, 255, 0.24));
+    --input-border: light-dark(#cccccc, rgba(255, 255, 255, 0.22));
+    --input-bg: light-dark(#ffffff, #1c1c1c);
+    --btn-bg: light-dark(#e1e1e1, #2a2a2a);
+    --btn-border: light-dark(#adadad, rgba(255, 255, 255, 0.28));
+    --btn-bg-hover: light-dark(#d5d5d5, #333333);
+    --track-bg: light-dark(#e1e1e1, #262626);
+    /* 顶栏 / 主按钮的品牌蓝：深色下压暗一档，与主界面 --brand-grad 的处理方式一致 */
+    --brand: light-dark(#3c78d8, #2b5da8);
+    --brand-hover: light-dark(#2b5da8, #244e8c);
+    --brand-disabled: light-dark(#a0c0f0, #334a6b);
+}
+
 /* 全局基础样式 */
 body,
 html {
@@ -5,7 +33,8 @@ html {
     padding: 0;
     height: 100%;
     font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-    background-color: #f0f0f0;
+    background-color: var(--bg);
+    color: var(--text);
     /* Tkinter 默认的浅灰色背景 */
     box-sizing: border-box;
     overflow: hidden;
@@ -15,7 +44,7 @@ html {
 /* 顶部蓝色标题栏 */
 .header {
     position: relative;
-    background-color: #3c78d8;
+    background-color: var(--brand);
     color: white;
     height: 40px;
     padding: 0 138px 0 16px;
@@ -72,14 +101,14 @@ html[data-platform="linux"] .header {
 
 /* 边框分组 (复刻 Tkinter 的 LabelFrame) */
 fieldset {
-    border: 1px solid #a0a0a0;
+    border: 1px solid var(--stroke);
     margin: 0 0 15px 0;
     padding: 10px;
     border-radius: 2px;
 }
 
 legend {
-    color: #000;
+    color: var(--text);
     font-size: 13px;
     padding: 0 4px;
 }
@@ -94,21 +123,24 @@ legend {
 .input-group input[type="text"] {
     flex: 1;
     padding: 4px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text);
     font-family: inherit;
 }
 
 .input-group button {
     padding: 3px 15px;
-    background-color: #e1e1e1;
-    border: 1px solid #adadad;
+    background-color: var(--btn-bg);
+    color: var(--text);
+    border: 1px solid var(--btn-border);
     cursor: pointer;
     font-family: inherit;
     -webkit-app-region: no-drag;
 }
 
 .input-group button:hover {
-    background-color: #d5d5d5;
+    background-color: var(--btn-bg-hover);
 }
 
 /* 单选/复选框行样式 */
@@ -128,7 +160,7 @@ label input {
 /* 文字说明样式 */
 .desc {
     font-size: 13px;
-    color: #000;
+    color: var(--text);
     margin-top: 0;
     margin-bottom: 12px;
     line-height: 1.5;
@@ -136,7 +168,7 @@ label input {
 
 /* 开始合并按钮 */
 .primary-btn {
-    background-color: #3c78d8;
+    background-color: var(--brand);
     color: white;
     border: none;
     padding: 10px;
@@ -148,11 +180,11 @@ label input {
 }
 
 .primary-btn:hover {
-    background-color: #2b5da8;
+    background-color: var(--brand-hover);
 }
 
 .primary-btn:disabled {
-    background-color: #a0c0f0;
+    background-color: var(--brand-disabled);
     cursor: not-allowed;
 }
 
@@ -164,8 +196,8 @@ label input {
 .progress-bar {
     width: 100%;
     height: 16px;
-    background-color: #e1e1e1;
-    border: 1px solid #a0a0a0;
+    background-color: var(--track-bg);
+    border: 1px solid var(--stroke);
     border-radius: 2px;
     overflow: hidden;
     box-sizing: border-box;
@@ -174,7 +206,7 @@ label input {
 .progress-fill {
     height: 100%;
     width: 0%;
-    background-color: #3c78d8;
+    background-color: var(--brand);
     position: relative;
     overflow: hidden;
     transition: width 0.5s ease;
@@ -208,7 +240,7 @@ label input {
 .progress-text {
     margin-top: 4px;
     font-size: 12px;
-    color: #333;
+    color: var(--text-secondary);
     text-align: center;
 }
 
@@ -216,18 +248,19 @@ label input {
 .log-label {
     font-size: 14px;
     margin-bottom: 5px;
-    color: #000;
+    color: var(--text);
 }
 
 textarea#log {
     flex: 1;
     width: 100%;
     resize: none;
-    border: 1px solid #a0a0a0;
+    border: 1px solid var(--stroke);
     padding: 5px;
     font-family: Consolas, "Courier New", monospace;
     font-size: 13px;
-    background: #fff;
+    background: var(--input-bg);
+    color: var(--text);
     box-sizing: border-box;
     outline: none;
     white-space: pre-wrap;

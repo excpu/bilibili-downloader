@@ -7,6 +7,7 @@ const $loginSection = document.getElementById('loginSection');
 const $cancelLoginBtn = document.getElementById('cancelLogin');
 const $cancelVideoInfo = document.getElementById('cancelVideoInfo');
 const $downloadBtn = document.getElementById('downloadBtn');
+const accountPopover = createNavBar();
 
 // 全局登录状态
 let globalLoginStatus = false;
@@ -389,6 +390,7 @@ function renderLoggedIn(userInfo) {
     globalUserInfo = userInfo;
     globalLoginStatus = true;
     $avatar.innerHTML = `<img src="${userInfo.data.face}" alt="用户头像" class="avatar-img">`;
+    accountPopover.setUser(userInfo.data);
 }
 
 function renderLoggedOut() {
@@ -396,6 +398,7 @@ function renderLoggedOut() {
     globalUserInfo = null;
     globalLoginStatus = false;
     $avatar.textContent = '登录';
+    accountPopover.clear();
 }
 
 window.syncLoginState = {
@@ -407,9 +410,10 @@ window.syncLoginState = {
 function fetchUserInfo() {
     window.electronAPI.invoke('getUserInfo').then((userInfo) => {
         //console.log('用户信息:', userInfo);
-        if (userInfo.data.isLogin) {
+        if (userInfo.status && userInfo.data && userInfo.data.isLogin) {
             renderLoggedIn(userInfo);
         } else {
+            console.error('获取用户信息失败:', userInfo.message);
             renderLoggedOut();
         }
     }).catch((error) => {
@@ -432,6 +436,13 @@ $avatar.addEventListener('click', () => {
     }
     $loginSection.classList.remove('hidden');
     requestLoginQr();
+});
+
+$avatar.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        $avatar.click();
+    }
 });
 
 // 用户取消登录

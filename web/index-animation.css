@@ -20,6 +20,9 @@
     --ui-ease-in: cubic-bezier(.4, 0, 1, 1);
     --ui-ease-out: cubic-bezier(.16, 1, .3, 1);
     --ui-ease-spring: cubic-bezier(.34, 1.45, .64, 1);
+    /* 滑翔曲线：只留极轻微的过冲，比 spring 更沉稳，用于悬浮卡片等大面积元素 */
+    --ui-ease-glide: cubic-bezier(.22, 1.1, .32, 1);
+    --ui-glide: 420ms;
 }
 
 /* --------------------------------------------------------------------------
@@ -107,6 +110,45 @@ body {
 }
 
 /* 头像 */
+/* 账户悬浮卡片：像从头像那里"揭开"一样展开。
+   展开点 --popover-origin 锚定在顶栏头像的圆心：卡片右缘与头像右缘对齐（right:0），
+   所以圆心横向就是"卡片宽度再往左半个头像"，即 calc(100% - 18px)；
+   卡片顶边贴在头像底边，圆心在其上方半个头像处，即 -18px。
+   18px = 头像 36px 的一半，只与头像尺寸相关，改卡片宽度不会错位。
+   clip-path 用同心圆从该点由 0 半径扩散到完全覆盖，transform 也从同一点缩放，
+   两者叠加就是"卡片自头像生长出来"的观感。
+   allow-discrete 让 hidden（display:none）也参与过渡；半径取 520px，
+   足以越过卡片阴影，静止态不会被裁切。
+   节奏"开慢收快"：展开 420ms 从容落位，收起压到 120ms 不拖沓。
+   隐藏态关闭 pointer-events，避免收起过程中挡住顶栏点击。 */
+.account-popover {
+    --popover-origin: calc(100% - 18px) -18px;
+    transform-origin: var(--popover-origin);
+    clip-path: circle(520px at var(--popover-origin));
+    transition:
+        clip-path var(--ui-glide) var(--ui-ease-out),
+        opacity var(--ui-base) var(--ui-ease-out),
+        transform var(--ui-glide) var(--ui-ease-glide),
+        display var(--ui-glide) allow-discrete;
+}
+
+.account-popover[hidden] {
+    opacity: 0;
+    transform: scale(.8);
+    clip-path: circle(0px at var(--popover-origin));
+    pointer-events: none;
+    transition-duration: var(--ui-fast);
+    transition-timing-function: var(--ui-ease-in);
+}
+
+@starting-style {
+    .account-popover {
+        opacity: 0;
+        transform: scale(.8);
+        clip-path: circle(0px at var(--popover-origin));
+    }
+}
+
 .avatar {
     transition:
         background-color var(--ui-base) var(--ui-ease),
@@ -474,6 +516,7 @@ body {
     .card,
     .btn,
     .pill,
+    .account-popover,
     .avatar,
     .avatar img,
     .field input,

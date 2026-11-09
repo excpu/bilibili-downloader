@@ -69,6 +69,40 @@ module.exports = function registerInformationIpc(mainWindow) {
         }
     });
 
+    // 获取导航卡片所需的关系数和动态数
+    ipcMain.handle('getUserNavStats', async (event, mid) => {
+        if (!auth.loadLoginStatus() || !Number.isSafeInteger(mid) || mid <= 0) {
+            return { success: false, message: '用户未登录或用户 ID 无效' };
+        }
+
+        const headers = {
+            'Referer': 'https://www.bilibili.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+            'Accept': 'application/json',
+            'Cookie': auth.getConstructedCookie()
+        };
+        const requestStats = async (url) => {
+            const response = await got(url, { headers, responseType: 'json', http2: true });
+            if (response.body.code !== 0 || !response.body.data) {
+                throw new Error(response.body.message || `接口错误 ${response.body.code}`);
+            }
+            return response.body.data;
+        };
+        const [relation, navnum] = await Promise.allSettled([
+            requestStats(`https://api.bilibili.com/x/relation/stat?vmid=${mid}`),
+            requestStats(`https://api.bilibili.com/x/space/navnum?mid=${mid}`)
+        ]);
+        return {
+            success: true,
+            relation: relation.status === 'fulfilled' ? relation.value : null,
+            navnum: navnum.status === 'fulfilled' ? navnum.value : null,
+            errors: [
+                ...(relation.status === 'rejected' ? [`关注和粉丝: ${relation.reason.message}`] : []),
+                ...(navnum.status === 'rejected' ? [`动态: ${navnum.reason.message}`] : [])
+            ]
+        };
+    });
+
     // 请求登录二维码
     ipcMain.handle('requestLoginQr', async () => {
         try {

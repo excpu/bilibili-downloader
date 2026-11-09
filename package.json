@@ -5,7 +5,8 @@
     "scripts": {
         "start": "electron .",
         "build": "electron-builder",
-        "test": "node test/js-media-check.js"
+        "test": "node --test test/account-popover-check.js && node test/js-media-check.js",
+        "test:account": "node --test test/account-popover-check.js"
     },
     "keywords": [
         "bilibili",

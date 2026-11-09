@@ -29,8 +29,36 @@
             <!-- <span class="pill clickable" onclick="openMoreTools()">更多工具</span> -->
             <span class="pill clickable" onclick="settingWeb.openSetting(this)">设置</span>
         </div>
-        <div class="avatar is-loading" id="avatar" title="正在获取登录状态" aria-busy="true">
-            <span class="micon-spin avatar-spinner" aria-hidden="true"></span>
+        <div class="avatar-area" id="avatarArea">
+            <div class="avatar is-loading" id="avatar" title="正在获取登录状态" aria-busy="true"
+                role="button" tabindex="0" aria-label="登录或查看账户信息"
+                aria-controls="accountPopover" aria-expanded="false">
+                <span class="micon-spin avatar-spinner" aria-hidden="true"></span>
+            </div>
+            <section class="account-popover" id="accountPopover" aria-label="账户信息" hidden>
+                <div class="account-card">
+                    <div class="account-portrait" role="img" aria-label="用户头像">
+                        <div class="account-portrait-placeholder" id="accountPortraitPlaceholder">头像不可用</div>
+                        <img class="account-portrait-face" id="accountPortraitFace" alt="" hidden>
+                        <img class="account-portrait-frame" id="accountPortraitFrame" alt="" hidden>
+                    </div>
+                    <div class="account-name" id="accountName"></div>
+                    <span class="account-vip" id="accountVip" hidden></span>
+                    <div class="account-wallet">硬币: <span id="accountCoins">--</span>　B币: <span id="accountBcoins">--</span></div>
+                    <div class="account-level">
+                        <span class="account-level-current" id="accountLevel">--</span>
+                        <div class="account-level-track"><div id="accountLevelProgress"></div></div>
+                        <span class="account-level-next" id="accountNextLevel">--</span>
+                    </div>
+                    <div class="account-experience" id="accountExperience">等级信息不可用</div>
+                    <div class="account-stats">
+                        <div><strong id="accountFollowing">--</strong><span>关注</span></div>
+                        <div><strong id="accountFollowers">--</strong><span>粉丝</span></div>
+                        <div><strong id="accountDynamics">--</strong><span>动态</span></div>
+                    </div>
+                    <div class="account-status" id="accountStatus" role="status"></div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -591,6 +619,7 @@
     <script src="independent_download.js"></script>
     <script src="select_card.js"></script>
     <script src="model.js"></script>
+    <script src="nav_bar.js"></script>
     <script src="index.js"></script>
     <script src="library_picker.js"></script>
     <script src="download_task.js"></script>

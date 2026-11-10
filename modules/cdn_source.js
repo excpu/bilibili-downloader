@@ -48,4 +48,20 @@ function normalizeCdnHost(raw) {
     return valid ? value : '';
 }
 
-module.exports = { fetchCdnList, normalizeCdnHost };
+// 将媒体链接的域名替换为指定 CDN，只改主机名，其余路径与参数保持不变
+// cdnHost 为空或替换失败时返回原始地址，保证预览/下载不因配置异常而中断
+function applyCdnHost(url, cdnHost) {
+    const host = normalizeCdnHost(cdnHost);
+    if (!host || !url) return url;
+
+    try {
+        const parsedUrl = new URL(url);
+        parsedUrl.hostname = host;
+        return parsedUrl.toString();
+    } catch (error) {
+        console.warn('替换 CDN 域名失败，使用原始地址:', error.message);
+        return url;
+    }
+}
+
+module.exports = { fetchCdnList, normalizeCdnHost, applyCdnHost };

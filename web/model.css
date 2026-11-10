@@ -108,6 +108,14 @@
     font-size: 16px;
 }
 
+#model .model-header {
+    padding-bottom: 8px;
+}
+
+#model .model-body {
+    padding-top: 8px;
+}
+
 .model-body {
     padding: 20px;
     max-height: calc(90vh - 80px);
@@ -118,26 +126,46 @@
 
 .tool-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
 }
 
 
 /* 工具元素 */
 .tool-slot {
-    border: 1px dashed var(--stroke);
-    border-radius: 12px;
-    padding: 16px;
+    border: 1px solid var(--stroke);
+    border-radius: 14px;
+    padding: 18px;
     background: linear-gradient(180deg, rgba(0, 120, 255, 0.04), rgba(0, 120, 255, 0.01));
-    min-height: 96px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 8px;
+    justify-content: flex-start;
+    gap: 6px;
     cursor: pointer;
+    outline: none;
+}
+
+.tool-slot:focus-visible {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent);
+}
+
+.tool-slot-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    color: var(--brand);
+    background: var(--brand-tint);
 }
 
 .tool-slot-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 700;
     font-size: 15px;
 }
@@ -145,6 +173,25 @@
 .tool-slot-meta {
     color: var(--muted);
     font-size: 13px;
+    line-height: 1.55;
+}
+
+.tool-slot-badge {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+.tool-slot.is-planned {
+    opacity: .72;
+}
+
+.tool-slot.is-planned .tool-slot-icon {
+    color: var(--muted);
+    background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
 
 /* 工具弹窗结束 */

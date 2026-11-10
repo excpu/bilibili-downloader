@@ -8,8 +8,13 @@ const { PassThrough } = require('stream');
 
 const Auth = require('../modules/auth');
 const { encWbi, getWbiKeys } = require('../modules/wbi');
+const { applyCdnHost } = require('../modules/cdn_source');
+const Setting = require('../modules/config_setting');
 
 const auth = new Auth();
+// 预览与下载共用同一份配置文件：这里只读取播放 CDN 与预览多线程开关
+const setting = new Setting();
+setting.load();
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0';
 
@@ -268,7 +273,19 @@ function handleConcurrentChunkStream(req, res, targetUrl, headers, totalSize, cl
     scheduleFetches();
 }
 
-// 启动本地轻量多线程并发流代理服务
+// 最近一次日志里汇报过的取流模式，避免每个请求都刷屏
+let loggedStreamMode = null;
+
+// 代理服务本身常驻（单连接同样需要它补防盗链头与 CORS），因此只有模式变化时才打日志
+function logStreamMode(mode, detail) {
+    if (loggedStreamMode === mode) return;
+    loggedStreamMode = mode;
+    console.log(mode === 'multi'
+        ? `⚡ 视频预览取流：多线程分块并发（并发数 ${CONCURRENCY}）${detail || ''}`
+        : `➡️ 视频预览取流：单连接直通${detail || ''}`);
+}
+
+// 启动本地轻量流媒体代理服务（按设置选择多线程分块或单连接直通）
 function ensureProxyServer() {
     if (proxyServer && proxyPort > 0) {
         return Promise.resolve(proxyPort);
@@ -298,15 +315,29 @@ function ensureProxyServer() {
                 'Cookie': auth.getConstructedCookie(),
             };
 
-            try {
-                const meta = await probeMediaMeta(targetUrl, baseHeaders);
-                const totalSize = meta.totalSize;
+            // 每次请求都读取最新设置：播放 CDN 与预览多线程开关改完即生效，无需重启预览
+            const playUrl = applyCdnHost(targetUrl, setting.getPlayCdnHost());
+            const multiThreadEnabled = setting.getPreviewMultiThreadEnabled();
 
-                // 如果无法探测出总大小，降级为普通单流传输
-                if (!totalSize) {
-                    handleFallbackSingleStream(req, res, targetUrl, baseHeaders);
+            try {
+                // 关闭多线程时无需探测总大小，直接按客户端 Range 单连接透传
+                if (!multiThreadEnabled) {
+                    logStreamMode('single');
+                    handleFallbackSingleStream(req, res, playUrl, baseHeaders);
                     return;
                 }
+
+                const meta = await probeMediaMeta(playUrl, baseHeaders);
+                const totalSize = meta.totalSize;
+
+                // 探测不出总大小就无法分片，降级为普通单流传输
+                if (!totalSize) {
+                    logStreamMode('single', '（无法探测总大小，自动降级）');
+                    handleFallbackSingleStream(req, res, playUrl, baseHeaders);
+                    return;
+                }
+
+                logStreamMode('multi');
 
                 let clientStart = 0;
                 let clientEnd = totalSize - 1;
@@ -345,7 +376,7 @@ function ensureProxyServer() {
                     'Content-Type': meta.contentType,
                 });
 
-                handleConcurrentChunkStream(req, res, targetUrl, baseHeaders, totalSize, clientStart, clientEnd);
+                handleConcurrentChunkStream(req, res, playUrl, baseHeaders, totalSize, clientStart, clientEnd);
             } catch (err) {
                 console.error('代理请求分发失败:', err);
                 if (!res.headersSent) {
@@ -357,7 +388,8 @@ function ensureProxyServer() {
 
         proxyServer.listen(0, '127.0.0.1', () => {
             proxyPort = proxyServer.address().port;
-            console.log(`🚀 视频预览【多线程并发缓冲引擎】已启动: 127.0.0.1:${proxyPort} (分块并发数: ${CONCURRENCY})`);
+            // 代理服务是常驻的，取流模式由设置决定，这里不再宣称引擎类型
+            console.log(`🚀 视频预览本地代理已启动: 127.0.0.1:${proxyPort}`);
             resolve(proxyPort);
         });
 
@@ -382,6 +414,7 @@ function closeProxyServer() {
         }
         proxyServer = null;
         proxyPort = 0;
+        loggedStreamMode = null;
         mediaMetaCache.clear();
     }
 }

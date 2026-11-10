@@ -20,6 +20,8 @@ const OUTPUT_FORMAT_VALUES = ['mp4', 'mkv'];
 const DEFAULT_OUTPUT_FORMAT = 'mp4';
 // 是否允许把 FLAC / 杜比全景声以非标方式封装进 MP4；关闭时这类音轨自动改用 MKV
 const DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO = true;
+// 视频预览是否使用多线程分块拉取（关闭后退回到单连接直通，与下载引擎设置无关）
+const DEFAULT_PREVIEW_MULTI_THREAD_ENABLED = true;
 const DEFAULT_SUBTITLE_SETTINGS = {
     format: 'srt',
     appendLanguage: false,
@@ -65,6 +67,8 @@ class Setting {
             downloadPath: "HomeDownloads", // 默认下载路径，用户可以修改
             danmuDownloadMethod: "traditional", // 弹幕下载方式：traditional / protobuf
             cdnHost: "", // 下载使用的 CDN 域名，空字符串表示使用默认（不替换）
+            playCdnHost: "", // 视频预览使用的 CDN 域名，空字符串表示使用默认（不替换）
+            previewMultiThreadEnabled: DEFAULT_PREVIEW_MULTI_THREAD_ENABLED, // 视频预览是否多线程分块拉取
             outputFormat: DEFAULT_OUTPUT_FORMAT, // 合并后输出格式：mp4 / mkv
             mp4AllowNonStandardAudio: DEFAULT_MP4_ALLOW_NON_STANDARD_AUDIO, // MP4 是否允许非标封装 FLAC / 杜比全景声
             concurrency: DEFAULT_CONCURRENCY, // 多线程下载的并发连接数
@@ -324,6 +328,32 @@ class Setting {
         const stored = data ? (data.cdnHost || '') : this.defaultData.cdnHost;
         // 兼容历史配置：读取时同样规范化，非法值视为未设置
         return normalizeCdnHost(stored);
+    }
+
+    // 播放 CDN 只作用于视频预览，独立于下载 CDN 存储，两者互不影响
+    updatePlayCdnHost(cdnHost) {
+        const data = this.load() || {};
+        data.playCdnHost = normalizeCdnHost(cdnHost);
+        this.save(data);
+    }
+
+    getPlayCdnHost() {
+        const data = this.load();
+        const stored = data ? (data.playCdnHost || '') : this.defaultData.playCdnHost;
+        return normalizeCdnHost(stored);
+    }
+
+    updatePreviewMultiThreadEnabled(enabled) {
+        const data = this.load() || {};
+        data.previewMultiThreadEnabled = enabled !== false;
+        this.save(data);
+        return data.previewMultiThreadEnabled;
+    }
+
+    getPreviewMultiThreadEnabled() {
+        const data = this.load() || {};
+        // 旧配置没有该字段时保持默认开启
+        return data.previewMultiThreadEnabled !== false;
     }
 
     updateSubtitleSettings(subtitleSettings) {

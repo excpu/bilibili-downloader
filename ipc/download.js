@@ -4,6 +4,7 @@ const path = require('path');
 const Auth = require('../modules/auth');
 const { encWbi, getWbiKeys } = require('../modules/wbi');
 const { sanitizePath } = require('../modules/sanitize_path'); // 引入路径安全函数
+const { applyCdnHost: applyDownloadCdnHost } = require('../modules/cdn_source');
 const { downloadFileWithGot } = require('../modules/stream_download');
 const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_download');
 const { createCancelError, isCancelError } = require('../modules/download_cancel');
@@ -41,19 +42,9 @@ const getDownloadFunction = () => {
 
 const auth = new Auth();
 
-// 将下载链接的域名替换为用户选择的 CDN，仅替换主机名，其余参数保持不变
+// 将下载链接的域名替换为用户选择的下载 CDN，仅替换主机名，其余参数保持不变
 function applyCdnHost(url) {
-    const cdnHost = setting.getCdnHost();
-    if (!cdnHost || !url) return url;
-
-    try {
-        const parsedUrl = new URL(url);
-        parsedUrl.hostname = cdnHost;
-        return parsedUrl.toString();
-    } catch (error) {
-        console.warn('替换 CDN 域名失败，使用原始下载地址:', error.message);
-        return url;
-    }
+    return applyDownloadCdnHost(url, setting.getCdnHost());
 }
 
 const fs = require('fs');

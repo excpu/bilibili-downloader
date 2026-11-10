@@ -13,19 +13,32 @@ function createSettingWeb() {
     const $downloadInFolderCheckbox = document.getElementById('downloadInFolderCheckbox');
     const $downloadFolderNestingSetting = document.getElementById('downloadFolderNestingSetting');
     const $downloadFolderNestingCheckbox = document.getElementById('downloadFolderNestingCheckbox');
-    const $cdnSelect = document.getElementById('cdnSelect');
-    const $cdnCustomHostSetting = document.getElementById('cdnCustomHostSetting');
-    const $cdnCustomHostInput = document.getElementById('cdnCustomHostInput');
-    const $cdnCustomHostSaveBtn = document.getElementById('cdnCustomHostSaveBtn');
-    const $cdnCustomHostCancelBtn = document.getElementById('cdnCustomHostCancelBtn');
-    const $cdnCustomHostHint = document.getElementById('cdnCustomHostHint');
-    const CDN_CUSTOM_HINT = '可直接粘贴完整下载链接或域名，保存时只保留主机名。';
-    // 下拉框中代表"自定义 CDN"的占位值，本身不会写入配置
-    const CDN_CUSTOM_VALUE = '__custom__';
+    const $previewMultiThreadCheckbox = document.getElementById('previewMultiThreadCheckbox');
+    // 两组共用同一份远端 CDN 列表，只需拉取一次
     let currentCdnList = null;
-    let currentCdnHost = '';
-    // 下拉框是否处于"自定义 CDN"状态：只有该状态才显示输入区
-    let cdnCustomMode = false;
+    // CDN 选择组工厂：下载 CDN 与播放 CDN 共用同一套交互，只是读写的设置项不同
+    const cdnDownloadGroup = createCdnGroup({
+        selectId: 'cdnSelect',
+        customSettingId: 'cdnCustomHostSetting',
+        inputId: 'cdnCustomHostInput',
+        saveBtnId: 'cdnCustomHostSaveBtn',
+        cancelBtnId: 'cdnCustomHostCancelBtn',
+        hintId: 'cdnCustomHostHint',
+        getChannel: 'getCdnHost',
+        setChannel: 'setCdnHost',
+        customHint: '可直接粘贴完整下载链接或域名，保存时只保留主机名。',
+    });
+    const cdnPlayGroup = createCdnGroup({
+        selectId: 'playCdnSelect',
+        customSettingId: 'playCdnCustomHostSetting',
+        inputId: 'playCdnCustomHostInput',
+        saveBtnId: 'playCdnCustomHostSaveBtn',
+        cancelBtnId: 'playCdnCustomHostCancelBtn',
+        hintId: 'playCdnCustomHostHint',
+        getChannel: 'getPlayCdnHost',
+        setChannel: 'setPlayCdnHost',
+        customHint: '可直接粘贴完整播放链接或域名，保存时只保留主机名。',
+    });
     const $outputFormatSelect = document.getElementById('outputFormatSelect');
     const $mp4NonStandardAudioSetting = document.getElementById('mp4NonStandardAudioSetting');
     const $mp4NonStandardAudioHint = document.getElementById('mp4NonStandardAudioHint');
@@ -52,6 +65,7 @@ function createSettingWeb() {
         await loadTheme();
         await loadModalMorph();
         await loadCdnList();
+        await loadPreviewMultiThread();
         await loadOutputFormat();
         await loadSubtitleSettings();
         await loadDanmakuSettings();
@@ -174,147 +188,205 @@ function createSettingWeb() {
         updateNestingVisibility();
     }
 
-    async function loadCdnList() {
-        if (!$cdnSelect) return;
+    // 下拉框中代表"自定义 CDN"的占位值，本身不会写入配置
+    const CDN_CUSTOM_VALUE = '__custom__';
 
-        const [cdnList, cdnHost] = await Promise.all([
-            window.electronAPI.invoke('getCdnList'),
-            window.electronAPI.invoke('getCdnHost')
-        ]);
+    // 下载 CDN 与播放 CDN 行为完全一致，用工厂生成两组互不干扰的状态与处理逻辑
+    function createCdnGroup(options) {
+        const $select = document.getElementById(options.selectId);
+        const $customSetting = document.getElementById(options.customSettingId);
+        const $customInput = document.getElementById(options.inputId);
+        const $customSaveBtn = document.getElementById(options.saveBtnId);
+        const $customCancelBtn = document.getElementById(options.cancelBtnId);
+        const $hint = document.getElementById(options.hintId);
 
-        currentCdnList = cdnList;
-        currentCdnHost = cdnHost || '';
-        cdnCustomMode = isCustomCdnHost(currentCdnHost);
-        renderCdnOptions();
-        if ($cdnCustomHostInput) {
-            $cdnCustomHostInput.value = cdnCustomMode ? currentCdnHost : '';
+        let currentHost = '';
+        // 下拉框是否处于"自定义 CDN"状态：只有该状态才显示输入区
+        let customMode = false;
+
+        function isPresetHost(host) {
+            if (!host || !currentCdnList || typeof currentCdnList !== 'object') return false;
+            return Object.values(currentCdnList).some(
+                (hosts) => Array.isArray(hosts) && hosts.includes(host)
+            );
         }
-        // 打开设置时若已存自定义 CDN，直接展开输入区，但不抢占焦点
-        setCdnCustomAreaVisible(cdnCustomMode);
-        setCdnHint(CDN_CUSTOM_HINT, false);
-    }
 
-    function isPresetCdnHost(host) {
-        if (!host || !currentCdnList || typeof currentCdnList !== 'object') return false;
-        return Object.values(currentCdnList).some(
-            (hosts) => Array.isArray(hosts) && hosts.includes(host)
-        );
-    }
+        // 既不是"默认"也不在预设列表里的主机，视为用户自定义的 CDN
+        function isCustomHost(host) {
+            return Boolean(host) && !isPresetHost(host);
+        }
 
-    // 既不是"默认"也不在预设列表里的主机，视为用户自定义的 CDN
-    function isCustomCdnHost(host) {
-        return Boolean(host) && !isPresetCdnHost(host);
-    }
+        // 重建下拉选项：自定义项紧跟"默认"，预设 CDN 按地区分组排在其后
+        function renderOptions() {
+            if (!$select) return;
 
-    // 重建下拉选项：自定义项紧跟"默认"，预设 CDN 按地区分组排在其后
-    function renderCdnOptions() {
-        if (!$cdnSelect) return;
+            $select.innerHTML = '<option value="">默认（不替换）</option>';
 
-        $cdnSelect.innerHTML = '<option value="">默认（不替换）</option>';
+            const $customOption = document.createElement('option');
+            $customOption.value = CDN_CUSTOM_VALUE;
+            $customOption.textContent = '自定义 CDN…';
+            $select.appendChild($customOption);
 
-        const $customOption = document.createElement('option');
-        $customOption.value = CDN_CUSTOM_VALUE;
-        $customOption.textContent = '自定义 CDN…';
-        $cdnSelect.appendChild($customOption);
-
-        if (currentCdnList && typeof currentCdnList === 'object') {
-            for (const [region, hosts] of Object.entries(currentCdnList)) {
-                if (!Array.isArray(hosts) || hosts.length === 0) continue;
-                const $group = document.createElement('optgroup');
-                $group.label = region;
-                for (const host of hosts) {
-                    const $option = document.createElement('option');
-                    $option.value = host;
-                    $option.textContent = host;
-                    $group.appendChild($option);
+            if (currentCdnList && typeof currentCdnList === 'object') {
+                for (const [region, hosts] of Object.entries(currentCdnList)) {
+                    if (!Array.isArray(hosts) || hosts.length === 0) continue;
+                    const $group = document.createElement('optgroup');
+                    $group.label = region;
+                    for (const host of hosts) {
+                        const $option = document.createElement('option');
+                        $option.value = host;
+                        $option.textContent = host;
+                        $group.appendChild($option);
+                    }
+                    $select.appendChild($group);
                 }
-                $cdnSelect.appendChild($group);
+            }
+
+            // 自定义主机不单列选项，统一回显为"自定义 CDN"，域名显示在输入框里
+            $select.value = customMode ? CDN_CUSTOM_VALUE : (currentHost || '');
+        }
+
+        function setHint(text, isError) {
+            if (!$hint) return;
+            $hint.textContent = text;
+            $hint.classList.toggle('cdn-hint-error', Boolean(isError));
+        }
+
+        // 只有选中"自定义 CDN"时才展开输入区，预设 CDN 只改设置不显示输入框
+        function setCustomAreaVisible(visible, focus = false) {
+            customMode = Boolean(visible);
+            if ($customSetting) {
+                $customSetting.classList.toggle('hidden', !visible);
+            }
+            if (visible && focus && $customInput) {
+                $customInput.focus();
+                $customInput.select();
             }
         }
 
-        // 自定义主机不单列选项，统一回显为"自定义 CDN"，域名显示在输入框里
-        $cdnSelect.value = cdnCustomMode ? CDN_CUSTOM_VALUE : (currentCdnHost || '');
-    }
-
-    function setCdnHint(text, isError) {
-        if (!$cdnCustomHostHint) return;
-        $cdnCustomHostHint.textContent = text;
-        $cdnCustomHostHint.classList.toggle('cdn-hint-error', Boolean(isError));
-    }
-
-    // 只有选中"自定义 CDN"时才展开输入区，预设 CDN 只改设置不显示输入框
-    function setCdnCustomAreaVisible(visible, focus = false) {
-        cdnCustomMode = Boolean(visible);
-        if ($cdnCustomHostSetting) {
-            $cdnCustomHostSetting.classList.toggle('hidden', !visible);
-        }
-        if (visible && focus && $cdnCustomHostInput) {
-            $cdnCustomHostInput.focus();
-            $cdnCustomHostInput.select();
-        }
-    }
-
-    function resetCustomCdnHint() {
-        setCdnHint(CDN_CUSTOM_HINT, false);
-    }
-
-    function cancelCustomCdnHost() {
-        // 取消后回到已保存的设置：自定义的保持展开并回填，预设/默认则收起
-        const keepCustom = isCustomCdnHost(currentCdnHost);
-        setCdnCustomAreaVisible(keepCustom);
-        renderCdnOptions();
-        if ($cdnCustomHostInput) {
-            $cdnCustomHostInput.value = keepCustom ? currentCdnHost : '';
-        }
-        resetCustomCdnHint();
-    }
-
-    async function saveCustomCdnHost() {
-        if (!$cdnCustomHostInput) return;
-
-        const raw = $cdnCustomHostInput.value.trim();
-        const normalized = raw
-            ? await window.electronAPI.invoke('normalizeCdnHost', raw)
-            : '';
-
-        if (raw && !normalized) {
-            setCdnHint('主机名无效，请填写例如 upos-sz-mirrorcos.bilivideo.com 的域名。', true);
-            $cdnCustomHostInput.focus();
-            return;
+        function resetCustomHint() {
+            setHint(options.customHint, false);
         }
 
-        const saved = await window.electronAPI.invoke('setCdnHost', normalized);
-        currentCdnHost = saved || '';
-        // 保存后仍停留在自定义态；若填的恰是预设域名，下拉框会切回该预设项并收起输入区
-        const keepCustom = Boolean(currentCdnHost) && !isPresetCdnHost(currentCdnHost);
-        setCdnCustomAreaVisible(keepCustom);
-        renderCdnOptions();
-        $cdnCustomHostInput.value = keepCustom ? currentCdnHost : '';
-        resetCustomCdnHint();
-    }
+        async function load() {
+            if (!$select) return;
 
-    // 下拉框切换：预设项立即写入设置，选"自定义 CDN"则展开输入框等待填写
-    async function handleCdnSelectChange(value) {
-        if (value === CDN_CUSTOM_VALUE) {
-            setCdnCustomAreaVisible(true, true);
-            renderCdnOptions();
-            // 已保存的是自定义域名时回填，方便在原有基础上修改
-            if ($cdnCustomHostInput) {
-                $cdnCustomHostInput.value = isCustomCdnHost(currentCdnHost) ? currentCdnHost : '';
-                $cdnCustomHostInput.select();
+            const host = await window.electronAPI.invoke(options.getChannel);
+            currentHost = host || '';
+            customMode = isCustomHost(currentHost);
+            renderOptions();
+            if ($customInput) {
+                $customInput.value = customMode ? currentHost : '';
             }
-            resetCustomCdnHint();
-            return;
+            // 打开设置时若已存自定义 CDN，直接展开输入区，但不抢占焦点
+            setCustomAreaVisible(customMode);
+            setHint(options.customHint, false);
         }
 
-        const saved = await window.electronAPI.invoke('setCdnHost', value);
-        currentCdnHost = saved || '';
-        setCdnCustomAreaVisible(false);
-        renderCdnOptions();
-        if ($cdnCustomHostInput) {
-            $cdnCustomHostInput.value = '';
+        function cancelCustomHost() {
+            // 取消后回到已保存的设置：自定义的保持展开并回填，预设/默认则收起
+            const keepCustom = isCustomHost(currentHost);
+            setCustomAreaVisible(keepCustom);
+            renderOptions();
+            if ($customInput) {
+                $customInput.value = keepCustom ? currentHost : '';
+            }
+            resetCustomHint();
         }
-        resetCustomCdnHint();
+
+        async function saveCustomHost() {
+            if (!$customInput) return;
+
+            const raw = $customInput.value.trim();
+            const normalized = raw
+                ? await window.electronAPI.invoke('normalizeCdnHost', raw)
+                : '';
+
+            if (raw && !normalized) {
+                setHint('主机名无效，请填写例如 upos-sz-mirrorcos.bilivideo.com 的域名。', true);
+                $customInput.focus();
+                return;
+            }
+
+            const saved = await window.electronAPI.invoke(options.setChannel, normalized);
+            currentHost = saved || '';
+            // 保存后仍停留在自定义态；若填的恰是预设域名，下拉框会切回该预设项并收起输入区
+            const keepCustom = Boolean(currentHost) && !isPresetHost(currentHost);
+            setCustomAreaVisible(keepCustom);
+            renderOptions();
+            $customInput.value = keepCustom ? currentHost : '';
+            resetCustomHint();
+        }
+
+        // 下拉框切换：预设项立即写入设置，选"自定义 CDN"则展开输入框等待填写
+        async function handleSelectChange(value) {
+            if (value === CDN_CUSTOM_VALUE) {
+                setCustomAreaVisible(true, true);
+                renderOptions();
+                // 已保存的是自定义域名时回填，方便在原有基础上修改
+                if ($customInput) {
+                    $customInput.value = isCustomHost(currentHost) ? currentHost : '';
+                    $customInput.select();
+                }
+                resetCustomHint();
+                return;
+            }
+
+            const saved = await window.electronAPI.invoke(options.setChannel, value);
+            currentHost = saved || '';
+            setCustomAreaVisible(false);
+            renderOptions();
+            if ($customInput) {
+                $customInput.value = '';
+            }
+            resetCustomHint();
+        }
+
+        if ($select) {
+            $select.addEventListener('change', (event) => {
+                handleSelectChange(event.target.value);
+            });
+        }
+
+        if ($customSaveBtn) {
+            $customSaveBtn.addEventListener('click', () => {
+                saveCustomHost();
+            });
+        }
+
+        if ($customCancelBtn) {
+            $customCancelBtn.addEventListener('click', cancelCustomHost);
+        }
+
+        // 输入框内回车直接保存、Esc 取消，保持与常见表单一致的交互
+        if ($customInput) {
+            $customInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    saveCustomHost();
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelCustomHost();
+                }
+            });
+        }
+
+        return { load };
+    }
+
+    // 拉取一次远端 CDN 列表，两组下拉框共用
+    async function loadCdnList() {
+        currentCdnList = await window.electronAPI.invoke('getCdnList');
+        await Promise.all([
+            cdnDownloadGroup.load(),
+            cdnPlayGroup.load(),
+        ]);
+    }
+
+    async function loadPreviewMultiThread() {
+        if (!$previewMultiThreadCheckbox) return;
+        const enabled = await window.electronAPI.invoke('getPreviewMultiThreadEnabled');
+        $previewMultiThreadCheckbox.checked = enabled !== false;
     }
 
     function updateAssSettingsVisibility() {
@@ -516,32 +588,9 @@ function createSettingWeb() {
         });
     }
 
-    if ($cdnSelect) {
-        $cdnSelect.addEventListener('change', (event) => {
-            handleCdnSelectChange(event.target.value);
-        });
-    }
-
-    if ($cdnCustomHostSaveBtn) {
-        $cdnCustomHostSaveBtn.addEventListener('click', () => {
-            saveCustomCdnHost();
-        });
-    }
-
-    if ($cdnCustomHostCancelBtn) {
-        $cdnCustomHostCancelBtn.addEventListener('click', cancelCustomCdnHost);
-    }
-
-    // 输入框内回车直接保存、Esc 取消，保持与常见表单一致的交互
-    if ($cdnCustomHostInput) {
-        $cdnCustomHostInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                saveCustomCdnHost();
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                cancelCustomCdnHost();
-            }
+    if ($previewMultiThreadCheckbox) {
+        $previewMultiThreadCheckbox.addEventListener('change', (event) => {
+            window.electronAPI.invoke('setPreviewMultiThreadEnabled', event.target.checked);
         });
     }
 

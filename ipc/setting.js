@@ -110,6 +110,20 @@ module.exports = function registerSettingIpc(mainWindow) {
 
     ipcMain.handle('normalizeCdnHost', (event, cdnHost) => normalizeCdnHost(cdnHost));
 
+    ipcMain.handle('getPlayCdnHost', () => setting.getPlayCdnHost());
+
+    ipcMain.handle('setPlayCdnHost', (event, cdnHost) => {
+        setting.updatePlayCdnHost(cdnHost);
+        // 返回规范化后的值，渲染进程据此回填输入框并提示非法输入
+        return setting.getPlayCdnHost();
+    });
+
+    ipcMain.handle('getPreviewMultiThreadEnabled', () => setting.getPreviewMultiThreadEnabled());
+
+    ipcMain.handle('setPreviewMultiThreadEnabled', (event, enabled) =>
+        setting.updatePreviewMultiThreadEnabled(enabled)
+    );
+
     ipcMain.handle('getSubtitleSettings', () => setting.getSubtitleSettings());
 
     ipcMain.handle('setSubtitleSettings', (event, subtitleSettings) =>

@@ -8,15 +8,26 @@ const $toolModelBody = document.getElementById('modelBody');
 const $toolModelCloseBtn = document.getElementById('modelCloseBtn');
 
 
-// 更多工具功能
-const moreTools = [
-    { key: 'multi-part-playback', title: '分P连续播放', description: '有些视频会切片分P上传以过审,用这个工具像观看完整的视频那样观看他们' },
-    { key: 'dd-monitor', title: 'DD监控室', description: '像监控一样一次性观看多个直播间' },
+// 工具箱内容
+const toolboxTools = [
+    { key: 'player', icon: '▶', title: '弹幕播放器', description: '选择下载好的 XML 弹幕与视频，在本地带弹幕播放' },
+    { key: 'merge-tool', icon: '⛓', title: '缓存合并工具', description: '批量合并本地缓存的音视频分片，并按标题重命名' },
+    { key: 'multi-part-playback', icon: '≣', planned: true, title: '分P连续播放', description: '有些视频会切片分P上传以过审，用这个工具像观看完整的视频那样观看它们' },
+    { key: 'dd-monitor', icon: '▦', planned: true, title: 'DD监控室', description: '像监控一样一次性观看多个直播间' },
 ];
 
 // 触发事件
 function triggerMoreToolEvent(tool) {
     console.log(tool);
+    // 已实现的工具直接走各自的打开逻辑，其余仍为占位
+    if (tool.key === 'player') {
+        openPlayer();
+        return;
+    }
+    if (tool.key === 'merge-tool') {
+        openMergeTool();
+        return;
+    }
     alert("暂未实现");
 }
 
@@ -27,9 +38,10 @@ function renderMoreTools() {
 
     $toolModelBody.innerHTML = `
         <div class="tool-grid">
-            ${moreTools.map((tool) => `
-                <div class="tool-slot" data-tool-key="${tool.key}" role="button" tabindex="0">
-                    <div class="tool-slot-title">${tool.title}</div>
+            ${toolboxTools.map((tool) => `
+                <div class="tool-slot${tool.planned ? ' is-planned' : ''}" data-tool-key="${tool.key}" role="button" tabindex="0">
+                    <div class="tool-slot-icon" aria-hidden="true">${tool.icon}</div>
+                    <div class="tool-slot-title">${tool.title}${tool.planned ? '<span class="tool-slot-badge">即将推出</span>' : ''}</div>
                     <div class="tool-slot-meta">${tool.description}</div>
                 </div>
             `).join('')}
@@ -39,16 +51,18 @@ function renderMoreTools() {
 
 function handleMoreToolActivate(target) {
     const toolKey = target?.dataset?.toolKey;
-    const tool = moreTools.find((item) => item.key === toolKey);
+    const tool = toolboxTools.find((item) => item.key === toolKey);
 
     if (!tool) {
         return;
     }
 
+    // 工具箱相当于启动器：选中后就收起，避免挡住新打开的窗口
+    closeToolModel();
     triggerMoreToolEvent(tool);
 }
 
-function openToolModel(title) {
+function openToolModel(title, trigger) {
     if (!$toolModel) {
         return;
     }
@@ -58,7 +72,8 @@ function openToolModel(title) {
     }
 
     renderMoreTools();
-    openModal($toolModel);
+    // 传入触发控件，弹窗才能播放“从工具箱按钮展开、收回按钮”的动效
+    openModal($toolModel, trigger);
 }
 
 function closeToolModel() {
@@ -129,6 +144,6 @@ function openMergeTool() {
     window.electronAPI.invoke('openMergeTool');
 }
 
-function openMoreTools() {
-    openToolModel('更多工具');
+function openToolbox(trigger) {
+    openToolModel('工具箱', trigger);
 }

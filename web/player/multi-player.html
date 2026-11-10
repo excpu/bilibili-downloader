@@ -1,0 +1,65 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>分P连续播放</title>
+    <link rel="icon" href="icon.png">
+    <link rel="stylesheet" href="multi-player.css">
+</head>
+<body>
+    <header class="topbar">
+        <span class="topbar-badge">≣</span>
+        <span class="topbar-title">分P连续播放</span>
+    </header>
+    <main class="page">
+        <section class="panel load-panel">
+            <form id="form">
+                <label for="input">BVID 或视频链接</label>
+                <div class="input-row">
+                    <input id="input" type="text" placeholder="BV 号 / B站视频链接 / b23.tv 短链接" required autocomplete="off" spellcheck="false">
+                    <button id="submit" class="btn-primary" type="submit">开始播放</button>
+                </div>
+            </form>
+        </section>
+        <h1 id="title" class="title"></h1>
+        <div id="player" class="player">
+            <div class="stage" id="stage">
+                <video preload="auto" playsinline></video>
+                <video preload="auto" playsinline></video>
+                <div id="danmaku" class="danmaku" aria-hidden="true"></div>
+                <div id="spinner" class="spinner" hidden></div>
+                <div id="placeholder" class="placeholder">
+                    <span class="placeholder-icon">≣</span>
+                    <span id="placeholderText">输入视频地址后开始播放</span>
+                </div>
+            </div>
+            <!-- 控制栏整体包一层，全屏时作为浮层覆盖在画面上并可自动收起 -->
+            <div class="hud" id="hud">
+                <div class="controls">
+                    <button type="button" id="play" class="icon-btn" disabled title="播放">▶</button>
+                    <span id="current" class="time">00:00</span>
+                    <input id="seek" class="seek" type="range" min="0" max="0" step="0.01" value="0" disabled aria-label="视频总进度">
+                    <span id="duration" class="time">00:00</span>
+                    <div class="volume">
+                        <button type="button" id="mute" class="icon-btn small" title="静音">🔊</button>
+                        <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="音量">
+                    </div>
+                    <label class="switch" title="显示 / 隐藏弹幕">
+                        <input id="showDanmaku" type="checkbox" checked>
+                        <span class="switch-track" aria-hidden="true"></span>
+                        <span>弹幕</span>
+                    </label>
+                    <button type="button" id="fullscreen" class="icon-btn" title="全屏">⛶</button>
+                </div>
+                <div class="meta">
+                    <span id="part" class="part"></span>
+                    <span id="status" class="status" role="status" aria-live="polite"></span>
+                </div>
+                <div id="partList" class="part-list"></div>
+            </div>
+        </div>
+    </main>
+    <script src="multi-player.js"></script>
+</body>
+</html>

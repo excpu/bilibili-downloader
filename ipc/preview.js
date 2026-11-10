@@ -48,6 +48,7 @@ const CODEC_NAME_MAP = {
 let previewWindow = null; // 持有引用，防止重复打开
 let proxyServer = null;
 let proxyPort = 0;
+let proxyStarting = null;
 
 // 多线程并发预取缓冲配置
 const CHUNK_SIZE = 1024 * 1024; // 1MB 分块大小，平衡网络握手开销与秒开响应
@@ -134,6 +135,8 @@ function handleFallbackSingleStream(req, res, targetUrl, headers) {
             if (!res.headersSent) {
                 res.writeHead(502);
                 res.end('Bad Gateway');
+            } else {
+                res.destroy(err);
             }
         });
 
@@ -214,11 +217,15 @@ function handleConcurrentChunkStream(req, res, targetUrl, headers, totalSize, cl
                 scheduleFetches();
             } else {
                 console.warn(`分块 ${chunkIndex} 响应状态码: ${response.statusCode}`);
+                res.destroy(new Error(`分块请求失败: HTTP ${response.statusCode}`));
+                cleanup();
             }
         }).catch((err) => {
             activeControllers.delete(chunkIndex);
             if (isAborted || err.name === 'AbortError') return;
             console.warn(`分块 ${chunkIndex} 下载异常:`, err.message);
+            res.destroy(err);
+            cleanup();
         });
     }
 
@@ -290,8 +297,9 @@ function ensureProxyServer() {
     if (proxyServer && proxyPort > 0) {
         return Promise.resolve(proxyPort);
     }
+    if (proxyStarting) return proxyStarting;
 
-    return new Promise((resolve, reject) => {
+    proxyStarting = new Promise((resolve, reject) => {
         proxyServer = http.createServer(async (req, res) => {
             const reqUrl = new URL(req.url, `http://127.0.0.1:${proxyPort}`);
             if (reqUrl.pathname !== '/stream') {
@@ -397,7 +405,8 @@ function ensureProxyServer() {
             console.error('代理服务器启动错误:', err);
             reject(err);
         });
-    });
+    }).finally(() => { proxyStarting = null; });
+    return proxyStarting;
 }
 
 function closeProxyServer() {
@@ -644,7 +653,6 @@ module.exports = function registerPreviewIpc(mainWindow) {
 
         previewWindow.on('closed', () => {
             previewWindow = null;
-            closeProxyServer();
         });
 
         return { success: true };
@@ -703,4 +711,3 @@ module.exports = function registerPreviewIpc(mainWindow) {
         }
     });
 };
-

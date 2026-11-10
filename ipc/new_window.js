@@ -20,6 +20,7 @@ const MERGE_THEME = {
 // 持有引用，防止重复打开
 let playerWindow = null; // 持有引用，防止重复打开
 let mergeWindow = null;
+let multiPlayerWindow = null;
 
 const playerTemplate = [
     {
@@ -35,6 +36,30 @@ const playerTemplate = [
 ]
 
 module.exports = function registerNewWindowIpc(mainWindow) {
+    ipcMain.handle('openMultiPlayer', () => {
+        if (multiPlayerWindow && !multiPlayerWindow.isDestroyed()) {
+            if (multiPlayerWindow.isMinimized()) multiPlayerWindow.restore();
+            multiPlayerWindow.focus();
+            return;
+        }
+        multiPlayerWindow = new BrowserWindow({
+            width: 1000,
+            height: 720,
+            minWidth: 640,
+            minHeight: 480,
+            icon: path.join(__dirname, '../assets/icon/player.png'),
+            ...theme.windowChromeOptions(PLAYER_THEME),
+            webPreferences: {
+                preload: path.join(__dirname, '../preload.js'),
+                nodeIntegration: false,
+                contextIsolation: true,
+            },
+        });
+        multiPlayerWindow.setMenu(null);
+        theme.registerThemeAwareWindow(multiPlayerWindow, PLAYER_THEME);
+        multiPlayerWindow.loadFile(path.join(__dirname, '../web/player/multi-player.html'));
+        multiPlayerWindow.on('closed', () => { multiPlayerWindow = null; });
+    });
     // 打开播放器
     ipcMain.handle('openPlayer', async () => {
         // electron 新窗口打开html

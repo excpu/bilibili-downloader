@@ -12,7 +12,7 @@ const $toolModelCloseBtn = document.getElementById('modelCloseBtn');
 const toolboxTools = [
     { key: 'player', icon: '▶', title: '弹幕播放器', description: '选择下载好的 XML 弹幕与视频，在本地带弹幕播放' },
     { key: 'merge-tool', icon: '⛓', title: '缓存合并工具', description: '批量合并本地缓存的音视频分片，并按标题重命名' },
-    { key: 'multi-part-playback', icon: '≣', planned: true, title: '分P连续播放', description: '有些视频会切片分P上传以过审，用这个工具像观看完整的视频那样观看它们' },
+    { key: 'multi-part-playback', icon: '≣', title: '分P连续播放', description: '有些视频会切片分P上传以过审，用这个工具像观看完整的视频那样观看它们' },
     { key: 'dd-monitor', icon: '▦', planned: true, title: 'DD监控室', description: '像监控一样一次性观看多个直播间' },
 ];
 
@@ -26,6 +26,10 @@ function triggerMoreToolEvent(tool) {
     }
     if (tool.key === 'merge-tool') {
         openMergeTool();
+        return;
+    }
+    if (tool.key === 'multi-part-playback') {
+        window.electronAPI.invoke('openMultiPlayer');
         return;
     }
     alert("暂未实现");

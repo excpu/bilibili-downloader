@@ -147,7 +147,7 @@ function openDanmakujiWindow(roomId, title) {
         frame: false,
         transparent: false,
         icon: path.join(__dirname, '../assets/icon/player.png'),
-        ...theme.windowChromeOptions({ height: 0, background: { light: '#ffffff', dark: '#17181c' } }),
+        ...theme.windowChromeOptions({ height: 0, background: { light: '#f8f8f8', dark: '#17181c' } }),
         webPreferences: {
             preload: path.join(__dirname, '../preload.js'),
             nodeIntegration: false,
@@ -158,9 +158,10 @@ function openDanmakujiWindow(roomId, title) {
     hj.loadFile(path.join(__dirname, '../web/player/monitor/danmakuji.html'));
 
     const hjContentsId = hj.webContents.id;
-    hj.webContents.once('did-finish-load', () => {
+    hj.webContents.on('did-finish-load', () => {
+        if (hj.isDestroyed()) return;
         hj.webContents.send('danmakuji:init', { roomId, title: title || `直播间 ${roomId}` });
-        // 等页面注册好 IPC 监听后再订阅，保证能收到当前连接状态的补发
+        // 等页面注册好 IPC 监听后再订阅，刷新页面时也能重新补发当前连接状态
         startRoomClient(roomId, hjContentsId, 'danmakuji');
     });
     hj.on('closed', () => {

@@ -95,3 +95,91 @@ test('规范化直播弹幕和房间状态命令', () => {
     assert.deepEqual(normalizeCommand({ cmd: 'PREPARING' }), { type: 'live_status', value: 0 });
     assert.equal(normalizeCommand({ cmd: 'UNKNOWN' }), null);
 });
+
+test('解析 DANMU_MSG 荣耀等级、粉丝勋章配色、大航海身份与表情贴纸', () => {
+    const meta = [];
+    meta[1] = 1;
+    meta[3] = 0xffffff;
+    meta[12] = 1;
+    meta[13] = JSON.stringify({
+        emoticon_unique: 'room_123_1',
+        url: 'http://i0.hdslb.com/bfs/live/sticker.png',
+        width: 120,
+        height: 120,
+    });
+    meta[15] = {
+        extra: JSON.stringify({
+            dm_type: 1,
+            emots: {
+                '[热]': {
+                    emoticon_id: 278,
+                    url: 'http://i0.hdslb.com/bfs/live/hot.png',
+                    width: 20,
+                    height: 20,
+                },
+            },
+        }),
+        user: {
+            uid: 10086,
+            base: {
+                name: 'invins-',
+                name_color_str: '#E17AFF',
+            },
+            medal: {
+                name: '旁汀生',
+                level: 55,
+                guard_level: 2,
+                is_light: 1,
+                guard_icon: 'http://i0.hdslb.com/bfs/live/guard2.png',
+                v2_medal_color_start: '#EB5370CC',
+                v2_medal_color_end: '#FF758FCC',
+                v2_medal_color_border: '#FF9AB0FF',
+            },
+        },
+    };
+
+    const info = [];
+    info[0] = meta;
+    info[1] = '喝茶[热]';
+    info[2] = [10086, 'invins-', 1, 0, 0, 10000, 1, ''];
+    info[3] = [55, '旁汀生', '主播', 8888, 2951253, '', 0, 16771156, 2951253, 10329087, 2, 1, 999];
+    info[4] = [40, 0, 10512625, 100, 2];
+    info[7] = 2;
+    info[16] = [52];
+
+    assert.deepEqual(normalizeCommand({ cmd: 'DANMU_MSG', info }), {
+        type: 'danmaku',
+        text: '喝茶[热]',
+        user: 'invins-',
+        uid: 10086,
+        color: '#ffffff',
+        mode: 1,
+        nameColor: '#E17AFF',
+        isAdmin: true,
+        rank: 2,
+        wealthLevel: 52,
+        level: 40,
+        guardLevel: 2,
+        medalName: '旁汀生',
+        medalLevel: 55,
+        medalRoom: 8888,
+        medalGuardLevel: 2,
+        medalGuardIcon: 'https://i0.hdslb.com/bfs/live/guard2.png',
+        medalColorStart: '#EB5370CC',
+        medalColorEnd: '#FF758FCC',
+        medalColorBorder: '#FF9AB0FF',
+        emotes: {
+            '[热]': {
+                id: 278,
+                url: 'https://i0.hdslb.com/bfs/live/hot.png',
+                width: 20,
+                height: 20,
+            },
+        },
+        sticker: {
+            url: 'https://i0.hdslb.com/bfs/live/sticker.png',
+            width: 120,
+            height: 120,
+        },
+    });
+});

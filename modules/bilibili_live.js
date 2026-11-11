@@ -18,6 +18,7 @@ const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const HEARTBEAT_INTERVAL = 30 * 1000;
 // 认证包必须在连接后 5 秒内发出，这里留出重连后的余量
 const AUTH_TIMEOUT = 8 * 1000;
+const CONNECT_TIMEOUT = 10 * 1000;
 
 const baseHeaders = {
     'User-Agent': BROWSER_UA,
@@ -216,6 +217,7 @@ class LiveDanmakuClient {
         this.hostIndex = 0;
         this.token = '';
         this.heartbeatTimer = null;
+        this.connectTimer = null;
         this.authTimer = null;
         this.reconnectTimer = null;
     }
@@ -236,9 +238,11 @@ class LiveDanmakuClient {
 
     clearTimers() {
         clearInterval(this.heartbeatTimer);
+        clearTimeout(this.connectTimer);
         clearTimeout(this.authTimer);
         clearTimeout(this.reconnectTimer);
         this.heartbeatTimer = null;
+        this.connectTimer = null;
         this.authTimer = null;
         this.reconnectTimer = null;
     }
@@ -277,9 +281,17 @@ class LiveDanmakuClient {
         ws.binaryType = 'arraybuffer';
         this.ws = ws;
         this.authed = false;
+        this.connectTimer = setTimeout(() => {
+            if (this.ws !== ws || this.stopped) return;
+            this.connectTimer = null;
+            this.onStatus({ state: 'error', message: '连接弹幕服务器超时' });
+            try { ws.close(); } catch { }
+        }, CONNECT_TIMEOUT);
 
         ws.onopen = () => {
             if (this.stopped) return;
+            clearTimeout(this.connectTimer);
+            this.connectTimer = null;
             this.sendAuth();
             this.authTimer = setTimeout(() => {
                 if (!this.authed) {

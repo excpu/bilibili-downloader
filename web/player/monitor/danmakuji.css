@@ -2,15 +2,24 @@
 
 :root {
     color-scheme: light dark;
-    --bg: light-dark(#ffffff, #17181c);
-    --bar-bg: light-dark(#f2f4f8, #202228);
-    --text: light-dark(#333333, #d8d8dc);
-    --muted: light-dark(#9aa0a8, #7c8087);
-    --stroke: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
-    --level-blue: #4aa3ff;
-    --guard-3: #58a5ff;
-    --guard-2: #9b7bff;
-    --guard-1: #ffb35c;
+    --bg: light-dark(#f8f8f8, #17181c);
+    --bar-bg: light-dark(#f0f2f5, #202228);
+    --text: light-dark(#2f3238, #e3e5e8);
+    --name: light-dark(#757a82, #9aa0a8);
+    --muted: light-dark(#9499a0, #7c8087);
+    --stroke: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+
+    --guard-3-bg: light-dark(#dff1f9, rgba(35, 173, 229, 0.18));
+    --guard-3-name: light-dark(#00b5e5, #3dc5f0);
+    --guard-3-badge: #23ade5;
+
+    --guard-2-bg: light-dark(#e8e4f8, rgba(155, 112, 255, 0.20));
+    --guard-2-name: light-dark(#9e54f0, #be82ff);
+    --guard-2-badge: #9656f0;
+
+    --guard-1-bg: light-dark(#fdf0dc, rgba(255, 166, 60, 0.20));
+    --guard-1-name: light-dark(#ef7c24, #ffaa4c);
+    --guard-1-badge: linear-gradient(135deg, #ffc247, #ff5e3a);
 }
 
 * {
@@ -25,7 +34,7 @@ body {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+    font-family: "Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     display: flex;
@@ -81,10 +90,11 @@ body {
     color: #ff4d4f;
 }
 
-/* ---------------- 弹幕列表（虚拟滚动） ---------------- */
+/* ---------------- 弹幕列表（动态行高虚拟滚动） ---------------- */
 .hj-viewport {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     scrollbar-width: thin;
 }
@@ -100,97 +110,282 @@ body {
     left: 0;
     right: 0;
     will-change: transform;
-    padding: 0 8px;
+    padding: 4px 10px;
 }
 
-/* 行高固定为 ROW_HEIGHT(42px)，虚拟滚动依赖等高行 */
+/* 外层包装承担行间距，避免 margin 折叠，保证 offsetHeight 精确测量 */
+.hj-item {
+    padding: 3px 0;
+}
+
+/* 普通弹幕无底框、按内容自然伸缩；大航海弹幕使用自适应宽度圆角色卡 */
 .hj-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 42px;
-    font-size: 12.5px;
-    line-height: 1.5;
-    overflow: hidden;
+    display: block;
+    padding: 1px 2px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text);
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
-/* 等级徽章：官方蓝色 Vx */
-.hj-level {
-    flex-shrink: 0;
+/* 负外边距抵消卡片内边距，使有底色弹幕的首行内容与无底色弹幕严格左对齐 */
+.hj-row.is-guard {
+    width: fit-content;
+    max-width: calc(100% + 6px);
+    margin-left: -6px;
+    padding: 5px 8px;
+    border-radius: 6px;
+}
+
+.hj-row.guard-3 {
+    background: var(--guard-3-bg);
+}
+
+.hj-row.guard-2 {
+    background: var(--guard-2-bg);
+}
+
+.hj-row.guard-1 {
+    background: var(--guard-1-bg);
+}
+
+/* ---------------- 行内徽章（统一 16px 胶囊，换行后第二行贴左） ---------------- */
+.hj-rank,
+.hj-admin,
+.hj-wealth,
+.hj-medal,
+.hj-guard-standalone {
     display: inline-flex;
     align-items: center;
-    padding: 1px 7px 1px 5px;
-    margin-top: 2px;
-    border-radius: 8px 8px 8px 2px;
-    background: var(--level-blue);
+    height: 16px;
+    line-height: 16px;
+    margin-right: 4px;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* 高能榜前三：榜1 / 榜2 / 榜3 */
+.hj-rank {
+    padding: 0 5px;
+    border-radius: 999px;
     color: #ffffff;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
 }
 
-/* 粉丝勋章 / 大航海徽章 */
-.hj-badge {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 7px;
-    margin-top: 2px;
-    border-radius: 8px;
-    color: #ffffff;
-    font-size: 10.5px;
-    max-width: 110px;
+.hj-rank.rank-1 {
+    background: linear-gradient(90deg, #ff9a3c, #ff6a2b);
 }
 
-.hj-badge .hj-badge-name {
+.hj-rank.rank-2 {
+    background: linear-gradient(90deg, #f58458, #ea6342);
+}
+
+.hj-rank.rank-3 {
+    background: linear-gradient(90deg, #f3a15c, #e5833d);
+}
+
+/* 房管徽章 */
+.hj-admin {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: #fea249;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* 荣耀等级胶囊（分档配色 + 羽翼纹章） */
+.hj-wealth {
+    gap: 2px;
+    padding: 0 5px 0 4px;
+    border-radius: 999px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.hj-wealth svg {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+
+.hj-wealth.tier-1 {
+    background: #95a8c6;
+}
+
+.hj-wealth.tier-2 {
+    background: #7fa2e0;
+}
+
+.hj-wealth.tier-3 {
+    background: #697be5;
+}
+
+.hj-wealth.tier-4 {
+    background: linear-gradient(90deg, #7462eb, #9065ec);
+}
+
+/* 粉丝勋章（新版一体胶囊 + 左侧大航海圆章） */
+.hj-medal {
+    padding: 0 6px;
+    border-radius: 999px;
+    color: #ffffff;
+    font-size: 11px;
+    max-width: 128px;
+}
+
+.hj-medal.has-guard {
+    padding-left: 0;
+}
+
+.hj-medal-name {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-.hj-badge.medal {
-    background: linear-gradient(135deg, #ff9db8, #ff5c8a);
-}
-
-.hj-badge.guard-3 {
-    background: var(--guard-3);
-}
-
-.hj-badge.guard-2 {
-    background: var(--guard-2);
-}
-
-.hj-badge.guard-1 {
-    background: linear-gradient(135deg, #ffd9a0, var(--guard-1));
-    color: #6b4a00;
-}
-
-.hj-body {
-    flex: 1;
-    min-width: 0;
-    word-break: break-all;
-}
-
-.hj-name {
+.hj-medal-level {
+    margin-left: 2px;
     font-weight: 700;
-    margin-right: 4px;
+    flex-shrink: 0;
 }
 
-.hj-name.guard-3 {
-    color: var(--guard-3);
+.hj-guard-icon,
+.hj-guard-emblem {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 3px;
 }
 
-.hj-name.guard-2 {
-    color: var(--guard-2);
+.hj-guard-icon {
+    display: block;
+    object-fit: cover;
 }
 
-.hj-name.guard-1 {
-    color: #e6a23c;
+.hj-guard-emblem {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.9);
 }
 
-/* SC 行高亮 */
-.hj-row.is-sc .hj-body {
-    padding: 3px 8px;
-    border-radius: 8px;
-    background: rgba(74, 163, 255, 0.12);
+.hj-guard-emblem svg {
+    width: 10px;
+    height: 10px;
+}
+
+.hj-guard-emblem.guard-3 {
+    background: var(--guard-3-badge);
+}
+
+.hj-guard-emblem.guard-2 {
+    background: var(--guard-2-badge);
+}
+
+.hj-guard-emblem.guard-1 {
+    background: var(--guard-1-badge);
+}
+
+.hj-guard-standalone .hj-guard-emblem {
+    width: 16px;
+    height: 16px;
+    margin-right: 0;
+}
+
+/* ---------------- 用户名与弹幕正文 ---------------- */
+.hj-name {
+    color: var(--name);
+    font-weight: 400;
+    margin-right: 3px;
+}
+
+.hj-row.guard-3 .hj-name {
+    color: var(--guard-3-name);
+}
+
+.hj-row.guard-2 .hj-name {
+    color: var(--guard-2-name);
+}
+
+.hj-row.guard-1 .hj-name {
+    color: var(--guard-1-name);
+}
+
+.hj-text {
+    color: var(--text);
+}
+
+/* 行内小表情（如 [热]），与徽章同一中线对齐 */
+.hj-emote {
+    display: inline-block;
+    height: 20px;
+    width: auto;
+    vertical-align: middle;
+    margin: 0 1px;
+}
+
+/* 直播间专属大表情贴纸 */
+.hj-sticker {
+    display: inline-block;
+    height: 46px;
+    width: auto;
+    max-width: 120px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin: 0;
+}
+
+/* ---------------- 醒目留言（SC）卡片 ---------------- */
+.hj-sc {
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 12.5px;
+    line-height: 18px;
+    border: 1px solid var(--sc-head, #2a60b2);
+}
+
+.hj-sc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 8px;
+    background: var(--sc-body, #edf5ff);
+    color: #2f3238;
+}
+
+.hj-sc-user {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+}
+
+.hj-sc-name {
+    font-weight: 600;
+    color: var(--sc-head, #2a60b2);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.hj-sc-price {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--sc-head, #2a60b2);
+}
+
+.hj-sc-body {
+    padding: 6px 8px;
+    background: var(--sc-head, #2a60b2);
+    color: #ffffff;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }

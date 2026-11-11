@@ -1,0 +1,196 @@
+/* 独立窗口弹幕姬：参考官方直播姬弹幕列表样式 */
+
+:root {
+    color-scheme: light dark;
+    --bg: light-dark(#ffffff, #17181c);
+    --bar-bg: light-dark(#f2f4f8, #202228);
+    --text: light-dark(#333333, #d8d8dc);
+    --muted: light-dark(#9aa0a8, #7c8087);
+    --stroke: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
+    --level-blue: #4aa3ff;
+    --guard-3: #58a5ff;
+    --guard-2: #9b7bff;
+    --guard-1: #ffb35c;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* ---------------- 顶栏（可拖动窗口） ---------------- */
+.hj-bar {
+    flex-shrink: 0;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 12px;
+    background: var(--bar-bg);
+    border-bottom: 1px solid var(--stroke);
+    -webkit-app-region: drag;
+}
+
+.hj-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hj-status {
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.hj-close {
+    -webkit-app-region: no-drag;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.hj-close:hover {
+    background: rgba(255, 77, 79, 0.15);
+    color: #ff4d4f;
+}
+
+/* ---------------- 弹幕列表（虚拟滚动） ---------------- */
+.hj-viewport {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+    scrollbar-width: thin;
+}
+
+.hj-spacer {
+    position: relative;
+    width: 100%;
+}
+
+.hj-rows {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    will-change: transform;
+    padding: 0 8px;
+}
+
+/* 行高固定为 ROW_HEIGHT(42px)，虚拟滚动依赖等高行 */
+.hj-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 42px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    overflow: hidden;
+}
+
+/* 等级徽章：官方蓝色 Vx */
+.hj-level {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px 1px 5px;
+    margin-top: 2px;
+    border-radius: 8px 8px 8px 2px;
+    background: var(--level-blue);
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+/* 粉丝勋章 / 大航海徽章 */
+.hj-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 7px;
+    margin-top: 2px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 10.5px;
+    max-width: 110px;
+}
+
+.hj-badge .hj-badge-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.hj-badge.medal {
+    background: linear-gradient(135deg, #ff9db8, #ff5c8a);
+}
+
+.hj-badge.guard-3 {
+    background: var(--guard-3);
+}
+
+.hj-badge.guard-2 {
+    background: var(--guard-2);
+}
+
+.hj-badge.guard-1 {
+    background: linear-gradient(135deg, #ffd9a0, var(--guard-1));
+    color: #6b4a00;
+}
+
+.hj-body {
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+}
+
+.hj-name {
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.hj-name.guard-3 {
+    color: var(--guard-3);
+}
+
+.hj-name.guard-2 {
+    color: var(--guard-2);
+}
+
+.hj-name.guard-1 {
+    color: #e6a23c;
+}
+
+/* SC 行高亮 */
+.hj-row.is-sc .hj-body {
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(74, 163, 255, 0.12);
+}

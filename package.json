@@ -1,11 +1,11 @@
 {
     "name": "bilibili-downloader",
-    "version": "1.2.4",
+    "version": "1.3.0",
     "main": "main.js",
     "scripts": {
         "start": "electron .",
         "build": "electron-builder",
-        "test": "node --test test/account-popover-check.js test/multi-part-check.js && node test/js-media-check.js",
+        "test": "node --test test/account-popover-check.js test/multi-part-check.js test/live-danmaku-protocol-check.js && node test/js-media-check.js",
         "test:account": "node --test test/account-popover-check.js"
     },
     "keywords": [
@@ -29,6 +29,7 @@
         "got": "^11.8.6",
         "md5": "^2.3.0",
         "mp4box": "^2.5.0",
+        "mpegts.js": "^1.8.2",
         "protobufjs": "^8.0.0"
     },
     "build": {

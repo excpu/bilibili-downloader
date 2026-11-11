@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DD 监控室</title>
+    <link rel="stylesheet" href="./monitor.css">
+    <script src="../artplayer-5.3.0/artplayer.js"></script>
+    <script src="./lib/mpegts.js"></script>
+</head>
+
+<body>
+    <header class="monitor-topbar">
+        <div class="topbar-brand">
+            <span class="brand-badge">▦</span>
+            <span class="brand-title">DD 监控室</span>
+        </div>
+
+        <div class="topbar-center">
+            <div class="layout-picker" id="layoutPicker" role="group" aria-label="布局">
+                <span class="layout-label">布局</span>
+                <button type="button" class="layout-btn" data-layout="2">2</button>
+                <button type="button" class="layout-btn" data-layout="4">4</button>
+                <button type="button" class="layout-btn" data-layout="6">6</button>
+                <button type="button" class="layout-btn" data-layout="9">9</button>
+            </div>
+        </div>
+
+        <div class="topbar-actions">
+            <button type="button" class="topbar-btn" id="toggleDanmaku">弹幕：开</button>
+            <button type="button" class="topbar-btn" id="toggleMute">声音：关</button>
+            <button type="button" class="topbar-btn" id="openEditor">房间列表</button>
+            <button type="button" class="topbar-btn" id="refreshAll">刷新</button>
+        </div>
+    </header>
+
+    <main class="monitor-main">
+        <div class="monitor-grid" id="grid" data-layout="4"></div>
+        <div class="monitor-hint" id="hint">
+            点击任意空位分配直播间，双击画面可临时放大
+        </div>
+    </main>
+
+    <!-- 单个空位分配弹窗 -->
+    <div class="monitor-modal hidden" id="pickerModal">
+        <div class="modal-panel">
+            <header class="modal-head">
+                <h2 id="pickerTitle">分配直播间</h2>
+                <button type="button" class="icon-btn" data-close="pickerModal" aria-label="关闭">✕</button>
+            </header>
+            <div class="modal-body">
+                <label class="field">
+                    <span class="field-label">直播间号或直播间链接</span>
+                    <input type="text" id="pickerInput" placeholder="例如 14047 或 https://live.bilibili.com/14047"
+                        autocomplete="off">
+                </label>
+                <p class="field-hint">支持短号，进入后会自动换算成真实房间号。</p>
+                <div class="recent-block">
+                    <div class="recent-head">
+                        <span>最近使用</span>
+                        <button type="button" class="link-btn" id="clearRecent">清空</button>
+                    </div>
+                    <div class="recent-list" id="recentList"></div>
+                </div>
+                <p class="modal-error hidden" id="pickerError"></p>
+            </div>
+            <footer class="modal-foot">
+                <button type="button" class="btn ghost" id="pickerRemove">移除该房间</button>
+                <span class="spacer"></span>
+                <button type="button" class="btn ghost" data-close="pickerModal">取消</button>
+                <button type="button" class="btn primary" id="pickerConfirm">分配</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 批量编辑弹窗 -->
+    <div class="monitor-modal hidden" id="editorModal">
+        <div class="modal-panel wide">
+            <header class="modal-head">
+                <h2>房间列表</h2>
+                <button type="button" class="icon-btn" data-close="editorModal" aria-label="关闭">✕</button>
+            </header>
+            <div class="modal-body">
+                <p class="field-hint">
+                    按顺序填写每个画面的直播间号或链接，留空表示该位置空置。保存后会重新加载受影响的画面。
+                </p>
+                <div class="editor-list" id="editorList"></div>
+                <p class="modal-error hidden" id="editorError"></p>
+            </div>
+            <footer class="modal-foot">
+                <button type="button" class="btn ghost" id="editorClear">清空全部</button>
+                <span class="spacer"></span>
+                <button type="button" class="btn ghost" data-close="editorModal">取消</button>
+                <button type="button" class="btn primary" id="editorSave">保存并加载</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 自定义右键菜单 -->
+    <div class="context-menu hidden" id="contextMenu" role="menu"></div>
+
+    <script src="./monitor.js"></script>
+</body>
+
+</html>

@@ -9,6 +9,10 @@
     --muted: light-dark(#9499a0, #7c8087);
     --stroke: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
 
+    /* 行内图标统一垂直补偿：vertical-align: middle 对齐到 x-height 中线，
+       比中文视觉中心偏高约 2px。徽章 / 表情 / 贴纸共用此值，确保与文字中线一致 */
+    --hj-badge-shift: -2px;
+
     --guard-3-bg: light-dark(#dff1f9, rgba(35, 173, 229, 0.18));
     --guard-3-name: light-dark(#00b5e5, #3dc5f0);
     --guard-3-badge: #23ade5;
@@ -163,6 +167,8 @@ body {
     margin-right: 4px;
     vertical-align: middle;
     flex-shrink: 0;
+    position: relative;
+    top: var(--hj-badge-shift);
 }
 
 /* 高能榜前三：榜1 / 榜2 / 榜3 */
@@ -327,6 +333,8 @@ body {
     height: 20px;
     width: auto;
     vertical-align: middle;
+    position: relative;
+    top: var(--hj-badge-shift);
     margin: 0 1px;
 }
 
@@ -338,6 +346,8 @@ body {
     max-width: 120px;
     object-fit: contain;
     vertical-align: middle;
+    position: relative;
+    top: var(--hj-badge-shift);
     margin: 0;
 }
 

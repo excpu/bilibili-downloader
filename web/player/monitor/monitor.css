@@ -260,6 +260,116 @@ html[data-platform="linux"] .monitor-topbar {
     display: none !important;
 }
 
+/* ArtPlayer 默认按大播放器设计（暂停时中心的播放按钮 80px、控制栏 46px、
+   播放/静音图标 36px），监控室里每个画面都很小，所以整体缩小一套尺寸。
+   这些变量由 artplayer 写在 .art-video-player 自身上，因此必须用
+   `.tile-player .art-video-player` 这样的两层选择器才能覆盖掉。 */
+.tile {
+    container-type: inline-size;
+}
+
+.tile-player .art-video-player {
+    --art-state-size: 32px;
+    --art-state-opacity: .6;
+    --art-control-height: 28px;
+    --art-control-icon-size: 18px;
+    --art-control-icon-scale: 1;
+    --art-control-opacity: .85;
+    --art-padding: 6px;
+    --art-bottom-height: 52px;
+    --art-bottom-gap: 3px;
+    --art-progress-height: 4px;
+    --art-indicator-size: 9px;
+    --art-volume-height: 80px;
+    --art-volume-handle-size: 10px;
+    --art-lock-size: 22px;
+    --art-settings-icon-size: 15px;
+    --art-subtitle-font-size: 13px;
+    --art-border-radius: 8px;
+}
+
+/* 3 列布局（6/9）格子约 430px 宽，再降一档，避免控制栏占掉太多画面 */
+@container (max-width: 460px) {
+    .tile-player .art-video-player {
+        --art-state-size: 26px;
+        --art-state-opacity: .55;
+        --art-control-height: 24px;
+        --art-control-icon-size: 15px;
+        --art-bottom-height: 46px;
+        --art-progress-height: 3px;
+        --art-indicator-size: 7px;
+    }
+}
+
+/* 窗口很窄或列数更多时用最紧凑的一档 */
+@container (max-width: 300px) {
+    .tile-player .art-video-player {
+        --art-state-size: 22px;
+        --art-state-opacity: .5;
+        --art-control-height: 22px;
+        --art-control-icon-size: 13px;
+        --art-bottom-height: 40px;
+    }
+}
+
+/* 放大的画面空间充裕，恢复到接近默认的尺寸 */
+.tile.is-zoomed .art-video-player {
+    --art-state-size: 72px;
+    --art-state-opacity: .8;
+    --art-control-height: 44px;
+    --art-control-icon-size: 30px;
+    --art-control-icon-scale: 1.1;
+    --art-padding: 10px;
+    --art-bottom-height: 92px;
+    --art-progress-height: 6px;
+    --art-indicator-size: 16px;
+    --art-volume-height: 120px;
+    --art-volume-handle-size: 14px;
+    --art-lock-size: 36px;
+    --art-settings-icon-size: 24px;
+    --art-subtitle-font-size: 20px;
+}
+
+/* 中心的播放/暂停图标不越过遮罩容器，防止小格子里撑破布局 */
+.tile-player .art-mask .art-state svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* 音量弹窗的宽度默认等于 --art-control-height，控制栏缩小后只有 20 多像素，
+   装不下 "100" 这样的数字，文字会溢出到深色底之外。这里给弹窗独立的宽度
+   （用 left + margin 保持水平居中，不动 transform，以免破坏弹出动画），
+   并压缩内边距，让滑块本身还有足够的可拖拽高度。
+   选择器需要比 artplayer 自带的更具体，否则同权重时后注入的样式会赢。 */
+.tile-player .art-control-volume .art-volume-panel {
+    width: 36px;
+    left: 50%;
+    margin-left: -18px;
+    font-size: 11px;
+}
+
+.tile-player .art-control-volume .art-volume-panel .art-volume-inner {
+    gap: 6px;
+    padding: 6px 0 8px;
+}
+
+.tile-player .art-control-volume .art-volume-val {
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* 放大的画面空间充裕，回到 artplayer 的原始比例 */
+.tile.is-zoomed .art-control-volume .art-volume-panel {
+    width: var(--art-control-height);
+    margin-left: calc(var(--art-control-height) / -2);
+    font-size: 12px;
+}
+
+.tile.is-zoomed .art-control-volume .art-volume-panel .art-volume-inner {
+    gap: 10px;
+    padding: 10px 0 12px;
+}
+
 /* 空位占位 */
 .tile-empty {
     position: absolute;

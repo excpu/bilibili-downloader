@@ -385,9 +385,9 @@ function measureRenderedRows() {
     rowsEl.style.transform = `translateY(${offsets[currentStart]}px)`;
 
     if (autoScroll) {
-        viewportEl.scrollTop = Math.max(0, totalPx - viewportEl.clientHeight);
+        startFollow();
     } else if (deltaAbove !== 0) {
-        viewportEl.scrollTop = Math.max(0, prevScrollTop + deltaAbove);
+        setScrollTop(Math.max(0, prevScrollTop + deltaAbove));
     }
     return true;
 }
@@ -403,10 +403,6 @@ function renderPass() {
         currentStart = 0;
         currentEnd = 0;
         return false;
-    }
-
-    if (autoScroll) {
-        viewportEl.scrollTop = Math.max(0, totalPx - viewportEl.clientHeight);
     }
 
     const scrollTop = viewportEl.scrollTop;
@@ -455,10 +451,40 @@ function scheduleRender() {
     requestAnimationFrame(render);
 }
 
-function scrollToBottom() {
-    const totalPx = getTotalHeight();
-    spacerEl.style.height = `${totalPx}px`;
-    viewportEl.scrollTop = Math.max(0, totalPx - viewportEl.clientHeight);
+// 平滑跟随：每帧向底部目标位置推进一段距离，新弹幕到来时目标随之更新，
+// 形成官方弹幕列表那样缓慢滚动的效果；用户上滚（autoScroll=false）时立即停止
+let followRaf = null;
+// 记录动画最后一次设置的滚动位置：scroll 事件里位置与之几乎一致即视为程序化滚动，
+// 避免跟随动画被误判成「用户上滚」而中断
+let lastProgrammaticTop = -1;
+
+function setScrollTop(value) {
+    lastProgrammaticTop = value;
+    viewportEl.scrollTop = value;
+}
+
+function startFollow() {
+    if (followRaf !== null) return;
+    const step = () => {
+        followRaf = null;
+        if (!autoScroll) return;
+        const target = Math.max(0, getTotalHeight() - viewportEl.clientHeight);
+        const dist = target - viewportEl.scrollTop;
+        if (Math.abs(dist) < 0.5) {
+            if (dist !== 0) setScrollTop(target);
+            return;
+        }
+        // 距离超过两屏（如初始加载）直接贴底，仅小步差值走缓动
+        if (dist > viewportEl.clientHeight * 2) {
+            setScrollTop(target);
+            scheduleRender();
+            return;
+        }
+        setScrollTop(viewportEl.scrollTop + dist * 0.3);
+        scheduleRender();
+        followRaf = requestAnimationFrame(step);
+    };
+    followRaf = requestAnimationFrame(step);
 }
 
 function pushMessage(message) {
@@ -480,24 +506,31 @@ function pushMessage(message) {
         heights.splice(0, excess);
         dirtyFrom = 0;
         if (!autoScroll) {
-            viewportEl.scrollTop = Math.max(0, viewportEl.scrollTop - removedHeight);
+            setScrollTop(Math.max(0, viewportEl.scrollTop - removedHeight));
         }
     }
 
     if (autoScroll) {
-        scrollToBottom();
+        startFollow();
     }
     scheduleRender();
 }
 
+// 平滑跟随期间的程序化滚动不触发「用户上滚」判定，避免动画自锁
 viewportEl.addEventListener('scroll', () => {
+    // 位置与动画最后一次写入值一致（Chromium 可能取整 1px 内误差）即程序化滚动
+    if (Math.abs(viewportEl.scrollTop - lastProgrammaticTop) <= 1) {
+        scheduleRender();
+        return;
+    }
     const gap = getTotalHeight() - viewportEl.scrollTop - viewportEl.clientHeight;
     autoScroll = gap <= AUTO_SCROLL_GAP;
+    if (autoScroll) startFollow();
     scheduleRender();
 });
 
 new ResizeObserver(() => {
-    if (autoScroll) scrollToBottom();
+    if (autoScroll) startFollow();
     scheduleRender();
 }).observe(viewportEl);
 

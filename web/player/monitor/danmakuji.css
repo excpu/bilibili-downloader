@@ -1,29 +1,70 @@
-/* 独立窗口弹幕姬：参考官方直播姬弹幕列表样式 */
+/* ==========================================================================
+   弹幕姬：共享调色板 + 弹幕列表渲染样式 + 显示设置面板 + 单房间独立窗口外壳
+   多房间控制台（danmakuji-console.css）在此基础上叠加自己的布局。
+   主题由主进程 nativeTheme 驱动：color-scheme + light-dark()，页面无需主题 JS。
+   ========================================================================== */
 
 :root {
     color-scheme: light dark;
-    --bg: light-dark(#f8f8f8, #17181c);
-    --bar-bg: light-dark(#f0f2f5, #202228);
-    --text: light-dark(#2f3238, #e3e5e8);
-    --name: light-dark(#757a82, #9aa0a8);
-    --muted: light-dark(#9499a0, #7c8087);
-    --stroke: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
 
-    /* 行内图标统一垂直补偿：vertical-align: middle 对齐到 x-height 中线，
-       比中文视觉中心偏高约 2px。徽章 / 表情 / 贴纸共用此值，确保与文字中线一致 */
-    --hj-badge-shift: -2px;
+    /* 主色族：直播弹幕的「墨蓝舞台」，浅色为冷瓷白，深色为深夜直播间 */
+    --bg: light-dark(#eef1f7, #0b0d14);
+    --surface: light-dark(#ffffff, #12151f);
+    --surface-2: light-dark(#f5f7fb, #171b28);
+    --overlay: light-dark(rgba(255, 255, 255, 0.94), rgba(18, 21, 31, 0.94));
+    --scrim: light-dark(rgba(20, 26, 44, 0.38), rgba(2, 4, 10, 0.62));
+    --text: light-dark(#1b2136, #e7ebf5);
+    --text-2: light-dark(#4b5670, #a7b0c6);
+    --muted: light-dark(#7c869e, #6f7890);
+    --stroke: light-dark(rgba(27, 33, 54, 0.10), rgba(231, 235, 245, 0.10));
+    --stroke-strong: light-dark(rgba(27, 33, 54, 0.18), rgba(231, 235, 245, 0.20));
+
+    /* 全彩强调：B 站粉、直播蓝、大航海琥珀、进场薄荷、舰团紫 */
+    --pink: light-dark(#f0508a, #fb7299);
+    --blue: light-dark(#0f95d6, #23ade5);
+    --amber: light-dark(#e08a12, #ffaa4c);
+    --mint: light-dark(#12a877, #3ddc97);
+    --violet: light-dark(#7d4fe0, #9b70ff);
+
+    --ok: var(--mint);
+    --warn: var(--amber);
+    --danger: light-dark(#e0324f, #ff5c7a);
+    --info: var(--blue);
+
+    --glow-pink: light-dark(rgba(240, 80, 138, 0.22), rgba(251, 114, 153, 0.30));
+    --glow-blue: light-dark(rgba(15, 149, 214, 0.20), rgba(35, 173, 229, 0.28));
+
+    /* 列表默认度量，渲染器会在每个视口上按设置覆盖 */
+    --hj-font-size: 13px;
+    --hj-line-height: 20px;
+    --hj-item-gap: 3px;
+    --hj-emote-size: 20px;
+    --hj-sticker-size: 46px;
+    --hj-badge-shift: 0px;
 
     --guard-3-bg: light-dark(#dff1f9, rgba(35, 173, 229, 0.18));
-    --guard-3-name: light-dark(#00b5e5, #3dc5f0);
+    --guard-3-name: light-dark(#0092bb, #3dc5f0);
     --guard-3-badge: #23ade5;
-
-    --guard-2-bg: light-dark(#e8e4f8, rgba(155, 112, 255, 0.20));
-    --guard-2-name: light-dark(#9e54f0, #be82ff);
+    --guard-2-bg: light-dark(#ece6fb, rgba(155, 112, 255, 0.20));
+    --guard-2-name: light-dark(#7d3fd0, #be82ff);
     --guard-2-badge: #9656f0;
-
     --guard-1-bg: light-dark(#fdf0dc, rgba(255, 166, 60, 0.20));
-    --guard-1-name: light-dark(#ef7c24, #ffaa4c);
-    --guard-1-badge: linear-gradient(135deg, #ffc247, #ff5e3a);
+    --guard-1-name: light-dark(#d2691a, #ffaa4c);
+    --guard-1-badge: #f28a28;
+
+    /* 直播间标识色：8 个可区分色相，深浅两套各自保证与底色的对比度 */
+    --room-1: light-dark(#0f95d6, #38bdf8);
+    --room-2: light-dark(#e0407a, #fb7299);
+    --room-3: light-dark(#0f9d6e, #3ddc97);
+    --room-4: light-dark(#c97a0a, #ffb454);
+    --room-5: light-dark(#7d4fe0, #a98bff);
+    --room-6: light-dark(#c2410c, #ff8a5c);
+    --room-7: light-dark(#0d9488, #2dd4bf);
+    --room-8: light-dark(#b5179e, #f472d0);
+
+    --scroll-track: light-dark(rgba(27, 33, 54, 0.05), rgba(231, 235, 245, 0.05));
+    --scroll-thumb: light-dark(rgba(15, 149, 214, 0.35), rgba(35, 173, 229, 0.38));
+    --scroll-thumb-hover: light-dark(rgba(240, 80, 138, 0.6), rgba(251, 114, 153, 0.65));
 }
 
 * {
@@ -38,24 +79,65 @@ body {
 }
 
 body {
-    font-family: "Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     user-select: none;
+    -webkit-font-smoothing: antialiased;
 }
 
-/* ---------------- 顶栏（可拖动窗口） ---------------- */
+.hidden {
+    display: none !important;
+}
+
+button {
+    font-family: inherit;
+}
+
+/* 滚动条统一走调色板：细轨、蓝色拇指、悬停转粉 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scroll-track);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* ---------------- 单房间独立窗口顶栏 ---------------- */
 .hj-bar {
     flex-shrink: 0;
-    height: 30px;
+    height: 32px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 8px 0 12px;
-    background: var(--bar-bg);
+    padding: 0 6px 0 12px;
+    background: var(--surface-2);
     border-bottom: 1px solid var(--stroke);
     -webkit-app-region: drag;
 }
@@ -74,33 +156,103 @@ body {
     font-size: 10px;
     color: var(--muted);
     flex-shrink: 0;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.hj-close {
-    -webkit-app-region: no-drag;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--muted);
+.hj-status.is-open {
+    color: var(--ok);
+}
+
+.hj-status.is-error {
+    color: var(--danger);
+}
+
+.hj-count {
     font-size: 10px;
-    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--scroll-track);
     flex-shrink: 0;
 }
 
+.hj-icon-btn,
+.hj-close {
+    -webkit-app-region: no-drag;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background .15s, color .15s, transform .15s;
+}
+
+.hj-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.hj-icon-btn svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.hj-icon-btn:hover {
+    background: var(--glow-blue);
+    color: var(--blue);
+}
+
+.hj-icon-btn.is-active {
+    background: var(--blue);
+    color: #ffffff;
+}
+
 .hj-close:hover {
-    background: rgba(255, 77, 79, 0.15);
-    color: #ff4d4f;
+    background: rgba(255, 77, 79, 0.16);
+    color: var(--danger);
+}
+
+.hj-icon-btn:active,
+.hj-close:active {
+    transform: scale(.92);
+}
+
+.hj-settings {
+    flex-shrink: 0;
+    max-height: 60%;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--stroke);
+    background: var(--surface-2);
+    padding: 10px 12px;
 }
 
 /* ---------------- 弹幕列表（动态行高虚拟滚动） ---------------- */
 .hj-viewport {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    overflow-anchor: none;
     position: relative;
-    scrollbar-width: thin;
+    background: var(--surface);
+    contain: paint;
 }
 
 .hj-spacer {
@@ -114,20 +266,41 @@ body {
     left: 0;
     right: 0;
     will-change: transform;
-    padding: 4px 10px;
+    padding: 4px 10px 12px;
 }
 
 /* 外层包装承担行间距，避免 margin 折叠，保证 offsetHeight 精确测量 */
 .hj-item {
-    padding: 3px 0;
+    padding: var(--hj-item-gap) 0;
 }
 
-/* 普通弹幕无底框、按内容自然伸缩；大航海弹幕使用自适应宽度圆角色卡 */
+.hj-item.is-new {
+    animation: hj-enter .22s cubic-bezier(.2, .8, .2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hj-item.is-new {
+        animation: none;
+    }
+}
+
+@keyframes hj-enter {
+    from {
+        opacity: 0;
+        transform: translateY(3px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
 .hj-row {
     display: block;
     padding: 1px 2px;
-    font-size: 13px;
-    line-height: 20px;
+    font-size: var(--hj-font-size);
+    line-height: var(--hj-line-height);
     color: var(--text);
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -140,6 +313,7 @@ body {
     margin-left: -6px;
     padding: 5px 8px;
     border-radius: 6px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .hj-row.guard-3 {
@@ -154,16 +328,24 @@ body {
     background: var(--guard-1-bg);
 }
 
-/* ---------------- 行内徽章（统一 16px 胶囊，换行后第二行贴左） ---------------- */
+.hj-notice {
+    color: var(--text-2);
+    font-size: calc(var(--hj-font-size) - 1px);
+}
+
+/* ---------------- 行内徽章 ---------------- */
 .hj-rank,
 .hj-admin,
 .hj-wealth,
 .hj-medal,
-.hj-guard-standalone {
+.hj-guard-standalone,
+.hj-tag,
+.hj-room-tag {
+    --hj-badge-size: max(18px, calc(var(--hj-font-size) * 1.4));
     display: inline-flex;
     align-items: center;
-    height: 16px;
-    line-height: 16px;
+    height: var(--hj-badge-size);
+    line-height: var(--hj-badge-size);
     margin-right: 4px;
     vertical-align: middle;
     flex-shrink: 0;
@@ -171,7 +353,53 @@ body {
     top: var(--hj-badge-shift);
 }
 
-/* 高能榜前三：榜1 / 榜2 / 榜3 */
+.hj-time {
+    display: inline-block;
+    margin-right: 5px;
+    font-size: calc(var(--hj-font-size) - 3px);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    vertical-align: middle;
+    position: relative;
+    top: var(--hj-badge-shift);
+}
+
+.hj-hide-time .hj-time {
+    display: none;
+}
+
+/* 合并时间线里的来源直播间标签，色相由渲染器按房间注入 */
+.hj-room-tag {
+    --room-hue: var(--blue);
+    padding: 0 6px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    max-width: 120px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--room-hue);
+    background: color-mix(in srgb, var(--room-hue) 16%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--room-hue) 38%, transparent);
+}
+
+.hj-tag {
+    padding: 0 5px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.hj-tag.is-enter {
+    background: var(--mint);
+}
+
+.hj-tag.is-gift {
+    background: var(--pink);
+}
+
 .hj-rank {
     padding: 0 5px;
     border-radius: 999px;
@@ -181,18 +409,17 @@ body {
 }
 
 .hj-rank.rank-1 {
-    background: linear-gradient(90deg, #ff9a3c, #ff6a2b);
+    background: #e87920;
 }
 
 .hj-rank.rank-2 {
-    background: linear-gradient(90deg, #f58458, #ea6342);
+    background: #df6347;
 }
 
 .hj-rank.rank-3 {
-    background: linear-gradient(90deg, #f3a15c, #e5833d);
+    background: #d88945;
 }
 
-/* 房管徽章 */
 .hj-admin {
     padding: 0 4px;
     border-radius: 4px;
@@ -202,7 +429,6 @@ body {
     font-weight: 700;
 }
 
-/* 荣耀等级胶囊（分档配色 + 羽翼纹章） */
 .hj-wealth {
     gap: 2px;
     padding: 0 5px 0 4px;
@@ -231,10 +457,9 @@ body {
 }
 
 .hj-wealth.tier-4 {
-    background: linear-gradient(90deg, #7462eb, #9065ec);
+    background: #795fe0;
 }
 
-/* 粉丝勋章（新版一体胶囊 + 左侧大航海圆章） */
 .hj-medal {
     padding: 0 6px;
     border-radius: 999px;
@@ -261,8 +486,8 @@ body {
 
 .hj-guard-icon,
 .hj-guard-emblem {
-    width: 16px;
-    height: 16px;
+    width: var(--hj-badge-size);
+    height: var(--hj-badge-size);
     border-radius: 50%;
     flex-shrink: 0;
     margin-right: 3px;
@@ -270,7 +495,7 @@ body {
 
 .hj-guard-icon {
     display: block;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .hj-guard-emblem {
@@ -298,15 +523,18 @@ body {
     background: var(--guard-1-badge);
 }
 
-.hj-guard-standalone .hj-guard-emblem {
-    width: 16px;
-    height: 16px;
+.hj-guard-standalone .hj-guard-emblem,
+.hj-guard-standalone .hj-guard-icon {
     margin-right: 0;
 }
 
-/* ---------------- 用户名与弹幕正文 ---------------- */
+/* ---------------- 用户名与正文 ---------------- */
 .hj-name {
-    color: var(--name);
+    /* 独立行框与徽章共用中线，避免字体基线和大表情改变昵称的对齐位置。 */
+    display: inline-block;
+    vertical-align: middle;
+    max-width: 100%;
+    color: var(--text-2);
     font-weight: 400;
     margin-right: 3px;
 }
@@ -324,13 +552,13 @@ body {
 }
 
 .hj-text {
+    vertical-align: middle;
     color: var(--text);
 }
 
-/* 行内小表情（如 [热]），与徽章同一中线对齐 */
 .hj-emote {
     display: inline-block;
-    height: 20px;
+    height: var(--hj-emote-size);
     width: auto;
     vertical-align: middle;
     position: relative;
@@ -338,26 +566,25 @@ body {
     margin: 0 1px;
 }
 
-/* 直播间专属大表情贴纸 */
 .hj-sticker {
     display: inline-block;
-    height: 46px;
+    height: var(--hj-sticker-size);
     width: auto;
     max-width: 120px;
     object-fit: contain;
     vertical-align: middle;
     position: relative;
     top: var(--hj-badge-shift);
-    margin: 0;
 }
 
-/* ---------------- 醒目留言（SC）卡片 ---------------- */
+/* ---------------- 醒目留言（SC） ---------------- */
 .hj-sc {
-    border-radius: 6px;
+    border-radius: 7px;
     overflow: hidden;
-    font-size: 12.5px;
-    line-height: 18px;
+    font-size: calc(var(--hj-font-size) - 0.5px);
+    line-height: calc(var(--hj-line-height) - 2px);
     border: 1px solid var(--sc-head, #2a60b2);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--sc-head, #2a60b2) 26%, transparent);
 }
 
 .hj-sc-head {
@@ -387,7 +614,7 @@ body {
 
 .hj-sc-price {
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: calc(var(--hj-font-size) - 1px);
     font-weight: 700;
     color: var(--sc-head, #2a60b2);
 }
@@ -398,4 +625,230 @@ body {
     color: #ffffff;
     word-break: break-word;
     overflow-wrap: anywhere;
+}
+
+/* ---------------- 显示设置面板（独立窗口与控制台共用） ---------------- */
+.dms {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.dms-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dms-label {
+    flex-shrink: 0;
+    width: 52px;
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.dms-slider {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.dms-slider input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    appearance: none;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--blue);
+    outline: none;
+    cursor: pointer;
+}
+
+.dms-slider input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--blue);
+    box-shadow: 0 0 0 3px var(--glow-blue);
+    transition: transform .12s, box-shadow .12s;
+}
+
+.dms-slider input[type="range"]:hover::-webkit-slider-thumb,
+.dms-slider input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+    border-color: var(--pink);
+    box-shadow: 0 0 0 5px var(--glow-pink);
+}
+
+.dms-slider-value {
+    flex-shrink: 0;
+    width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.dms-segment {
+    flex: 1;
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--scroll-track);
+}
+
+.dms-segment-btn {
+    flex: 1;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+.dms-segment-btn:hover {
+    color: var(--text);
+}
+
+.dms-segment-btn.is-active {
+    background: var(--blue);
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--glow-blue);
+}
+
+.dms-toggles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+}
+
+.dms-switch {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    color: var(--text-2);
+    min-width: 0;
+}
+
+.dms-switch-wide {
+    grid-column: 1 / -1;
+}
+
+.dms-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.dms-switch-track {
+    position: relative;
+    flex-shrink: 0;
+    width: 28px;
+    height: 16px;
+    border-radius: 999px;
+    background: var(--stroke-strong);
+    transition: background .18s;
+}
+
+.dms-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1);
+}
+
+.dms-switch input:checked + .dms-switch-track {
+    background: var(--blue);
+}
+
+.dms-switch input:checked + .dms-switch-track .dms-switch-thumb {
+    transform: translateX(12px);
+}
+
+.dms-switch input:focus-visible + .dms-switch-track {
+    box-shadow: 0 0 0 3px var(--glow-blue);
+}
+
+.dms-switch-label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.dms-switch:hover {
+    color: var(--text);
+}
+
+.dms-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--stroke);
+}
+
+.dms-input {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    padding: 0 9px;
+    border: 1px solid var(--stroke);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    user-select: text;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+.dms-input::placeholder {
+    color: var(--muted);
+}
+
+.dms-input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--glow-blue);
+}
+
+.dms-hint {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.dms-reset {
+    align-self: flex-start;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--stroke);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+
+.dms-reset:hover {
+    border-color: var(--pink);
+    color: var(--pink);
 }

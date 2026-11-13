@@ -47,7 +47,7 @@ function parseRoomId(input) {
     const str = String(input ?? '').trim();
     if (!str) return null;
     if (/^\d+$/.test(str)) return Number(str);
-    const liveMatch = str.match(/live\.bilibili\.com\/(?:[a-z]+\/)?(\d+)/i);
+    const liveMatch = str.match(/live\.bilibili\.com\/(?:[a-z0-9]+\/)?(\d+)/i);
     if (liveMatch) return Number(liveMatch[1]);
     const digits = str.match(/(\d{2,})/);
     return digits ? Number(digits[1]) : null;

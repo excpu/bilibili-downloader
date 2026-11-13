@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹幕姬 · 多房间控制台</title>
+    <link rel="stylesheet" href="./danmakuji.css">
+    <link rel="stylesheet" href="./danmakuji-console.css">
+</head>
+
+<body>
+    <div class="dc-aurora" aria-hidden="true"></div>
+
+    <header class="dc-topbar">
+        <div class="dc-brand">
+            <span class="dc-brand-badge" aria-hidden="true">
+                <span class="dc-brand-wave"></span>
+            </span>
+            <span class="dc-brand-text">
+                <strong>弹幕姬</strong>
+                <small>多房间控制台</small>
+            </span>
+        </div>
+
+        <form class="dc-add" id="addForm" autocomplete="off">
+            <div class="dc-add-field">
+                <span class="dc-add-icon" aria-hidden="true">＋</span>
+                <input type="text" id="roomInput" placeholder="直播间号 / 短号 / 直播间链接，多个用空格或逗号分隔"
+                    aria-label="直播间号或链接">
+                <button type="submit" class="dc-add-btn" id="addBtn">接入</button>
+            </div>
+            <p class="dc-add-error hidden" id="addError" role="alert"></p>
+        </form>
+
+        <div class="dc-topbar-actions">
+            <div class="dc-pulse" id="globalPulse" title="全部直播间近一分钟弹幕速率">
+                <span class="dc-pulse-dot" aria-hidden="true"></span>
+                <span class="dc-pulse-value" id="globalRate">0.0</span>
+                <span class="dc-pulse-unit">条/分</span>
+            </div>
+            <div class="dc-view-switch" role="group" aria-label="视图">
+                <button type="button" class="dc-view-btn is-active" data-view="columns">分栏</button>
+                <button type="button" class="dc-view-btn" data-view="merged">合并</button>
+            </div>
+            <button type="button" class="dc-btn" id="togglePause" title="暂停全部弹幕滚动（空格）">暂停</button>
+            <button type="button" class="dc-btn" id="exportAll" title="导出全部弹幕记录">导出</button>
+            <button type="button" class="dc-btn dc-btn-icon" id="toggleRail" title="显示 / 隐藏调节面板"
+                aria-label="显示 / 隐藏调节面板" aria-expanded="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M10 3h4l.6 2.6 1.8 1 2.6-.8 2 3.4-2 1.8v2l2 1.8-2 3.4-2.6-.8-1.8 1L14 21h-4l-.6-2.6-1.8-1-2.6.8-2-3.4 2-1.8v-2L3 9.2l2-3.4 2.6.8 1.8-1Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="dc-body">
+        <main class="dc-main">
+            <div class="dc-strip" id="roomStrip">
+                <div class="dc-strip-label">已接入</div>
+                <div class="dc-chips" id="roomChips"></div>
+                <button type="button" class="dc-link" id="clearRooms">全部移除</button>
+            </div>
+
+            <section class="dc-stage" id="stage">
+                <div class="dc-grid hidden" id="roomGrid" data-columns="auto"></div>
+
+                <div class="dc-merged hidden" id="mergedPanel">
+                    <div class="dc-merged-head">
+                        <span class="dc-merged-title">合并时间线</span>
+                        <span class="dc-merged-meta" id="mergedMeta">按接收时间排列全部直播间的弹幕</span>
+                        <span class="dc-spacer"></span>
+                        <span class="dc-merged-count" id="mergedCount">0 条</span>
+                        <button type="button" class="dc-mini" id="mergedClear">清空</button>
+                    </div>
+                    <div class="dc-merged-list" id="mergedViewport"></div>
+                </div>
+
+                <div class="dc-empty" id="emptyState">
+                    <div class="dc-empty-art" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <h2>还没有接入直播间</h2>
+                    <p>在上方输入直播间号、短号或直播间链接即可开始接收弹幕。<br>一次可以粘贴多个，用空格或逗号分隔；每个直播间独占一栏，也可以切到「合并」看统一时间线。</p>
+                    <div class="dc-empty-recent" id="emptyRecent"></div>
+                    <ul class="dc-empty-tips">
+                        <li><kbd>空格</kbd> 暂停 / 继续全部滚动</li>
+                        <li><kbd>/</kbd> 快速定位输入框</li>
+                        <li>拖动栏目标题可调整顺序</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <aside class="dc-rail" id="rail" aria-label="显示调节">
+            <div class="dc-rail-head">
+                <h2>实时调节</h2>
+                <span class="dc-rail-hint">改动立即生效</span>
+            </div>
+            <div class="dc-rail-scroll">
+                <div class="dc-rail-block">
+                    <div class="dc-rail-block-title">收藏直播间</div>
+                    <div class="dc-recent dc-favorites" id="favoriteList"></div>
+                </div>
+                <div id="settingsPanel"></div>
+                <div class="dc-rail-block">
+                    <div class="dc-rail-block-title">最近接入</div>
+                    <div class="dc-recent" id="recentList"></div>
+                </div>
+                <div class="dc-rail-block">
+                    <div class="dc-rail-block-title">连接总览</div>
+                    <dl class="dc-stats" id="statsList">
+                        <div><dt>直播间</dt><dd id="statRooms">0</dd></div>
+                        <div><dt>已连接</dt><dd id="statOpen">0</dd></div>
+                        <div><dt>累计弹幕</dt><dd id="statTotal">0</dd></div>
+                        <div><dt>醒目留言</dt><dd id="statSc">0</dd></div>
+                    </dl>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="dc-toasts" id="toasts" aria-live="polite"></div>
+
+    <script src="./danmakuji-shared.js"></script>
+    <script src="./danmakuji-list.js"></script>
+    <script src="./danmakuji-settings.js"></script>
+    <script src="./danmakuji-console.js"></script>
+</body>
+
+</html>

@@ -5,7 +5,7 @@
     "scripts": {
         "start": "electron .",
         "build": "electron-builder",
-        "test": "node --test test/account-popover-check.js test/multi-part-check.js test/live-danmaku-protocol-check.js && node test/js-media-check.js",
+        "test": "node --test test/account-popover-check.js test/multi-part-check.js test/live-danmaku-protocol-check.js test/danmakuji-check.js && node test/js-media-check.js",
         "test:account": "node --test test/account-popover-check.js"
     },
     "keywords": [

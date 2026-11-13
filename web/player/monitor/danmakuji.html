@@ -9,13 +9,20 @@
     <header class="hj-bar">
         <span class="hj-title" id="hjTitle">弹幕姬</span>
         <span class="hj-status" id="hjStatus">连接中</span>
+        <span class="hj-count" id="hjCount" title="已接收弹幕数">0</span>
+        <button type="button" class="hj-icon-btn" id="hjSettings" title="显示设置" aria-label="显示设置" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M10 3h4l.6 2.6 1.8 1 2.6-.8 2 3.4-2 1.8v2l2 1.8-2 3.4-2.6-.8-1.8 1L14 21h-4l-.6-2.6-1.8-1-2.6.8-2-3.4 2-1.8v-2L3 9.2l2-3.4 2.6.8 1.8-1Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
         <button type="button" class="hj-close" id="hjClose" title="关闭">✕</button>
     </header>
-    <main class="hj-viewport" id="hjViewport">
-        <div class="hj-spacer" id="hjSpacer">
-            <div class="hj-rows" id="hjRows"></div>
-        </div>
-    </main>
+    <section class="hj-settings hidden" id="hjSettingsPanel" aria-label="显示设置"></section>
+    <main class="hj-viewport" id="hjViewport"></main>
+    <script src="./danmakuji-shared.js"></script>
+    <script src="./danmakuji-list.js"></script>
+    <script src="./danmakuji-settings.js"></script>
     <script src="./danmakuji.js"></script>
 </body>
 </html>

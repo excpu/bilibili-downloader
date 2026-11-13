@@ -14,6 +14,7 @@ const toolboxTools = [
     { key: 'merge-tool', icon: '⛓', title: '缓存合并工具', description: '批量合并本地缓存的音视频分片，并按标题重命名' },
     { key: 'multi-part-playback', icon: '≣', title: '分P连续播放', description: '有些视频会切片分P上传以过审，用这个工具像观看完整的视频那样观看它们' },
     { key: 'dd-monitor', icon: '▦', title: 'DD监控室', description: '像监控一样一次性观看多个直播间，支持实时弹幕' },
+    { key: 'danmakuji', icon: '💬', title: '弹幕姬', description: '输入直播间号或链接，同时看多个直播间的实时弹幕，可分栏或合并时间线' },
 ];
 
 // 触发事件
@@ -36,6 +37,14 @@ function triggerMoreToolEvent(tool) {
         window.electronAPI.invoke('openMonitor').then((res) => {
             if (res && res.success === false) {
                 alert(res.message || '打开 DD 监控室失败');
+            }
+        });
+        return;
+    }
+    if (tool.key === 'danmakuji') {
+        window.electronAPI.invoke('openDanmakujiConsole').then((res) => {
+            if (res && res.success === false) {
+                alert(res.message || '打开弹幕姬失败');
             }
         });
         return;

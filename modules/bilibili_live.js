@@ -139,7 +139,7 @@ async function fetchPlayUrl(roomId, qn = 10000) {
     if (json.code !== 0 || !json.data) {
         throw new Error(json.message || '获取直播流失败');
     }
-    if (!json.data.live_status) {
+    if (Number(json.data.live_status) !== 1) {
         return { live: false };
     }
 

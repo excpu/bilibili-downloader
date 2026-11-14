@@ -300,11 +300,11 @@ test('SC 隐藏缓存遵守历史上限，关键词过滤仍剔除不匹配消�
     assert.deepEqual(plain(list.history.map(message => message.text)), ['message-10001']);
 });
 
-function loadConsoleState(saved) {
+function loadConsoleState(saved, invoke) {
     const storage = new Map(saved ? [['danmakuji-console-v1', JSON.stringify(saved)]] : []);
     const context = vm.createContext({
         console,
-        window: { electronAPI: {}, DanmakujiShared: Shared },
+        window: { electronAPI: { invoke }, DanmakujiShared: Shared },
         document: { getElementById: () => null },
         localStorage: {
             getItem: key => storage.get(key) || null,
@@ -316,6 +316,129 @@ function loadConsoleState(saved) {
     vm.runInContext('renderRecent = () => {}; loadState();', context);
     return { context, storage };
 }
+
+test('恢复房间时刷新直播状态，实时状态优先于较晚返回的查询', async () => {
+    let resolveRequest;
+    const { context } = loadConsoleState(null, () => new Promise(resolve => { resolveRequest = resolve; }));
+    vm.runInContext(`
+        updateColumnMeta = () => {};
+        renderChips = () => {};
+        const room = { roomId: 101, title: 'A', liveStatus: null };
+        state.rooms = [room];
+        const column = { roomId: 101, room };
+        columns.set(101, column);
+        globalThis.refresh = () => refreshRoomStatus(column);
+    `, context);
+
+    let pending = context.refresh();
+    resolveRequest({ success: true, data: { liveStatus: 0 } });
+    await pending;
+    assert.equal(vm.runInContext('state.rooms[0].liveStatus', context), 0);
+
+    pending = context.refresh();
+    vm.runInContext("handleRoomMessage(101, { type: 'live_status', value: 1 });", context);
+    resolveRequest({ success: true, data: { liveStatus: 0 } });
+    await pending;
+    assert.equal(vm.runInContext('state.rooms[0].liveStatus', context), 1);
+});
+
+test('恢复已保存房间时不展示旧的开播状态，并更新为查询结果', async () => {
+    let resolveRequest;
+    const saved = { rooms: [{ roomId: 101, title: 'A', liveStatus: 1 }] };
+    const { context } = loadConsoleState(saved, name => {
+        if (name === 'danmakuji:watch') return Promise.resolve({ success: true });
+        if (name === 'danmakuji:resolveRoom') return new Promise(resolve => { resolveRequest = resolve; });
+        throw new Error(`unexpected IPC ${name}`);
+    });
+    vm.runInContext(`
+        buildColumn = room => ({
+            roomId: room.roomId, room, el: {}, pendingIpc: [],
+            list: { setPaused() {} }
+        });
+        els.roomGrid = { appendChild() {} };
+        updatePauseButton = reorderColumns = applyColumns = renderRecent = updateEmptyState = () => {};
+        updateColumnMeta = renderChips = () => {};
+        addRoom(state.rooms[0], { silent: true, refreshStatus: true });
+    `, context);
+    assert.equal(vm.runInContext('state.rooms[0].liveStatus', context), null);
+    resolveRequest({ success: true, data: { liveStatus: 0 } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(vm.runInContext('state.rooms[0].liveStatus', context), 0);
+});
+
+test('控制台只将直播状态 1 显示为开播', () => {
+    const { context } = loadConsoleState();
+    vm.runInContext(`
+        updateFavoriteButton = () => {};
+        const room = { roomId: 1, title: 'A', liveStatus: 2 };
+        const refs = {
+            favoriteBtn: {}, title: {}, anchor: {}, foot: {},
+            offline: { classList: { toggle: (_, value) => { globalThis.offlineHidden = value; } } },
+            status: { classList: { remove() {}, add() {} } }
+        };
+        const column = { room, refs, status: { state: 'open' }, el: { style: { setProperty() {} } } };
+        globalThis.renderRoom = value => { room.liveStatus = value; updateColumnMeta(column); return refs.foot.textContent; };
+    `, context);
+    assert.equal(context.renderRoom(2), '等待开播');
+    assert.equal(context.offlineHidden, false);
+    assert.equal(context.renderRoom(0), '等待开播');
+    assert.equal(context.renderRoom(1), '开播中 · A');
+    assert.equal(context.offlineHidden, true);
+    assert.equal(context.renderRoom(null), '直播状态获取中');
+});
+
+test('播放接口只将状态 1 当作直播流', async () => {
+    let liveStatus = 0;
+    const playurl = {
+        stream: [{ protocol_name: 'http_stream', format: [{ codec: [{
+            codec_name: 'avc', current_qn: 10000, base_url: '/stream',
+            url_info: [{ host: 'https://example.test' }],
+        }] }] }],
+    };
+    const requireStub = name => {
+        if (name === 'got') return async () => ({ body: { code: 0, data: { live_status: liveStatus, playurl_info: { playurl } } } });
+        if (name === './auth') return class { async ensureBuvidCredentials() {} getConstructedCookie() { return ''; } };
+        if (name === './wbi' || name === './live_danmaku_protocol') return {};
+        throw new Error(`unexpected module ${name}`);
+    };
+    const context = vm.createContext({ require: requireStub, module: { exports: {} }, console });
+    vm.runInContext(fs.readFileSync(path.join(root, 'modules', 'bilibili_live.js'), 'utf8'), context);
+    const { fetchPlayUrl } = context.module.exports;
+    assert.equal((await fetchPlayUrl(1)).live, false);
+    liveStatus = 2;
+    assert.equal((await fetchPlayUrl(1)).live, false);
+    liveStatus = 1;
+    const live = await fetchPlayUrl(1);
+    assert.equal(live.live, true);
+    assert.equal(live.urls[0], 'https://example.test/stream');
+});
+
+test('收到下播消息时取消未完成的直播流请求并保持轮询', async () => {
+    let resolveRequest;
+    const context = vm.createContext({
+        invoke: () => new Promise(resolve => { resolveRequest = resolve; }),
+        console,
+    });
+    const source = fs.readFileSync(path.join(monitorDir, 'monitor.js'), 'utf8');
+    const classSource = source.slice(source.indexOf('class MonitorTile {'), source.indexOf('// ---------------- 布局 ----------------'));
+    vm.runInContext(`${classSource}\nglobalThis.MonitorTile = MonitorTile;`, context);
+    const tile = Object.create(context.MonitorTile.prototype);
+    tile.room = { roomId: 1 };
+    tile.visible = true;
+    tile.loadToken = 0;
+    tile.teardownPlayer = () => {};
+    tile.setStatus = status => { tile.status = status; };
+    tile.scheduleRetry = delay => { tile.retryDelay = delay; };
+    tile.createPlayer = () => { tile.playerCreated = true; };
+
+    const pending = tile.load();
+    tile.pushDanmaku({ type: 'live_status', value: 0 });
+    resolveRequest({ success: true, data: { live: true, urls: ['https://example.test/stream'] } });
+    await pending;
+    assert.equal(tile.status, 'offline');
+    assert.equal(tile.retryDelay, 20000);
+    assert.equal(tile.playerCreated, undefined);
+});
 
 test('收藏单独持久化，不随已接入和最近接入列表清空，支持取消收藏', () => {
     const { context, storage } = loadConsoleState();

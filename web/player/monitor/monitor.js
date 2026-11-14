@@ -260,7 +260,7 @@ class MonitorTile {
         this.el.classList.remove('is-empty');
         this.metaTitleEl.textContent = room.title || `直播间 ${room.roomId}`;
         this.metaSubEl.textContent = [room.anchorName, `#${room.roomId}`].filter(Boolean).join(' · ');
-        this.setStatus(room.liveStatus ? 'live' : 'offline');
+        this.setStatus(Number(room.liveStatus) === 1 ? 'live' : 'offline');
         this.applyDanmakuStyle();
 
         if (this.visible) {
@@ -529,8 +529,14 @@ class MonitorTile {
 
     pushDanmaku(message) {
         if (message.type === 'live_status') {
-            this.setStatus(message.value ? 'live' : 'offline');
-            if (message.value) this.load();
+            if (Number(message.value) === 1) {
+                this.load();
+            } else {
+                this.loadToken += 1;
+                this.teardownPlayer();
+                this.setStatus('offline');
+                if (this.visible && this.room) this.scheduleRetry(20000);
+            }
             return;
         }
         if (message.type === 'online') {

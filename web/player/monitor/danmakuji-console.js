@@ -304,7 +304,7 @@ function updateColumnMeta(column) {
     refs.title.textContent = room.title;
     refs.title.title = room.title;
     refs.anchor.textContent = [room.anchorName, `#${room.roomId}`].filter(Boolean).join(' · ');
-    refs.offline.classList.toggle('hidden', !!room.liveStatus);
+    refs.offline.classList.toggle('hidden', room.liveStatus == null || Number(room.liveStatus) === 1);
     column.el.style.setProperty('--room-hue', hueFor(room.roomId));
     updateColumnStatus(column);
 }
@@ -326,7 +326,7 @@ function updateColumnStatus(column) {
     refs.status.title = status.message || text;
     refs.foot.textContent = status.message && status.state !== 'open'
         ? status.message
-        : (column.room.liveStatus ? `开播中 · ${column.room.title}` : '等待开播');
+        : (column.room.liveStatus == null ? (column.liveStatusError ? '直播状态获取失败' : '直播状态获取中') : Number(column.room.liveStatus) === 1 ? `开播中 · ${column.room.title}` : '等待开播');
     refs.foot.title = refs.foot.textContent;
 }
 
@@ -403,16 +403,18 @@ function reorderColumns() {
 }
 
 // ---------------- 房间增删 ----------------
-function addRoom(room, { silent = false } = {}) {
+function addRoom(room, { silent = false, refreshStatus = false } = {}) {
     const result = Shared.upsertRoom(state.rooms, room);
     const normalized = result.room;
     if (!normalized) return false;
+    if (refreshStatus) normalized.liveStatus = null;
 
     // 已存在的房间只刷新信息并高亮，不重建列表
     if (columns.has(normalized.roomId)) {
         const column = columns.get(normalized.roomId);
         if (column) {
             column.room = normalized;
+            column.liveStatusVersion = (column.liveStatusVersion || 0) + 1;
             updateColumnMeta(column);
             column.el.classList.remove('is-flash');
             void column.el.offsetWidth;
@@ -442,6 +444,7 @@ function addRoom(room, { silent = false } = {}) {
         column.pendingIpc = [];
         for (const message of buffered) handleRoomMessage(normalized.roomId, message);
     }).catch(() => { column.watching = true; });
+    if (refreshStatus) refreshRoomStatus(column);
 
     state.recent = Shared.rememberRecent(state.recent, normalized);
     reorderColumns();
@@ -479,7 +482,7 @@ function removeRoom(roomId, { undo = false } = {}) {
             action: {
                 label: '撤销',
                 onClick: () => {
-                    const restored = addRoom(room, { silent: true });
+                    const restored = addRoom(room, { silent: true, refreshStatus: true });
                     if (!restored) return;
                     const from = state.rooms.findIndex(item => item.roomId === roomId);
                     state.rooms = Shared.moveRoom(state.rooms, from, Math.min(index, state.rooms.length - 1));
@@ -488,6 +491,28 @@ function removeRoom(roomId, { undo = false } = {}) {
                 },
             },
         });
+    }
+}
+
+async function refreshRoomStatus(column) {
+    const version = column.liveStatusVersion || 0;
+    try {
+        const res = await invoke('danmakuji:resolveRoom', String(column.roomId));
+        if (columns.get(column.roomId) !== column || (column.liveStatusVersion || 0) !== version) return;
+        if (!res?.success || !res.data || res.data.liveStatus == null || !Number.isFinite(Number(res.data.liveStatus))) {
+            throw new Error(res?.message || '获取直播状态失败');
+        }
+        column.room.liveStatus = Number(res.data.liveStatus);
+        column.liveStatusError = false;
+        updateColumnMeta(column);
+        renderChips();
+        saveState();
+    } catch (error) {
+        if (columns.get(column.roomId) !== column || (column.liveStatusVersion || 0) !== version) return;
+        console.warn(`获取直播间 ${column.roomId} 的直播状态失败:`, error);
+        toast(`直播间 #${column.roomId}：${error.message || '获取直播状态失败'}`, { kind: 'error' });
+        column.liveStatusError = true;
+        updateColumnStatus(column);
     }
 }
 
@@ -641,7 +666,7 @@ function renderChips() {
         const column = columns.get(room.roomId);
         const chip = document.createElement('button');
         chip.type = 'button';
-        chip.className = `dc-chip${room.liveStatus ? '' : ' is-offline'}`;
+        chip.className = `dc-chip${Number(room.liveStatus) === 1 ? '' : ' is-offline'}`;
         chip.style.setProperty('--room-hue', hueFor(room.roomId));
         chip.title = `${room.title} · #${room.roomId}`;
         chip.innerHTML = '<span class="dc-chip-dot"></span><span class="dc-chip-name"></span><span class="dc-chip-rate">0.0</span>';
@@ -769,6 +794,8 @@ function handleRoomMessage(roomId, message) {
     const column = columns.get(roomId);
     if (!column) return;
     if (message.type === 'live_status') {
+        column.liveStatusVersion = (column.liveStatusVersion || 0) + 1;
+        column.liveStatusError = false;
         column.room.liveStatus = Number(message.value) || 0;
         const saved = state.rooms.find(room => room.roomId === roomId);
         if (saved) saved.liveStatus = column.room.liveStatus;
@@ -893,7 +920,7 @@ function init() {
 
     for (const room of state.rooms.slice()) {
         if (columns.size >= Shared.MAX_ROOMS) break;
-        addRoom(room, { silent: true });
+        addRoom(room, { silent: true, refreshStatus: true });
     }
     state.rooms = state.rooms.filter(room => columns.has(room.roomId));
     applyPaused(false, { silent: true });

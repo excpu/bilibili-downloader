@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const got = require('got');
 const { createCancelError, isCancelError } = require('./download_cancel');
+const { createUrlExpiredError } = require('./download_errors');
 
 // 构造“本地残留分片不可继续使用”的统一错误对象，供外层捕获后清理并重下。
 function createStalePartialFileError(destPath) {
@@ -58,7 +59,7 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
             // 下载取消事件监听
             if (signal?.aborted) throw createCancelError();
             if (Date.now() >= deadline) {
-                throw new Error('下载链接已超过 1 小时 50 分钟有效期，停止重试并退出');
+                throw createUrlExpiredError('下载链接已超过 1 小时 50 分钟有效期，停止重试并退出');
             }
 
             // 读取本地已下载大小；若已有部分文件，则尝试使用 Range 续传。
@@ -109,6 +110,11 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
                     signal?.removeEventListener('abort', onAbort);
 
                     if (error) {
+                        if (writer && !writer.closed) {
+                            writer.once('close', () => reject(error));
+                            writer.destroy();
+                            return;
+                        }
                         reject(error);
                     } else {
                         resolve();
@@ -286,12 +292,12 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
 
             // 超过下载链接允许的最长生命周期后，不再继续重试。
             if (Date.now() >= deadline) {
-                throw new Error(`下载失败：已超过 1 小时 50 分钟有效期，停止重试并退出。原始错误: ${err.message}`);
+                throw createUrlExpiredError(`下载失败：已超过 1 小时 50 分钟有效期。原始错误: ${err.message}`);
             }
 
             // 对确定不可恢复的问题直接失败，避免浪费时间反复尝试。
             if (isNonRetriableError(err)) {
-                throw new Error(`下载失败：${err.message}`);
+                throw err;
             }
 
             retries--;
@@ -305,7 +311,7 @@ async function downloadFileWithGot(url, destPath, headers, onProgress, maxRetrie
             const waitTime = Math.min(exponentialDelay, Math.max(0, deadline - Date.now()));
 
             if (waitTime <= 0) {
-                throw new Error(`下载失败：已超过 1 小时 50 分钟有效期，停止重试并退出。原始错误: ${err.message}`);
+                throw createUrlExpiredError(`下载失败：已超过 1 小时 50 分钟有效期。原始错误: ${err.message}`);
             }
 
             console.warn(`⚠️ 下载中断，将在 ${Math.round(waitTime / 1000)} 秒后进行第 ${retryAttempt}/${maxRetries} 次重试 - 错误: ${err.message}`);

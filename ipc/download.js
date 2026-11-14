@@ -8,6 +8,7 @@ const { applyCdnHost: applyDownloadCdnHost } = require('../modules/cdn_source');
 const { downloadFileWithGot } = require('../modules/stream_download');
 const { downloadFileWithGotMulti } = require('../modules/multi_thread_stream_download');
 const { createCancelError, isCancelError } = require('../modules/download_cancel');
+const { isUrlRefreshableError } = require('../modules/download_errors');
 const Setting = require("../modules/config_setting");
 const subtitleJsonConverter = require('../modules/sub_json_converter');
 const setting = new Setting();
@@ -15,6 +16,46 @@ setting.load(); // 加载设置数据
 
 let activeDownloadCount = 0;
 const downloadControllers = new Map(); // uid -> AbortController
+const MAX_URL_REFRESHES = 2;
+
+function getTaskPaths(payload) {
+    if (typeof payload?.uid !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(payload.uid)) {
+        throw new Error('下载任务 UID 无效');
+    }
+    const title = sanitizePath(String(payload.title || ''));
+    if (!title) throw new Error('下载任务标题为空');
+    const dir = setting.resolveDownloadDir(payload.folderNames);
+    const suffix = payload.uid;
+    return {
+        dir, title,
+        audio: path.join(dir, `${title}_audio_${suffix}.m4s`),
+        video: path.join(dir, `${title}_video_${suffix}.m4s`),
+        state: path.join(dir, `${title}_download_${suffix}.json`),
+        output: ext => path.join(dir, `${title}_output_${suffix}.${ext}`),
+    };
+}
+
+function saveCheckpoint(filePath, checkpoint) {
+    fs.writeFileSync(`${filePath}.tmp`, JSON.stringify(checkpoint), 'utf8');
+    fs.renameSync(`${filePath}.tmp`, filePath);
+}
+
+function loadCheckpoint(filePath) {
+    if (!fs.existsSync(filePath)) return null;
+    const checkpoint = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (checkpoint.version !== 1 || !['node', 'node-multi'].includes(checkpoint.engine)) {
+        throw new Error('下载断点元数据格式无效，请删除任务后重新添加');
+    }
+    return checkpoint;
+}
+
+function getAvailableOutputPath(dir, title, ext) {
+    let outputPath = path.join(dir, `${title}.${ext}`);
+    for (let index = 2; fs.existsSync(outputPath); index++) {
+        outputPath = path.join(dir, `${title} (${index}).${ext}`);
+    }
+    return outputPath;
+}
 
 // 取消后删除下载残留文件，文件可能被释放得稍慢，失败时短暂重试
 async function removeFilesWithRetry(filePaths) {
@@ -24,7 +65,10 @@ async function removeFilesWithRetry(filePaths) {
                 if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
                 break;
             } catch (err) {
-                if (attempt === 9) console.warn(`⚠️ 清理文件失败: ${filePath}`, err.message);
+                if (attempt === 9) {
+                    console.warn(`⚠️ 清理文件失败: ${filePath}`, err.message);
+                    throw err;
+                }
                 else await new Promise(res => setTimeout(res, 300));
             }
         }
@@ -32,8 +76,7 @@ async function removeFilesWithRetry(filePaths) {
 }
 
 // 每次需要下载函数时读取最新设置，避免在模块加载时缓存导致切换无效
-const getDownloadFunction = () => {
-    const engine = setting.getDownloadEngine() || 'node-multi';
+const getDownloadFunction = (engine = setting.getDownloadEngine() || 'node-multi') => {
     if (engine === 'node') {
         return downloadFileWithGot;
     }
@@ -52,19 +95,27 @@ const fs = require('fs');
 const { mergeBiliM4sToFile, convertBiliM4sAudio, checkAudioConversion } = require('../modules/js-media/media');
 
 module.exports = function registerDownloadIpc(mainWindow) {
-    ipcMain.handle('cleanupFailedDownload', async (event, payload) => {
-        const dir = setting.resolveDownloadDir(payload?.folderNames);
-        const base = path.join(dir, sanitizePath(String(payload?.title || '')));
-        const targets = [`${base}_video.m4s`, `${base}_audio.m4s`].flatMap(p => [
+    const cleanupDownload = async (event, payload) => {
+        const paths = getTaskPaths(payload);
+        const targets = [paths.video, paths.audio].flatMap(p => [
             p, `${p}.tmp`, `${p}.dstate.json`
         ]);
+        targets.push(paths.state, `${paths.state}.tmp`, ...['mp4', 'mkv', 'm4a', 'flac'].map(paths.output));
         await removeFilesWithRetry(targets);
         return { success: true };
-    });
+    };
+    ipcMain.handle('cleanupFailedDownload', cleanupDownload);
+    ipcMain.handle('completeDownload', cleanupDownload);
     ipcMain.handle('cancelDownload', (event, uid) => {
         const controller = downloadControllers.get(uid);
         if (!controller) return { success: false };
         controller.abort();
+        return { success: true };
+    });
+    ipcMain.handle('pauseDownload', (event, uid) => {
+        const controller = downloadControllers.get(uid);
+        if (!controller) return { success: false, message: '任务已经结束，无法暂停' };
+        controller.abort('pause');
         return { success: true };
     });
     ipcMain.handle('downloadSubtitle', async (event, payload) => {
@@ -129,114 +180,131 @@ module.exports = function registerDownloadIpc(mainWindow) {
             videoQualityId,
             videoCodec
         } = payload;
-        title = sanitizePath(title);
-        const downloadDir = setting.resolveDownloadDir(payload.folderNames);
+        const paths = getTaskPaths(payload);
+        title = paths.title;
+        const downloadDir = paths.dir;
         const controller = new AbortController();
         const signal = controller.signal;
         downloadControllers.set(uid, controller);
-
-        if (!fs.existsSync(downloadDir)) {
-            fs.mkdirSync(downloadDir, { recursive: true });
-        }
-
-        const videoStream = await getUpToDateUrl(bvid, cid, {
-            audioIndex,
-            videoIndex,
-            audioQualityId,
-            audioCodec,
-            videoQualityId,
-            videoCodec
-        });
-        if (signal.aborted) {
-            downloadControllers.delete(uid);
-            return { success: false, cancelled: true, message: '下载已取消' };
-        }
-        if (!videoStream.success) {
-            downloadControllers.delete(uid);
-            console.error(`❌ [${title}] 获取视频流失败: ${videoStream.message}`);
-            return { success: false, message: videoStream.message };
-        }
-
-        const videoPath = path.join(downloadDir, `${title}_video.m4s`);
-        const audioPath = path.join(downloadDir, `${title}_audio.m4s`);
-        // 未允许非标封装时，FLAC / 杜比全景声会自动改用 MKV 容器
-        const outputFormat = setting.resolveOutputFormat({
-            audioId: videoStream.selectedAudioId,
-            audioCodec: videoStream.selectedAudioCodec,
-        });
-        const outputPath = path.join(downloadDir, `${title}.${outputFormat}`);
-        let m4aOutputPath = path.join(downloadDir, `${title}.m4a`);
-
-        if (videoStream.selectedAudioId == 30251) {
-            m4aOutputPath = path.join(downloadDir, `${title}.flac`);
-        }
-
-        if (videoStream.selectedAudioId == 30250) {
-            m4aOutputPath = path.join(downloadDir, `${title}.mkv`);
-        }
-
-
-        // 检查是否仅下载音频
+        const videoPath = paths.video;
+        const audioPath = paths.audio;
+        let outputPath;
+        let m4aOutputPath;
+        let outputFormat;
+        let finalOutputPath;
         const audioOnly = parseInt(videoIndex) === -1;
+        let checkpoint;
+        let resumeEnabled = false;
+        let mergeStarted = false;
+        let keepPartial = payload.resume === true;
+        activeDownloadCount += 1;
 
-        // 新任务开始前清理上次异常退出残留的临时文件，避免一开始就命中 416
-        const isMultiEngine = setting.getDownloadEngine() === 'node-multi' && setting.getNodeResumeEnabled();
-        const resuming = isMultiEngine && payload.resume === true;
-        const tempPathsToClean = resuming ? [] : [audioPath];
-        if (!audioOnly && !resuming) tempPathsToClean.push(videoPath);
-        if (audioOnly && fs.existsSync(m4aOutputPath)) tempPathsToClean.push(m4aOutputPath);
+        try {
+            if (!fs.existsSync(downloadDir)) {
+                fs.mkdirSync(downloadDir, { recursive: true });
+            }
+            checkpoint = payload.resume ? loadCheckpoint(paths.state) : null;
+            if (checkpoint?.completed && checkpoint.outputPath &&
+                path.dirname(checkpoint.outputPath) === downloadDir && fs.existsSync(checkpoint.outputPath)) {
+                finalOutputPath = checkpoint.outputPath;
+                keepPartial = true;
+                return { success: true, filePath: finalOutputPath };
+            }
+            const engine = checkpoint?.engine || setting.getDownloadEngine() || 'node-multi';
+            const isMultiEngine = engine !== 'node';
+            resumeEnabled = isMultiEngine && setting.getNodeResumeEnabled();
+            const resuming = payload.resume === true && !!checkpoint;
+            const tempPathsToClean = resuming ? [] : [audioPath, `${audioPath}.tmp`, `${audioPath}.dstate.json`];
+            if (!audioOnly && !resuming) tempPathsToClean.push(videoPath, `${videoPath}.tmp`, `${videoPath}.dstate.json`);
+            await removeFilesWithRetry(tempPathsToClean);
+            checkpoint ||= { version: 1, engine };
 
-        for (const tempPath of tempPathsToClean) {
-            if (fs.existsSync(tempPath)) {
+            // 局部通知函数，绑定当前任务的 uid
+            const notifyProgress = (progress, speed, avId, downloadedBytes = 0, totalBytes = 0) => {
+                if (speed === 'NaN' || isNaN(Number(speed))) return;
+                const progressInfo = {
+                    progress,
+                    speed,
+                    currentUid: uid,
+                    avId,
+                    downloadedBytes: Number(downloadedBytes) || 0,
+                    totalBytes: Number(totalBytes) || 0
+                };
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('download-progress', progressInfo);
+                }
+            };
+
+            const downloadHeaders = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                'Referer': 'https://www.bilibili.com/',
+                'Origin': 'https://www.bilibili.com',
+                'Accept': '*/*',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            };
+
+            const downloadFunc = getDownloadFunction(engine);
+            let videoStream;
+            const refreshStreams = async () => {
+                const fresh = await getUpToDateUrl(bvid, cid, {
+                    audioIndex, videoIndex, audioQualityId, audioCodec, videoQualityId, videoCodec
+                }, signal);
+                if (signal.aborted) throw createCancelError();
+                if (!fresh.success) throw new Error(`获取视频流失败：${fresh.message}`);
+                const audioResource = new URL(fresh.audioUrl).pathname;
+                const videoResource = fresh.videoUrl ? new URL(fresh.videoUrl).pathname : null;
+                if (checkpoint.audioResource && (checkpoint.audioResource !== audioResource ||
+                    checkpoint.videoResource !== videoResource)) {
+                    await removeFilesWithRetry([audioPath, videoPath].flatMap(p => [p, `${p}.tmp`, `${p}.dstate.json`]));
+                    checkpoint.audioComplete = false;
+                    checkpoint.videoComplete = false;
+                }
+                Object.assign(checkpoint, { audioResource, videoResource, completed: false });
+                saveCheckpoint(paths.state, checkpoint);
+                videoStream = fresh;
+                outputFormat = setting.resolveOutputFormat({
+                    audioId: fresh.selectedAudioId, audioCodec: fresh.selectedAudioCodec,
+                });
+                outputPath = paths.output(outputFormat);
+                const audioExt = fresh.selectedAudioId === 30251 ? 'flac' : fresh.selectedAudioId === 30250 ? 'mkv' : 'm4a';
+                m4aOutputPath = paths.output(audioExt);
+            };
+            await refreshStreams();
+            keepPartial = false;
+            let urlRefreshes = 0;
+            for (;;) {
                 try {
-                    fs.unlinkSync(tempPath);
-                } catch (cleanupErr) {
-                    console.warn(`⚠️ 清理残留临时文件失败: ${tempPath}`, cleanupErr.message);
+                    if (signal.aborted) throw createCancelError();
+                    if (!checkpoint.audioComplete || !fs.existsSync(audioPath)) {
+                        await downloadFunc(
+                            applyCdnHost(videoStream.audioUrl), audioPath, downloadHeaders,
+                            (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
+                            undefined, setting.getConcurrency(), signal, { resume: isMultiEngine }
+                        );
+                        checkpoint.audioComplete = true;
+                        saveCheckpoint(paths.state, checkpoint);
+                    }
+                    if (signal.aborted) throw createCancelError();
+                    if (!audioOnly && (!checkpoint.videoComplete || !fs.existsSync(videoPath))) {
+                        notifyProgress(0, '0.00', 'video');
+                        await downloadFunc(
+                            applyCdnHost(videoStream.videoUrl), videoPath, downloadHeaders,
+                            (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
+                            undefined, setting.getConcurrency(), signal, { resume: isMultiEngine }
+                        );
+                        checkpoint.videoComplete = true;
+                        saveCheckpoint(paths.state, checkpoint);
+                    }
+                    if (signal.aborted) throw createCancelError();
+                    break;
+                } catch (error) {
+                    if (signal.aborted || !isUrlRefreshableError(error) || urlRefreshes >= MAX_URL_REFRESHES) throw error;
+                    urlRefreshes += 1;
+                    console.warn(`⚠️ [${title}] 下载链接失效，刷新地址 (${urlRefreshes}/${MAX_URL_REFRESHES})`);
+                    notifyProgress(0, '0.00', 'refreshing');
+                    await refreshStreams();
                 }
             }
-        }
-
-        // 局部通知函数，绑定当前任务的 uid
-        const notifyProgress = (progress, speed, avId, downloadedBytes = 0, totalBytes = 0) => {
-            if (speed === 'NaN' || isNaN(Number(speed))) return;
-            const progressInfo = {
-                progress,
-                speed,
-                currentUid: uid,
-                avId,
-                downloadedBytes: Number(downloadedBytes) || 0,
-                totalBytes: Number(totalBytes) || 0
-            };
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('download-progress', progressInfo);
-            }
-        };
-
-        const downloadHeaders = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-            'Referer': 'https://www.bilibili.com/',
-            'Origin': 'https://www.bilibili.com',
-            'Accept': '*/*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        };
-
-        activeDownloadCount += 1;
-        let mergeStarted = false;
-        let keepPartial = false;
-        try {
-            // 串行下载：等待音频下载完成后，再开始视频下载
-            console.log(`⏳ [${title}] 开始下载音频...`);
-            const downloadFunc = getDownloadFunction();
-            await downloadFunc(
-                applyCdnHost(videoStream.audioUrl),
-                audioPath,
-                downloadHeaders,
-                (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'audio', downloaded, total),
-                undefined,
-                setting.getConcurrency(),
-                signal,
-                { resume: isMultiEngine }
-            );
 
             if (audioOnly) {
                 // 仅音频模式：把音频 .m4s 转封装成目标格式（.m4a / .flac / 纯音频 .mkv）
@@ -259,6 +327,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
 
                 try {
                     await convertBiliM4sAudio(audioPath, m4aOutputPath, { signal });
+                    if (signal.aborted) throw createCancelError();
                     console.log(`✅ [${title}] 转换为 ${audioExt} 完成 (js-media)`);
                 } catch (err) {
                     if (signal.aborted) throw createCancelError();
@@ -270,22 +339,6 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     };
                 }
             } else {
-                // 音视频模式：下载视频并合并
-                console.log(`⏳ [${title}] 音频下载完成，开始下载视频...`);
-                notifyProgress(0, '0.00', 'video', 0, 0);
-                const downloadFunc = getDownloadFunction();
-                await downloadFunc(
-                    applyCdnHost(videoStream.videoUrl),
-                    videoPath,
-                    downloadHeaders,
-                    (percent, speed, downloaded, total) => notifyProgress(percent, speed, 'video', downloaded, total),
-                    undefined,
-                    setting.getConcurrency(),
-                    signal,
-                    { resume: isMultiEngine }
-                );
-
-                // 合并音视频
                 console.log(`⏳ [${title}] 正在合并...`);
                 notifyProgress(100, '0.00', 'merging');
                 mergeStarted = true;
@@ -306,9 +359,24 @@ module.exports = function registerDownloadIpc(mainWindow) {
                     };
                 }
             }
+            const tempOutputPath = audioOnly ? m4aOutputPath : outputPath;
+            const ext = path.extname(tempOutputPath).slice(1);
+            const destination = getAvailableOutputPath(downloadDir, title, ext);
+            Object.assign(checkpoint, { completed: true, outputPath: destination });
+            saveCheckpoint(paths.state, checkpoint);
+            fs.renameSync(tempOutputPath, destination);
+            finalOutputPath = destination;
+            keepPartial = true;
 
         } catch (err) {
             if (isCancelError(err) || signal.aborted) {
+                if (signal.reason === 'pause') {
+                    keepPartial = true;
+                    if (checkpoint) saveCheckpoint(paths.state, checkpoint);
+                    if (mergeStarted) await removeFilesWithRetry([audioOnly ? m4aOutputPath : outputPath]);
+                    console.log(`⏸ [${title}] 下载已暂停，保留断点`);
+                    return { success: false, paused: true, message: '下载已暂停' };
+                }
                 console.log(`🛑 [${title}] 下载已取消，清理文件`);
                 const partialPaths = [videoPath, audioPath, ...(mergeStarted ? [outputPath, m4aOutputPath] : [])].flatMap(p => [
                     p, `${p}.tmp`, `${p}.dstate.json`
@@ -317,7 +385,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
                 return { success: false, cancelled: true, message: '下载已取消' };
             }
             console.error(`❌ [${title}] 出错：`, err);
-            keepPartial = isMultiEngine;
+            keepPartial = !!checkpoint && (resumeEnabled || payload.resume === true || isUrlRefreshableError(err));
             if (!keepPartial) {
                 await removeFilesWithRetry([videoPath, audioPath].flatMap(p => [`${p}.tmp`, `${p}.dstate.json`]));
             }
@@ -327,16 +395,20 @@ module.exports = function registerDownloadIpc(mainWindow) {
             };
         } finally {
             downloadControllers.delete(uid);
+            activeDownloadCount -= 1;
+            if (!keepPartial) await removeFilesWithRetry([paths.state, `${paths.state}.tmp`]);
+            if (!keepPartial && mergeStarted) {
+                await removeFilesWithRetry([audioOnly ? m4aOutputPath : outputPath]);
+            }
             // 清理临时 m4s 文件
             try {
-                if (!keepPartial) {
+                if (!keepPartial || finalOutputPath) {
                     if (!audioOnly && fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
                     if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
                 }
             } catch (cleanupErr) {
                 console.warn('⚠️ 清理临时文件失败:', cleanupErr.message);
             }
-            activeDownloadCount -= 1;
         }
 
         // 通知该视频已经下载完成
@@ -344,7 +416,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             mainWindow.webContents.send('download-finished', uid);
         }
 
-        return { success: true };
+        return { success: true, filePath: finalOutputPath };
     });
 
     function getCodecPrefix(codecs) {
@@ -430,9 +502,9 @@ module.exports = function registerDownloadIpc(mainWindow) {
         return audioList.slice().sort((a, b) => getAudioQualityScore(b.id) - getAudioQualityScore(a.id))[0] || null;
     }
 
-    async function getUpToDateUrl(bvid, cid, options = {}) {
+    async function getUpToDateUrl(bvid, cid, options = {}, signal) {
         try {
-            const wbiKeys = await getWbiKeys();
+            const wbiKeys = await getWbiKeys(signal);
             const params = {
                 bvid: bvid,
                 cid: cid,
@@ -445,6 +517,7 @@ module.exports = function registerDownloadIpc(mainWindow) {
             const credentialCookie = auth.getConstructedCookie();
 
             const response = await fetch(url, {
+                signal,
                 headers: {
                     'Referer': `https://www.bilibili.com/video/${bvid}/`,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',

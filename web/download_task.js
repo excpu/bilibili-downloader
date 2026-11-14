@@ -79,6 +79,8 @@ function formatETA(seconds) {
 }
 
 const unsubscribe = window.electronAPI.on('download-progress', (data) => {
+    const task = taskQuene.find(item => item.uid === data.currentUid);
+    if (!task || task.pauseRequested || task.cancelled) return;
     //console.log('进度来了：', data);
     // { percent: 30, speed: 123456, name: 'xxx' }
     // 添加容错：检查对应的DOM元素是否存在
@@ -114,6 +116,9 @@ const unsubscribe = window.electronAPI.on('download-progress', (data) => {
         statusEl.style.color = "var(--warn)";
     } else if (data.avId === "merging") {
         statusEl.textContent = "正在合并中...";
+        statusEl.style.color = "var(--warn)";
+    } else if (data.avId === "refreshing") {
+        statusEl.textContent = "链接失效，正在重新获取...";
         statusEl.style.color = "var(--warn)";
     }
 
@@ -185,6 +190,8 @@ window.electronAPI.on('download-finished', (data) => {
 });
 
 let taskQuene = [];
+const pausedTasks = new Map();
+const preparationInterrupts = new Map();
 
 let globalTaskLock = false;
 
@@ -421,9 +428,6 @@ async function downloadCover(cover, coverUrl, title, uid, folderNames) {
 // 取消后的收尾：移除 UI、出队并继续下一个任务
 function finishCancelledTask(task) {
     removeTaskUi(task.uid);
-    taskQuene = taskQuene.filter(item => item.uid !== task.uid);
-    globalTaskLock = false;
-    taskManager();
 }
 
 function removeTaskUi(uid) {
@@ -434,22 +438,104 @@ function removeTaskUi(uid) {
 }
 
 function cancelTask(uid) {
-    const task = taskQuene.find(item => item.uid === uid);
+    const pausedTask = pausedTasks.get(uid);
+    const task = pausedTask || taskQuene.find(item => item.uid === uid);
     if (!task) return;
     const isCurrent = globalTaskLock && taskQuene[0] === task;
     if (!isCurrent) {
+        pausedTasks.delete(uid);
         taskQuene = taskQuene.filter(item => item.uid !== uid);
         removeTaskUi(uid);
-        $taskCount.innerText = taskQuene.length;
+        if (pausedTask || task.resume) {
+            window.electronAPI.invoke('cleanupFailedDownload', task).catch(error => {
+                model.showErrorMessage(`清理下载任务失败：${error.message}`);
+            });
+        }
+        taskManager();
         return;
     }
     task.cancelled = true;
+    saveDownloadTasks();
+    preparationInterrupts.get(uid)?.();
     const statusEl = document.getElementById(`status-${uid}`);
     if (statusEl) {
         statusEl.textContent = '正在取消...';
         statusEl.style.color = 'var(--warn)';
     }
     window.electronAPI.invoke('cancelDownload', uid);
+}
+
+function finishPausedTask(task) {
+    task.pauseRequested = false;
+    task.resume = true;
+    pausedTasks.set(task.uid, task);
+    taskQuene = taskQuene.filter(item => item !== task);
+    const statusEl = document.getElementById(`status-${task.uid}`);
+    if (statusEl) {
+        statusEl.textContent = '已暂停';
+        statusEl.style.color = 'var(--warn)';
+    }
+    const speedEl = document.getElementById(`speed-${task.uid}`);
+    const etaEl = document.getElementById(`eta-${task.uid}`);
+    if (speedEl) speedEl.textContent = '0.00';
+    if (etaEl) etaEl.textContent = '--:--';
+    speedSmoothers.delete(task.uid);
+    lastAvIdMap.delete(task.uid);
+    lastTextUpdateTimeMap.delete(task.uid);
+}
+
+async function pauseTask(uid) {
+    const task = taskQuene.find(item => item.uid === uid);
+    if (!task || task.pauseRequested || task.cancelled || task.finishing) return;
+    if (!(globalTaskLock && taskQuene[0] === task)) {
+        pausedTasks.set(uid, task);
+        taskQuene = taskQuene.filter(item => item !== task);
+        const statusEl = document.getElementById(`status-${uid}`);
+        if (statusEl) statusEl.textContent = '已暂停';
+        taskManager();
+        return;
+    }
+    task.pauseRequested = true;
+    const statusEl = document.getElementById(`status-${uid}`);
+    const previousStatus = statusEl ? { text: statusEl.textContent, color: statusEl.style.color } : null;
+    const restoreStatus = () => {
+        task.pauseRequested = false;
+        if (task.downloading && statusEl && previousStatus) {
+            statusEl.textContent = previousStatus.text;
+            statusEl.style.color = previousStatus.color;
+        }
+    };
+    if (statusEl) {
+        statusEl.textContent = '正在暂停...';
+        statusEl.style.color = 'var(--warn)';
+    }
+    if (task.downloading) {
+        try {
+            const result = await window.electronAPI.invoke('pauseDownload', uid);
+            if (!result.success && task.pauseRequested) {
+                restoreStatus();
+                model.showErrorMessage(result.message || '任务已经结束，无法暂停');
+            }
+        } catch (error) {
+            restoreStatus();
+            model.showErrorMessage(`暂停失败：${error.message}`);
+        }
+    } else {
+        preparationInterrupts.get(uid)?.();
+    }
+}
+
+function resumeTask(uid) {
+    const task = pausedTasks.get(uid);
+    if (!task) return;
+    pausedTasks.delete(uid);
+    const statusEl = document.getElementById(`status-${uid}`);
+    if (statusEl) {
+        statusEl.textContent = '排队中';
+        statusEl.style.color = '';
+    }
+    taskQuene.push(task);
+    taskManager();
 }
 
 // 任务右键菜单
@@ -467,6 +553,11 @@ $retryMenuItem.textContent = '重试';
 $retryMenuItem.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:4px;display:none;';
 $retryMenuItem.addEventListener('mouseenter', () => { $retryMenuItem.style.background = 'rgba(128,128,128,.2)'; });
 $retryMenuItem.addEventListener('mouseleave', () => { $retryMenuItem.style.background = ''; });
+const $pauseMenuItem = document.createElement('div');
+$pauseMenuItem.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:4px;';
+$pauseMenuItem.addEventListener('mouseenter', () => { $pauseMenuItem.style.background = 'rgba(128,128,128,.2)'; });
+$pauseMenuItem.addEventListener('mouseleave', () => { $pauseMenuItem.style.background = ''; });
+$taskContextMenu.appendChild($pauseMenuItem);
 $taskContextMenu.appendChild($retryMenuItem);
 $taskContextMenu.appendChild($cancelMenuItem);
 document.body.appendChild($taskContextMenu);
@@ -476,6 +567,49 @@ const failedTasks = new Map();
 
 function markTaskFailed(task) {
     failedTasks.set(task.uid, task);
+}
+
+const DOWNLOAD_TASK_STORAGE_KEY = 'bilibili-download-tasks-v1';
+
+function saveDownloadTasks() {
+    try {
+        const tasks = [...new Map([...taskQuene, ...pausedTasks.values(), ...failedTasks.values()]
+            .filter(task => !task.cancelled).map(task => [task.uid, task])).values()]
+            .map(({ downloading, finishing, pauseRequested, cancelled, ...task }) => task);
+        localStorage.setItem(DOWNLOAD_TASK_STORAGE_KEY, JSON.stringify({ version: 1, tasks }));
+    } catch (error) {
+        console.error('保存下载任务失败:', error);
+        model.showErrorMessage(`保存下载任务失败，重启后可能无法恢复：${error.message}`);
+    }
+}
+
+function restoreDownloadTasks() {
+    try {
+        const raw = localStorage.getItem(DOWNLOAD_TASK_STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (saved.version !== 1 || !Array.isArray(saved.tasks) ||
+            saved.tasks.some(task => !task || typeof task.uid !== 'string' ||
+                !/^[a-zA-Z0-9_-]+$/.test(task.uid) || typeof task.title !== 'string' ||
+                typeof task.bvid !== 'string')) {
+            throw new Error('保存的下载任务格式无效');
+        }
+        for (const task of saved.tasks) {
+            if (pausedTasks.has(task.uid)) continue;
+            task.resume = true;
+            task.cancelled = false;
+            task.pauseRequested = false;
+            task.finishing = false;
+            task.downloading = false;
+            pausedTasks.set(task.uid, task);
+            displayTasks(task);
+            document.getElementById(`status-${task.uid}`).textContent = '已恢复，等待继续';
+        }
+        $taskCount.innerText = pausedTasks.size;
+    } catch (error) {
+        console.error('恢复下载任务失败:', error);
+        model.showErrorMessage(`恢复下载任务失败：${error.message}`);
+    }
 }
 
 function retryFailedTask(uid) {
@@ -506,7 +640,9 @@ async function deleteFailedTask(uid) {
     if (!task) return;
     failedTasks.delete(uid);
     removeTaskUi(uid);
+    saveDownloadTasks();
     await window.electronAPI.invoke('cleanupFailedDownload', {
+        uid: task.uid,
         title: task.title,
         folderNames: task.folderNames || []
     });
@@ -522,6 +658,14 @@ $retryMenuItem.addEventListener('click', () => {
     const uid = contextMenuUid;
     hideTaskContextMenu();
     if (uid) retryFailedTask(uid);
+});
+
+$pauseMenuItem.addEventListener('click', () => {
+    const uid = contextMenuUid;
+    hideTaskContextMenu();
+    if (!uid) return;
+    if (pausedTasks.has(uid)) resumeTask(uid);
+    else pauseTask(uid);
 });
 
 $cancelMenuItem.addEventListener('click', () => {
@@ -540,17 +684,18 @@ document.addEventListener('contextmenu', async (event) => {
     }
     const uid = taskEl.id.slice('task-'.length);
     const failedTask = failedTasks.get(uid);
-    const task = failedTask || taskQuene.find(item => item.uid === uid);
-    if (!task || task.cancelled) {
+    const pausedTask = pausedTasks.get(uid);
+    const task = failedTask || pausedTask || taskQuene.find(item => item.uid === uid);
+    if (!task || task.cancelled || task.pauseRequested) {
         hideTaskContextMenu();
         return;
     }
     event.preventDefault();
     const { clientX, clientY } = event;
+    $pauseMenuItem.style.display = failedTask || task.finishing ? 'none' : 'block';
+    $pauseMenuItem.textContent = pausedTask ? '恢复下载' : '暂停下载';
     if (failedTask) {
-        const engine = await window.electronAPI.invoke('getDownloadEngine');
-        const resumeEnabled = await window.electronAPI.invoke('getNodeResumeEnabled');
-        $retryMenuItem.style.display = engine === 'node-multi' && resumeEnabled ? 'block' : 'none';
+        $retryMenuItem.style.display = 'block';
         $cancelMenuItem.textContent = '删除';
     } else {
         $retryMenuItem.style.display = 'none';
@@ -571,54 +716,62 @@ window.addEventListener('resize', hideTaskContextMenu);
 // 右键菜单逻辑结束
 
 async function taskManager() {
-    $taskCount.innerText = taskQuene.length;
-    if (taskQuene.length < 1) {
-        globalTaskLock = false;
-        return;
-    } else if (globalTaskLock === true) {
-        return;
-    }
+    $taskCount.innerText = taskQuene.length + pausedTasks.size;
+    saveDownloadTasks();
+    if (globalTaskLock || taskQuene.length < 1) return;
     globalTaskLock = true;
     const currentTask = taskQuene[0];
+    let completed = false;
 
-    if (!currentTask.cid || currentTask.needFetchCid) {
-        const statusEl = document.getElementById(`status-${currentTask.uid}`);
-        if (statusEl) {
-            statusEl.textContent = '获取CID中';
-            statusEl.style.color = 'var(--brand)';
+    try {
+        if (!currentTask.cid || currentTask.needFetchCid) {
+            const statusEl = document.getElementById(`status-${currentTask.uid}`);
+            if (statusEl) {
+                statusEl.textContent = '获取CID中';
+                statusEl.style.color = 'var(--brand)';
+            }
+
+            const interrupted = new Promise(resolve => {
+                preparationInterrupts.set(currentTask.uid, () => resolve(null));
+            });
+            const videoInfo = await Promise.race([
+                window.electronAPI.invoke('getVideoInfo', currentTask.bvid),
+                interrupted
+            ]);
+            preparationInterrupts.delete(currentTask.uid);
+            if (currentTask.cancelled) {
+                finishCancelledTask(currentTask);
+                return;
+            }
+            if (currentTask.pauseRequested) {
+                finishPausedTask(currentTask);
+                return;
+            }
+            if (!videoInfo?.success || !videoInfo.data?.cid) {
+                throw new Error(`获取CID失败：${videoInfo?.message || '未知错误'}`);
+            }
+
+            currentTask.cid = videoInfo.data.cid;
+            if (!currentTask.duration && videoInfo.data.duration) {
+                currentTask.duration = Number(videoInfo.data.duration) || 0;
+            }
+            currentTask.needFetchCid = false;
         }
 
-        const videoInfo = await window.electronAPI.invoke('getVideoInfo', currentTask.bvid);
-        if (currentTask.cancelled) {
+        currentTask.downloading = true;
+        const result = await window.electronAPI.invoke('downloadTarget', currentTask);
+        currentTask.downloading = false;
+        if (result.paused && !currentTask.cancelled) {
+            finishPausedTask(currentTask);
+            return;
+        }
+        currentTask.pauseRequested = false;
+        if (!result.success && (result.cancelled || currentTask.cancelled)) {
             finishCancelledTask(currentTask);
             return;
         }
-        if (!videoInfo.success || !videoInfo.data || !videoInfo.data.cid) {
-            alert(`获取 ${currentTask.title} 的CID失败：${videoInfo.message || '未知错误'}`);
-            if (statusEl) {
-                statusEl.textContent = 'CID获取失败';
-                statusEl.style.color = 'var(--err)';
-            }
-            markTaskFailed(currentTask);
-            taskQuene.shift();
-            globalTaskLock = false;
-            taskManager();
-            return;
-        }
-
-        currentTask.cid = videoInfo.data.cid;
-        if (!currentTask.duration && videoInfo.data.duration) {
-            currentTask.duration = Number(videoInfo.data.duration) || 0;
-        }
-        currentTask.needFetchCid = false;
-    }
-
-    const result = await window.electronAPI.invoke('downloadTarget', currentTask);
-    if (!result.success && (result.cancelled || currentTask.cancelled)) {
-        finishCancelledTask(currentTask);
-        return;
-    }
-    if (result.success) {
+        if (!result.success) throw new Error(result.message || '未知错误');
+        currentTask.finishing = true;
         if (currentTask.subtitleLanguage) {
             try {
                 const playerConfig = await window.electronAPI.invoke('getPlayerConfig', currentTask.bvid, currentTask.cid);
@@ -650,13 +803,27 @@ async function taskManager() {
             }
         }
         // 下载成功
-        await downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid, currentTask.folderNames);
-        await downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid, currentTask.folderNames);
-    } else {
-        alert(`下载 ${currentTask.title} 失败：${result.message}`);
-        // 在UI上标记下载失败，并移除该任务UI（防止进度显示混乱）
+        for (const [label, download] of [
+            ['弹幕', () => downloadDanmu(currentTask.cid, currentTask.title, currentTask.duration, currentTask.danmu, currentTask.uid, currentTask.folderNames)],
+            ['封面', () => downloadCover(currentTask.cover, currentTask.coverUrl, currentTask.title, currentTask.uid, currentTask.folderNames)]
+        ]) {
+            try {
+                await download();
+            } catch (error) {
+                console.error(`${label}下载失败:`, error);
+                model.showErrorMessage(`${label}下载失败：${currentTask.title}，${error.message}`);
+            }
+        }
+        completed = true;
+        removeTaskUi(currentTask.uid);
+    } catch (error) {
+        if (currentTask.cancelled) {
+            finishCancelledTask(currentTask);
+            return;
+        }
+        console.error(`下载 ${currentTask.title} 失败:`, error);
+        model.showErrorMessage(`下载 ${currentTask.title} 失败：${error.message}`);
         const failedUid = currentTask.uid;
-        const taskEl = document.getElementById(`task-${failedUid}`);
         const statusEl = document.getElementById(`status-${failedUid}`);
         const speedEl = document.getElementById(`speed-${failedUid}`);
         const progressEl = document.getElementById(`progress-${failedUid}`);
@@ -674,17 +841,24 @@ async function taskManager() {
             percentEl.textContent = "失败";
             percentEl.style.color = "var(--err)";
         }
-        
         markTaskFailed(currentTask);
-        
-        // 3秒后自动移除失败的任务UI，避免后续进度事件错误更新
-        // setTimeout(() => {
-        //     if (taskEl) taskEl.remove();
-        // }, 3000);
+    } finally {
+        preparationInterrupts.delete(currentTask.uid);
+        currentTask.downloading = false;
+        currentTask.pauseRequested = false;
+        currentTask.finishing = false;
+        taskQuene = taskQuene.filter(task => task !== currentTask);
+        globalTaskLock = false;
+        taskManager();
+        if (completed) {
+            try {
+                await window.electronAPI.invoke('completeDownload', currentTask);
+            } catch (error) {
+                console.error('清理已完成任务失败:', error);
+                model.showErrorMessage(`清理已完成任务失败：${error.message}`);
+            }
+        }
     }
-
-    // 无论成功与否，都继续下一个任务
-    taskQuene.shift();
-    globalTaskLock = false;
-    taskManager();
 }
+
+restoreDownloadTasks();

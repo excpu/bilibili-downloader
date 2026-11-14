@@ -5,6 +5,7 @@ const https = require('https');
 const { Writable, pipeline } = require('stream');
 const got = require('got');
 const { createCancelError, isCancelError } = require('./download_cancel');
+const { createUrlExpiredError } = require('./download_errors');
 
 // 创建专用 HTTP 1.1 Agent 实例池，实现真正的多 TCP 连接并发加速下载
 function createHttpAgents(concurrency) {
@@ -140,15 +141,14 @@ function isUnrecoverableError(err) {
  * 探测远程下载链接的有效性、总大小及 Range 分片支持情况
  * 适配恶劣网络：自动重试探测请求，确定链接完全不可用再抛错
  */
-async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null) {
+async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null, signal = null) {
     let retries = maxRetries;
     let attempt = 0;
 
     while (retries >= 0) {
+        if (signal?.aborted) throw createCancelError();
         if (Date.now() >= deadline) {
-            const err = new Error('下载链接已超过有效期，停止探测');
-            err.unrecoverable = true;
-            throw err;
+            throw createUrlExpiredError('下载链接已超过有效期，停止探测');
         }
 
         try {
@@ -156,6 +156,7 @@ async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null) {
             // 相比 HEAD，很多 CDN 对 HEAD 处理不规范或直接返回 403/405，而 GET 0-0 兼容性最好且能直接测出 Range 支持
             const response = await got(url, {
                 method: 'GET',
+                signal: signal || undefined,
                 headers: {
                     ...headers,
                     Range: 'bytes=0-0'
@@ -225,6 +226,7 @@ async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null) {
             // 遇到 429 或 5xx 等瞬时服务错误，进入重试循环
             throw new Error(`服务器响应异常: HTTP ${statusCode}`);
         } catch (err) {
+            if (signal?.aborted) throw createCancelError();
             if (isUnrecoverableError(err)) {
                 throw err;
             }
@@ -239,7 +241,7 @@ async function probeUrl(url, headers, maxRetries = 5, deadline, agents = null) {
                 BASE_RETRY_DELAY_MS * Math.pow(1.5, attempt) + Math.random() * 500,
                 MAX_RETRY_DELAY_MS
             );
-            await sleep(delay);
+            await sleep(delay, signal);
         }
     }
 }
@@ -264,9 +266,7 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
     while (retries >= 0) {
         if (signal?.aborted) throw createCancelError();
         if (Date.now() >= deadline) {
-            const err = new Error('下载链接已超过有效期，停止重试并退出');
-            err.unrecoverable = true;
-            throw err;
+            throw createUrlExpiredError('下载链接已超过有效期，停止重试并退出');
         }
 
         let downloadedLength = 0;
@@ -324,6 +324,11 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
                     }
 
                     if (error) {
+                        if (writer && !writer.closed) {
+                            writer.once('close', () => reject(error));
+                            writer.destroy();
+                            return;
+                        }
                         reject(error);
                     } else {
                         resolve();
@@ -465,7 +470,7 @@ async function downloadSingleStream(url, destPath, tempPath, initialTotalLength,
         } catch (err) {
             if (isCancelError(err)) throw err;
             if (isUnrecoverableError(err)) {
-                throw new Error(`单流下载遇到不可恢复错误: ${err.message}`);
+                throw err;
             }
 
             retries--;
@@ -563,7 +568,7 @@ class StreamDownload {
 
         // 1. 探测链接与 Range 支持情况
         console.log(`🔍 [StreamDownload] 正在探测链接属性并检测分片支持...`);
-        const probeResult = await probeUrl(url, headers, 6, deadline, agents).catch((err) => {
+        const probeResult = await probeUrl(url, headers, 6, deadline, agents, signal).catch((err) => {
             destroyHttpAgents(agents);
             throw err;
         });
@@ -959,7 +964,7 @@ class StreamDownload {
 
             if (!allChunksCompleted()) {
                 if (Date.now() >= deadline) {
-                    throw new Error('下载链接已超过 1 小时 50 分钟有效期，已停止下载');
+                    throw createUrlExpiredError('下载链接已超过 1 小时 50 分钟有效期，已停止下载');
                 }
                 throw new Error('多线程下载未能在预期内完成所有分片');
             }
@@ -1028,7 +1033,7 @@ class StreamDownload {
             }
 
             // 失败时立即落盘最新断点，供重试时续传
-            if (!isCancelError(err)) {
+            if (!isCancelError(err) || resumeEnabled) {
                 if (!resumeEnabled) {
                     if (fileHandle) {
                         try { await fileHandle.close(); } catch {}

@@ -193,7 +193,7 @@ function buildColumn(room) {
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
                 </button>
                 <button type="button" class="dc-room-btn" data-action="open" title="在浏览器中打开直播间" aria-label="在浏览器中打开直播间">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4 10 14M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9Z"/></svg>
                 </button>
                 <button type="button" class="dc-room-btn" data-action="clear" title="清空这一栏" aria-label="清空这一栏">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4 7 7-9 9H7l-4-4ZM8 11l7 7M12 20h9"/></svg>

@@ -100,9 +100,13 @@ html[data-platform="linux"] .dc-topbar {
 }
 
 .dc-add-icon {
-    color: var(--pink);
-    font-weight: 700;
+    display: block;
+    flex: 0 0 12px;
+    height: 12px;
     margin-right: 6px;
+    background:
+        linear-gradient(var(--pink), var(--pink)) center / 2px 10px no-repeat,
+        linear-gradient(var(--pink), var(--pink)) center / 10px 2px no-repeat;
 }
 
 .dc-add input {

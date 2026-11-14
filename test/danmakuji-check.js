@@ -158,6 +158,10 @@ test('房间列表：去重、置顶、上限与拖动排序', () => {
     assert.deepEqual(plain(recent.map(r => r.roomId)), [2, 1]);
     assert.equal(Shared.rememberRecent(recent, { roomId: 1 })[0].roomId, 1);
     assert.equal(Shared.rememberRecent(recent, { roomId: 1 }).length, 2);
+    assert.deepEqual(plain(Shared.removeRecent(recent, 2).map(r => r.roomId)), [1]);
+    assert.deepEqual(plain(Shared.removeRecent(recent, '1').map(r => r.roomId)), [2]);
+    assert.deepEqual(plain(Shared.removeRecent(recent, 0).map(r => r.roomId)), [2, 1]);
+    assert.deepEqual(plain(Shared.removeRecent(null, 1)), []);
 });
 
 test('速率与导出文本', () => {
@@ -466,6 +470,40 @@ test('收藏读取兼容旧配置，并按房间号去重、剔除非法记录',
     assert.deepEqual(plain(vm.runInContext('state.favorites.map(room => room.roomId)', context)), [101, 102]);
 });
 
+test('最近接入支持删除单个项目并持久化，撤销可按原位置恢复', () => {
+    const saved = {
+        rooms: [{ roomId: 101, title: 'A' }],
+        favorites: [{ roomId: 102, title: 'B', anchorName: '乙' }],
+        recent: [
+            { roomId: 101, title: 'A', anchorName: '甲' },
+            { roomId: 102, title: 'B', anchorName: '乙' },
+            { roomId: 103, title: 'C', anchorName: '丙' },
+        ],
+    };
+    const { context, storage } = loadConsoleState(saved);
+    vm.runInContext(`
+        globalThis.lastToast = null;
+        toast = (message, options) => { globalThis.lastToast = { message, options }; };
+        deleteRecentRoom(102);
+    `, context);
+
+    assert.deepEqual(plain(vm.runInContext('state.recent.map(r => r.roomId)', context)), [101, 103]);
+    assert.deepEqual(plain(vm.runInContext('state.favorites.map(r => r.roomId)', context)), [102]);
+    assert.deepEqual(plain(vm.runInContext('state.rooms.map(r => r.roomId)', context)), [101]);
+    assert.deepEqual(
+        JSON.parse(storage.get('danmakuji-console-v1')).recent.map(r => r.roomId),
+        [101, 103]
+    );
+    assert.match(vm.runInContext('lastToast.message', context), /乙/);
+
+    vm.runInContext('lastToast.options.action.onClick()', context);
+    assert.deepEqual(plain(vm.runInContext('state.recent.map(r => r.roomId)', context)), [101, 102, 103]);
+    assert.deepEqual(
+        JSON.parse(storage.get('danmakuji-console-v1')).recent.map(r => r.roomId),
+        [101, 102, 103]
+    );
+});
+
 // ---------------- 订阅中心 ----------------
 function loadHub() {
     const sent = [];
@@ -753,6 +791,8 @@ test('工具箱包含弹幕姬入口，页面脚本与 IPC 频道一一对应', 
     for (const match of consoleJs.matchAll(/invoke\('([^']+)'/g)) {
         assert.ok(match[1].startsWith('danmakuji:'), `未知 IPC ${match[1]}`);
     }
+    assert.match(consoleJs, /openRecentContextMenu/);
+    assert.match(consoleJs, /deleteRecentRoom/);
 
     const hjHtml = fs.readFileSync(path.join(monitorDir, 'danmakuji.html'), 'utf8');
     const hjJs = fs.readFileSync(path.join(monitorDir, 'danmakuji.js'), 'utf8');
@@ -767,4 +807,251 @@ test('工具箱包含弹幕姬入口，页面脚本与 IPC 频道一一对应', 
             assert.ok(fs.existsSync(path.join(monitorDir, match[1])), `缺少资源 ${match[1]}`);
         }
     }
+});
+
+// ---------------- 直播弹幕长连接与错误透传 ----------------
+function loadBilibiliLive({ gotImpl, authData = {}, wbiResult = { img_key: 'a', sub_key: 'b', isLogin: false, mid: 0 } } = {}) {
+    const sentCookies = [];
+    const requireStub = name => {
+        if (name === 'got') {
+            return async (url, options) => {
+                sentCookies.push({ url, cookie: options?.headers?.Cookie || '' });
+                return gotImpl(url, options);
+            };
+        }
+        if (name === './auth') {
+            return class {
+                load() { return authData; }
+                async ensureBuvidCredentials() { return authData; }
+                getConstructedCookie() { return authData.cookie || ''; }
+            };
+        }
+        if (name === './wbi') {
+            return {
+                encWbi: (params) => `id=${params.id}&wts=1&w_rid=test`,
+                getWbiKeys: async () => wbiResult,
+            };
+        }
+        if (name === './live_danmaku_protocol') {
+            return require(path.join(root, 'modules', 'live_danmaku_protocol.js'));
+        }
+        throw new Error(`unexpected module ${name}`);
+    };
+    const context = vm.createContext({
+        require: requireStub,
+        module: { exports: {} },
+        console,
+        Buffer,
+        setTimeout,
+        clearTimeout,
+        setInterval,
+        clearInterval,
+        AbortController,
+    });
+    vm.runInContext(fs.readFileSync(path.join(root, 'modules', 'bilibili_live.js'), 'utf8'), context);
+    return { ...context.module.exports, sentCookies };
+}
+
+function makePacket(op, body) {
+    const payload = Buffer.isBuffer(body) ? body : Buffer.from(String(body ?? ''));
+    const header = Buffer.alloc(16);
+    header.writeUInt32BE(16 + payload.length, 0);
+    header.writeUInt16BE(16, 4);
+    header.writeUInt16BE(1, 6);
+    header.writeUInt32BE(op, 8);
+    header.writeUInt32BE(1, 12);
+    return Buffer.concat([header, payload]);
+}
+
+test('fetchDanmuConfig 补齐 buvid3 且使鉴权 uid 与 nav 登录态一致', async () => {
+    const { fetchDanmuConfig, sentCookies } = loadBilibiliLive({
+        authData: { loginStatus: true, DedeUserID: '99999', buvid3: 'B3_TEST', cookie: 'SESSDATA=expired' },
+        wbiResult: { img_key: 'img', sub_key: 'sub', isLogin: false, mid: 0 },
+        gotImpl: async () => ({
+            body: {
+                code: 0,
+                data: {
+                    token: 'tok-1',
+                    host_list: [
+                        { host: 'a.chat.bilibili.com', wss_port: 2245 },
+                        { host: 'a.chat.bilibili.com', wss_port: 2245 },
+                    ],
+                },
+            },
+        }),
+    });
+    const config = await fetchDanmuConfig(1017);
+    assert.match(sentCookies[0].cookie, /buvid3=B3_TEST/);
+    assert.equal(config.uid, 0);
+    assert.equal(config.buvid, 'B3_TEST');
+    // 去重并追加 broadcastlv 备用节点
+    assert.deepEqual(plain(config.host_list.map(h => `${h.host}:${h.wss_port}`)), [
+        'a.chat.bilibili.com:2245',
+        'broadcastlv.chat.bilibili.com:443',
+    ]);
+});
+
+test('LiveDanmakuClient 连接超时时不等待 hang 住的 close()，立即切换下一节点并保留失败原因', async () => {
+    const statuses = [];
+    const urls = [];
+    const sockets = [];
+    const { LiveDanmakuClient } = loadBilibiliLive({
+        authData: { buvid3: 'B3_OK', cookie: 'buvid3=B3_OK' },
+        gotImpl: async () => ({
+            body: {
+                code: 0,
+                data: {
+                    token: 'tok-2',
+                    host_list: [
+                        { host: 'hang.example.test', wss_port: 2245 },
+                        { host: 'ok.example.test', wss_port: 443 },
+                    ],
+                },
+            },
+        }),
+    });
+
+    const client = new LiveDanmakuClient(1017, {
+        connectTimeoutMs: 30,
+        authTimeoutMs: 100,
+        heartbeatIntervalMs: 5000,
+        onStatus: (status) => statuses.push(status),
+        createWebSocket: (url) => {
+            urls.push(url);
+            const ws = {
+                readyState: 0,
+                sent: [],
+                closed: false,
+                close() {
+                    this.closed = true;
+                    // 故意不触发 onclose，模拟 Node/undici 在 CONNECTING 期间 close 卡死
+                },
+                send(buf) { this.sent.push(buf); },
+            };
+            sockets.push(ws);
+            if (url.includes('ok.example.test')) {
+                setTimeout(() => {
+                    ws.readyState = 1;
+                    ws.onopen?.();
+                    setTimeout(() => {
+                        ws.onmessage?.({ data: makePacket(8, JSON.stringify({ code: 0 })) });
+                    }, 10);
+                }, 10);
+            }
+            return ws;
+        },
+    });
+
+    client.start();
+    await new Promise(resolve => setTimeout(resolve, 750));
+    client.stop();
+
+    assert.equal(urls[0], 'wss://hang.example.test:2245/sub');
+    assert.equal(urls[1], 'wss://ok.example.test:443/sub');
+    assert.equal(sockets[0].closed, true);
+    const timeoutErr = statuses.find(s => s.state === 'error' && /连接弹幕服务器超时.*hang\.example\.test:2245/.test(s.message));
+    assert.ok(timeoutErr, `应报告连接超时原因，实际状态: ${JSON.stringify(statuses)}`);
+    const retrying = statuses.find(s => s.state === 'connecting' && s.reconnecting && /连接弹幕服务器超时/.test(s.message));
+    assert.ok(retrying, '重连期间应保留上一次失败原因');
+    assert.equal(statuses.at(-1).state, 'open');
+});
+
+test('LiveDanmakuClient 鉴权超时和 socket 错误都会把具体原因传递到状态', async () => {
+    const statuses = [];
+    let attempt = 0;
+    const { LiveDanmakuClient } = loadBilibiliLive({
+        authData: { buvid3: 'B3_OK', cookie: 'buvid3=B3_OK' },
+        gotImpl: async () => ({
+            body: {
+                code: 0,
+                data: {
+                    token: 'tok-3',
+                    host_list: [{ host: 'auth-hang.example.test', wss_port: 2245 }],
+                },
+            },
+        }),
+    });
+
+    const client = new LiveDanmakuClient(6, {
+        connectTimeoutMs: 100,
+        authTimeoutMs: 30,
+        onStatus: (status) => statuses.push(status),
+        createWebSocket: () => {
+            attempt += 1;
+            const ws = {
+                readyState: 0,
+                close() {},
+                send() {},
+            };
+            if (attempt === 1) {
+                setTimeout(() => {
+                    ws.readyState = 1;
+                    ws.onopen?.();
+                    // 故意不回 op=8，触发鉴权超时
+                }, 5);
+            } else if (attempt === 2) {
+                setTimeout(() => {
+                    ws.onerror?.({ error: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' } });
+                    ws.onclose?.({ code: 1006, reason: '' });
+                }, 5);
+            }
+            return ws;
+        },
+    });
+
+    client.start();
+    await new Promise(resolve => setTimeout(resolve, 650));
+    client.stop();
+
+    assert.ok(statuses.some(s => s.state === 'error' && /弹幕服务器鉴权超时.*auth-hang\.example\.test:2245/.test(s.message)));
+    assert.ok(statuses.some(s => s.state === 'closed' && /ECONNREFUSED/.test(s.message)));
+});
+
+test('控制台前端在连接失败与重连中保留并展示错误横幅，连接成功后清除', () => {
+    const { context } = loadConsoleState();
+    vm.runInContext(`
+        updateFavoriteButton = () => {};
+        const createEl = () => {
+            const el = {
+                textContent: '',
+                title: '',
+                classes: new Set(['hidden']),
+            };
+            el.classList = {
+                add(...names) { names.forEach(n => el.classes.add(n)); },
+                remove(...names) { names.forEach(n => el.classes.delete(n)); },
+                toggle(name, force) {
+                    const next = force === undefined ? !el.classes.has(name) : !!force;
+                    if (next) el.classes.add(name);
+                    else el.classes.delete(name);
+                },
+            };
+            return el;
+        };
+        const refs = {
+            favoriteBtn: {}, title: {}, anchor: {}, foot: createEl(),
+            offline: createEl(),
+            error: createEl(),
+            status: createEl(),
+        };
+        const column = { room: { roomId: 1, title: 'A', liveStatus: 1 }, refs, status: { state: 'connecting' }, el: { style: { setProperty() {} } } };
+        globalThis.setStatus = (status) => { column.status = status; updateColumnStatus(column); return refs; };
+    `, context);
+
+    const afterErr = context.setStatus({ state: 'error', message: '连接弹幕服务器超时 (a.chat.bilibili.com:2245)' });
+    assert.equal(afterErr.status.textContent, '连接失败');
+    assert.equal(afterErr.error.textContent, '连接弹幕服务器超时 (a.chat.bilibili.com:2245)');
+    assert.equal(afterErr.error.classes.has('hidden'), false);
+    assert.equal(afterErr.foot.classes.has('is-error'), true);
+
+    const afterRetry = context.setStatus({ state: 'connecting', reconnecting: true, message: '连接弹幕服务器超时 (a.chat.bilibili.com:2245)' });
+    assert.equal(afterRetry.status.textContent, '重连中');
+    assert.equal(afterRetry.error.classes.has('hidden'), false);
+    assert.equal(afterRetry.error.textContent, '连接弹幕服务器超时 (a.chat.bilibili.com:2245)');
+
+    const afterOpen = context.setStatus({ state: 'open' });
+    assert.equal(afterOpen.status.textContent, '已连接');
+    assert.equal(afterOpen.error.classes.has('hidden'), true);
+    assert.equal(afterOpen.foot.classes.has('is-error'), false);
+    assert.equal(afterOpen.foot.textContent, '开播中 · A');
 });

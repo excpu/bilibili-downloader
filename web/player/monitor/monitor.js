@@ -117,6 +117,7 @@ function buildTile(index) {
         <div class="tile-player"></div>
         <div class="tile-danmaku"></div>
         <div class="tile-superchat"></div>
+        <div class="tile-danmaku-error hidden"></div>
         <div class="tile-overlay">
             <div class="spinner"></div>
             <div class="overlay-text"></div>
@@ -185,6 +186,7 @@ class MonitorTile {
         this.playerEl = el.querySelector('.tile-player');
         this.danmakuEl = el.querySelector('.tile-danmaku');
         this.superchatEl = el.querySelector('.tile-superchat');
+        this.danmakuErrorEl = el.querySelector('.tile-danmaku-error');
         this.overlayEl = el.querySelector('.tile-overlay');
         this.overlayTextEl = el.querySelector('.overlay-text');
         this.retryBtn = el.querySelector('.overlay-retry');
@@ -204,6 +206,7 @@ class MonitorTile {
         this.laneReadyAt = [];
         this.statusKind = 'empty';
         this.onlineCount = 0;
+        this.danmakuStatus = null;
         this.resizeObserver = new ResizeObserver(() => {
             if (this.art) this.art.resize();
             this.syncDanmakuMetrics();
@@ -242,6 +245,7 @@ class MonitorTile {
         this.room = room;
         this.loadToken += 1;
         this.onlineCount = 0;
+        this.setDanmakuStatus(null);
         this.teardownPlayer();
         this.danmakuEl.innerHTML = '';
         this.superchatEl.innerHTML = '';
@@ -501,6 +505,27 @@ class MonitorTile {
         saveState();
     }
 
+    setDanmakuStatus(status) {
+        this.danmakuStatus = status || null;
+        const hasError = !!(status && status.state !== 'open' && (status.state === 'error' || status.message));
+        const msg = status?.message || '';
+        if (this.statusEl) {
+            this.statusEl.classList.toggle('is-danmaku-error', hasError);
+            if (!status) this.statusEl.title = '';
+            else if (status.state === 'open') this.statusEl.title = '弹幕已连接';
+            else if (msg) this.statusEl.title = `弹幕：${msg}`;
+            else if (status.state === 'error') this.statusEl.title = '弹幕连接失败';
+            else if (status.state === 'closed') this.statusEl.title = '弹幕重连中';
+            else this.statusEl.title = '弹幕连接中';
+        }
+        if (this.danmakuErrorEl) {
+            const showBanner = Boolean(this.room && this.danmakuEnabled && hasError && msg);
+            this.danmakuErrorEl.textContent = showBanner ? `弹幕异常：${msg}` : '';
+            this.danmakuErrorEl.title = showBanner ? msg : '';
+            this.danmakuErrorEl.classList.toggle('hidden', !showBanner);
+        }
+    }
+
     applyDanmakuStyle() {
         const enabled = this.danmakuEnabled;
         this.danmakuEl.classList.toggle('is-off', !enabled);
@@ -509,6 +534,7 @@ class MonitorTile {
         this.danmakuEl.innerHTML = '';
         this.pendingDanmaku = [];
         this.laneReadyAt = [];
+        this.setDanmakuStatus(this.danmakuStatus);
     }
 
     setSuperChatEnabled(enabled) {
@@ -519,11 +545,23 @@ class MonitorTile {
 
     startDanmaku() {
         if (!this.room) return;
-        invoke('monitor:watchDanmaku', { roomId: this.room.roomId, tile: this.index }).catch(() => { });
+        const roomId = this.room.roomId;
+        invoke('monitor:watchDanmaku', { roomId, tile: this.index })
+            .then((res) => {
+                if (this.roomId !== roomId) return;
+                if (res?.success === false) {
+                    this.setDanmakuStatus({ state: 'error', message: res.message || '连接弹幕失败' });
+                }
+            })
+            .catch((error) => {
+                if (this.roomId !== roomId) return;
+                this.setDanmakuStatus({ state: 'error', message: error?.message || '连接弹幕失败' });
+            });
     }
 
     stopDanmaku() {
         if (!this.roomId) return;
+        this.setDanmakuStatus(null);
         invoke('monitor:unwatchDanmaku', { roomId: this.roomId, tile: this.index }).catch(() => { });
     }
 
@@ -1124,9 +1162,7 @@ function bindIpc() {
         const status = payload.status || {};
         tiles.forEach((tile) => {
             if (tile.roomId !== payload.roomId) return;
-            if (status.state === 'open') tile.statusEl.title = '弹幕已连接';
-            else if (status.state === 'error') tile.statusEl.title = status.message || '弹幕连接失败';
-            else tile.statusEl.title = `弹幕：${status.state}`;
+            tile.setDanmakuStatus(status);
         });
     });
 }

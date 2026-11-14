@@ -10,6 +10,7 @@ const STORAGE_KEY = 'danmakuji-console-v1';
 const ROOM_HUES = 8;
 const UNDO_MS = 6000;
 const FAVORITE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9Z"/></svg>';
+const DELETE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>';
 
 const $ = id => document.getElementById(id);
 const els = {
@@ -43,6 +44,7 @@ const els = {
     statTotal: $('statTotal'),
     statSc: $('statSc'),
     toasts: $('toasts'),
+    contextMenu: $('contextMenu'),
 };
 
 const state = {
@@ -204,6 +206,7 @@ function buildColumn(room) {
             </div>
         </header>
         <div class="dc-room-offline hidden">主播尚未开播，弹幕连接保持中</div>
+        <div class="dc-room-error hidden" role="status"></div>
         <div class="dc-room-popout-note">弹幕已在独立窗口显示</div>
         <div class="hj-viewport dc-room-list"></div>
         <footer class="dc-room-foot">
@@ -223,6 +226,7 @@ function buildColumn(room) {
         pending: el.querySelector('.dc-room-pending'),
         follow: el.querySelector('.dc-room-follow'),
         offline: el.querySelector('.dc-room-offline'),
+        error: el.querySelector('.dc-room-error'),
         pauseBtn: el.querySelector('[data-action="pause"]'),
         popoutBtn: el.querySelector('[data-action="popout"]'),
         favoriteBtn: el.querySelector('[data-action="favorite"]'),
@@ -311,22 +315,34 @@ function updateColumnMeta(column) {
 
 function updateColumnStatus(column) {
     const { status, refs } = column;
+    const hasError = status.state !== 'open' && !!status.message;
     refs.status.classList.remove('is-open', 'is-connecting', 'is-error');
     let text = '连接中';
     if (status.state === 'open') {
         text = '已连接';
         refs.status.classList.add('is-open');
     } else if (status.state === 'connecting') {
-        refs.status.classList.add('is-connecting');
+        text = status.reconnecting || hasError ? '重连中' : '连接中';
+        refs.status.classList.add(hasError ? 'is-error' : 'is-connecting');
     } else {
         text = status.state === 'closed' ? '重连中' : '连接失败';
         refs.status.classList.add('is-error');
     }
     refs.status.textContent = text;
     refs.status.title = status.message || text;
-    refs.foot.textContent = status.message && status.state !== 'open'
+
+    if (refs.error) {
+        refs.error.textContent = hasError ? status.message : '';
+        refs.error.title = hasError ? status.message : '';
+        refs.error.classList.toggle('hidden', !hasError);
+    }
+
+    refs.foot.classList?.toggle('is-error', hasError);
+    refs.foot.textContent = hasError
         ? status.message
-        : (column.room.liveStatus == null ? (column.liveStatusError ? '直播状态获取失败' : '直播状态获取中') : Number(column.room.liveStatus) === 1 ? `开播中 · ${column.room.title}` : '等待开播');
+        : (column.room.liveStatus == null
+            ? (column.liveStatusError ? '直播状态获取失败' : '直播状态获取中')
+            : Number(column.room.liveStatus) === 1 ? `开播中 · ${column.room.title}` : '等待开播');
     refs.foot.title = refs.foot.textContent;
 }
 
@@ -439,11 +455,25 @@ function addRoom(room, { silent = false, refreshStatus = false } = {}) {
     invoke('danmakuji:watch', { roomId: normalized.roomId }).then((res) => {
         if (!columns.has(normalized.roomId)) return;
         column.watching = true;
-        if (res?.success === false) toast(res.message || '连接弹幕失败', { kind: 'error' });
+        if (res?.success === false) {
+            const message = res.message || '连接弹幕失败';
+            column.status = { state: 'error', message };
+            updateColumnStatus(column);
+            toast(message, { kind: 'error' });
+        } else if (res?.status) {
+            column.status = res.status;
+            updateColumnStatus(column);
+        }
         const buffered = column.pendingIpc;
         column.pendingIpc = [];
         for (const message of buffered) handleRoomMessage(normalized.roomId, message);
-    }).catch(() => { column.watching = true; });
+    }).catch((error) => {
+        column.watching = true;
+        if (columns.has(normalized.roomId)) {
+            column.status = { state: 'error', message: error?.message || '连接弹幕失败' };
+            updateColumnStatus(column);
+        }
+    });
     if (refreshStatus) refreshRoomStatus(column);
 
     state.recent = Shared.rememberRecent(state.recent, normalized);
@@ -704,7 +734,58 @@ function toggleFavorite(room) {
     renderRecent();
 }
 
-function renderSavedRooms(container, rooms, emptyText) {
+function closeContextMenu() {
+    if (!els.contextMenu) return;
+    els.contextMenu.classList.add('hidden');
+    els.contextMenu.textContent = '';
+}
+
+function deleteRecentRoom(roomId) {
+    const index = state.recent.findIndex(item => item.roomId === roomId);
+    if (index < 0) return;
+    const removed = state.recent[index];
+    state.recent = Shared.removeRecent(state.recent, roomId);
+    saveState();
+    renderRecent();
+    toast(`已删除最近接入「${labelFor(removed)}」`, {
+        action: {
+            label: '撤销',
+            onClick: () => {
+                if (state.recent.some(item => item.roomId === removed.roomId)) return;
+                const next = state.recent.slice();
+                next.splice(Math.min(index, next.length), 0, removed);
+                state.recent = next.slice(0, Shared.MAX_RECENT);
+                saveState();
+                renderRecent();
+            },
+        },
+    });
+}
+
+function openRecentContextMenu(x, y, item) {
+    closeContextMenu();
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'dc-context-item is-danger';
+    deleteBtn.setAttribute('role', 'menuitem');
+    deleteBtn.innerHTML = `${DELETE_ICON}<span></span>`;
+    deleteBtn.querySelector('span').textContent = '删除此记录';
+    deleteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        closeContextMenu();
+        deleteRecentRoom(item.roomId);
+    });
+    els.contextMenu.appendChild(deleteBtn);
+    els.contextMenu.classList.remove('hidden');
+
+    const rect = els.contextMenu.getBoundingClientRect();
+    const left = Math.min(x, window.innerWidth - rect.width - 6);
+    const top = Math.min(y, window.innerHeight - rect.height - 6);
+    els.contextMenu.style.left = `${Math.max(6, left)}px`;
+    els.contextMenu.style.top = `${Math.max(6, top)}px`;
+}
+
+function renderSavedRooms(container, rooms, emptyText, { onContextMenu } = {}) {
     container.textContent = '';
     if (!rooms.length) {
         const empty = document.createElement('span');
@@ -716,6 +797,13 @@ function renderSavedRooms(container, rooms, emptyText) {
     for (const item of rooms) {
         const row = document.createElement('div');
         row.className = 'dc-saved-room';
+        if (onContextMenu) {
+            row.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onContextMenu(event, item);
+            });
+        }
         const chip = document.createElement('button');
         chip.type = 'button';
         const added = columns.has(item.roomId);
@@ -738,9 +826,17 @@ function renderSavedRooms(container, rooms, emptyText) {
 }
 
 function renderRecent() {
+    closeContextMenu();
+    const handleRecentContextMenu = (event, item) => {
+        openRecentContextMenu(event.clientX, event.clientY, item);
+    };
     renderSavedRooms(els.favoriteList, state.favorites, '点击房间或最近接入记录的星标即可收藏');
-    renderSavedRooms(els.recentList, state.recent, '接入过的直播间会出现在这里');
-    renderSavedRooms(els.emptyRecent, state.recent, '');
+    renderSavedRooms(els.recentList, state.recent, '接入过的直播间会出现在这里', {
+        onContextMenu: handleRecentContextMenu,
+    });
+    renderSavedRooms(els.emptyRecent, state.recent, '', {
+        onContextMenu: handleRecentContextMenu,
+    });
 }
 
 function updateStats() {
@@ -867,9 +963,23 @@ function bindUi() {
         });
     });
 
+    document.addEventListener('click', closeContextMenu);
+    document.addEventListener('contextmenu', closeContextMenu);
+    els.contextMenu.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+    els.rail.addEventListener('scroll', closeContextMenu, true);
+    window.addEventListener('blur', closeContextMenu);
+    window.addEventListener('resize', closeContextMenu);
+
     document.addEventListener('keydown', (event) => {
         const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '');
         if (event.key === 'Escape') {
+            if (!els.contextMenu.classList.contains('hidden')) {
+                closeContextMenu();
+                return;
+            }
             showAddError('');
             if (typing) event.target.blur();
             return;

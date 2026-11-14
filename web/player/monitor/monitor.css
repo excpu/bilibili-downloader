@@ -483,6 +483,31 @@ html[data-platform="linux"] .monitor-topbar {
     vertical-align: middle;
 }
 
+.tile-status.is-danmaku-error {
+    box-shadow: inset 0 0 0 1px rgba(255, 92, 122, 0.75);
+}
+
+.tile-danmaku-error {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 34px;
+    z-index: 3;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(24, 10, 14, 0.82);
+    border: 1px solid rgba(255, 92, 122, 0.55);
+    color: #ffd6de;
+    font-size: 11px;
+    line-height: 1.4;
+    word-break: break-word;
+    pointer-events: none;
+}
+
+.tile-danmaku-error.hidden {
+    display: none;
+}
+
 .tile-actions {
     display: flex;
     gap: 4px;

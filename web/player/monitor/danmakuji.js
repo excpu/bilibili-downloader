@@ -4,6 +4,7 @@ const Shared = window.DanmakujiShared;
 
 const titleEl = document.getElementById('hjTitle');
 const statusEl = document.getElementById('hjStatus');
+const errorEl = document.getElementById('hjError');
 const closeBtn = document.getElementById('hjClose');
 const viewportEl = document.getElementById('hjViewport');
 const settingsBtn = document.getElementById('hjSettings');
@@ -76,17 +77,24 @@ on('monitor:danmaku', (payload) => {
 on('monitor:danmaku-status', (payload) => {
     if (!roomId || payload?.roomId !== roomId) return;
     const status = payload.status || {};
+    const hasError = status.state !== 'open' && !!status.message;
     statusEl.classList.remove('is-open', 'is-error');
     if (status.state === 'open') {
         statusEl.textContent = '已连接';
         statusEl.classList.add('is-open');
     } else if (status.state === 'connecting') {
-        statusEl.textContent = '连接中';
+        statusEl.textContent = status.reconnecting || hasError ? '重连中' : '连接中';
+        if (hasError) statusEl.classList.add('is-error');
     } else {
-        statusEl.textContent = status.message || status.state || '已断开';
+        statusEl.textContent = status.state === 'closed' ? '重连中' : '连接失败';
         statusEl.classList.add('is-error');
     }
-    statusEl.title = statusEl.textContent;
+    statusEl.title = status.message || statusEl.textContent;
+    if (errorEl) {
+        errorEl.textContent = hasError ? status.message : '';
+        errorEl.title = hasError ? status.message : '';
+        errorEl.classList.toggle('hidden', !hasError);
+    }
 });
 
 closeBtn.addEventListener('click', () => {

@@ -2,6 +2,8 @@
 // 参考: https://github.com/BACNext/bilibili-API-collect-backup/blob/master/docs/misc/buvid3_4.md
 const got = require('got');
 
+const REQUEST_TIMEOUT = 8000;
+
 const DEFAULT_HEADERS = {
     Referer: 'https://www.bilibili.com/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
@@ -36,7 +38,8 @@ async function getBuvid3FromWebFrontend() {
         method: 'GET',
         headers: DEFAULT_HEADERS,
         responseType: 'json',
-        http2: true
+        http2: true,
+        timeout: { request: REQUEST_TIMEOUT }
     });
 
     const body = response.body || {};
@@ -52,7 +55,8 @@ async function getBuvid34FromSpi() {
         method: 'GET',
         headers: DEFAULT_HEADERS,
         responseType: 'json',
-        http2: true
+        http2: true,
+        timeout: { request: REQUEST_TIMEOUT }
     });
 
     const body = response.body || {};
@@ -70,14 +74,16 @@ async function getBuvid3AndNutFromHomepageHeaders() {
             method: 'HEAD',
             headers: DEFAULT_HEADERS,
             throwHttpErrors: false,
-            http2: true
+            http2: true,
+            timeout: { request: REQUEST_TIMEOUT }
         });
     } catch (error) {
         response = await got('https://www.bilibili.com/', {
             method: 'GET',
             headers: DEFAULT_HEADERS,
             throwHttpErrors: false,
-            http2: true
+            http2: true,
+            timeout: { request: REQUEST_TIMEOUT }
         });
     }
 

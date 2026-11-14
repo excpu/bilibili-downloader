@@ -170,6 +170,18 @@ button {
     color: var(--danger);
 }
 
+.hj-error {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--danger) 24%, var(--stroke));
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    color: var(--danger);
+    font-size: 11px;
+    line-height: 1.45;
+    word-break: break-word;
+    user-select: text;
+}
+
 .hj-count {
     font-size: 10px;
     font-variant-numeric: tabular-nums;

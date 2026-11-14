@@ -193,6 +193,13 @@
         ].slice(0, max);
     }
 
+    function removeRecent(recent, roomId) {
+        const targetId = Number(roomId);
+        if (!Array.isArray(recent)) return [];
+        if (!Number.isFinite(targetId) || targetId <= 0) return recent.slice();
+        return recent.filter(item => Number(item?.roomId) !== targetId);
+    }
+
     // 滚动窗口内的弹幕速率（条/分），timestamps 为入列时间数组
     function formatRate(timestamps, now = Date.now(), windowMs = RATE_WINDOW) {
         const from = now - windowMs;
@@ -225,6 +232,7 @@
         upsertRoom,
         moveRoom,
         rememberRecent,
+        removeRecent,
         formatRate,
     };
 

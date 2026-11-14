@@ -44,26 +44,48 @@ function encWbi(params, img_key, sub_key) {
 // 获取最新的 img_key 和 sub_key
 async function getWbiKeys(signal) {
     const credentialCookie = auth.getConstructedCookie();
-    const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
-        signal,
-        headers: {
-            'Referer': 'https://www.bilibili.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-            'Accept': 'application/json',
-            'Cookie': credentialCookie // 登录验证
+    const timeoutController = !signal && typeof AbortController === 'function' ? new AbortController() : null;
+    const timeoutTimer = timeoutController ? setTimeout(() => timeoutController.abort(), 10000) : null;
+    try {
+        const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
+            signal: signal || timeoutController?.signal,
+            headers: {
+                'Referer': 'https://www.bilibili.com/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+                'Accept': 'application/json',
+                'Cookie': credentialCookie // 登录验证
+            }
+        });
+        if (!res.ok) {
+            throw new Error(`获取 WBI 密钥失败 (HTTP ${res.status})`);
         }
-    })
-    const { data: { wbi_img: { img_url, sub_url } } } = await res.json()
+        const json = await res.json();
+        const img_url = json?.data?.wbi_img?.img_url;
+        const sub_url = json?.data?.wbi_img?.sub_url;
+        if (!img_url || !sub_url) {
+            const codeText = json?.code !== undefined ? ` (${json.code})` : '';
+            throw new Error(`获取 WBI 密钥失败${codeText}${json?.message ? `: ${json.message}` : ''}`);
+        }
 
-    return {
-        img_key: img_url.slice(
-            img_url.lastIndexOf('/') + 1,
-            img_url.lastIndexOf('.')
-        ),
-        sub_key: sub_url.slice(
-            sub_url.lastIndexOf('/') + 1,
-            sub_url.lastIndexOf('.')
-        )
+        return {
+            img_key: img_url.slice(
+                img_url.lastIndexOf('/') + 1,
+                img_url.lastIndexOf('.')
+            ),
+            sub_key: sub_url.slice(
+                sub_url.lastIndexOf('/') + 1,
+                sub_url.lastIndexOf('.')
+            ),
+            isLogin: Boolean(json.data.isLogin),
+            mid: Number(json.data.mid) || 0,
+        };
+    } catch (error) {
+        if (error?.name === 'AbortError' && timeoutController?.signal.aborted) {
+            throw new Error('获取 WBI 密钥超时');
+        }
+        throw error;
+    } finally {
+        if (timeoutTimer) clearTimeout(timeoutTimer);
     }
 }
 module.exports = {

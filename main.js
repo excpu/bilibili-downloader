@@ -6,6 +6,7 @@ const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const registerIpc = require('./ipc');
 const { hasActiveDownloads, pauseAllDownloads } = require('./ipc/download');
+const { initObsServer, stopObsServer } = require('./ipc/danmakuji');
 const theme = require('./modules/theme');
 const Setting = require('./modules/config_setting');
 
@@ -53,6 +54,7 @@ function createWindow() {
 
     // 注册 IPC 处理器
     registerIpc(win);
+    initObsServer();
 
     win.on('close', (event) => {
         if (allowClose || !hasActiveDownloads()) {
@@ -134,6 +136,10 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
+
+app.on('before-quit', () => {
+    stopObsServer();
+});
 
 // Referrer 防护，防止部分请求被拒绝
 app.on('ready', () => {

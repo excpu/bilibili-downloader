@@ -8,7 +8,7 @@ const DEFAULT_CHANNELS = {
     status: 'monitor:danmaku-status',
 };
 
-// roomId -> { client, lastStatus, subscribers: Map<webContentsId, Map<tile, channels>> }
+// roomId -> { client, lastStatus, subscribers: Map<webContentsId, Map<tile, channels>>, listeners: Map<listenerId, { onMessage, onStatus }> }
 const rooms = new Map();
 // 已挂载 destroyed 监听的渲染进程，避免重复注册
 const watchedContents = new Set();
@@ -46,6 +46,46 @@ function broadcast(roomId, kind, payload) {
             }
         }
     }
+    for (const listener of entry.listeners.values()) {
+        try {
+            if (kind === 'message') listener.onMessage?.({ roomId, ...payload });
+            else if (kind === 'status') listener.onStatus?.({ roomId, ...payload });
+        } catch (error) {
+            console.warn('分发直播弹幕到监听器失败:', error.message);
+        }
+    }
+}
+
+function ensureRoom(roomId) {
+    const room = Number(roomId);
+    if (!Number.isFinite(room) || room <= 0) throw new Error('缺少直播间号');
+    let entry = rooms.get(room);
+    let fresh = false;
+    if (!entry) {
+        entry = {
+            client: null,
+            lastStatus: { state: 'connecting' },
+            subscribers: new Map(),
+            listeners: new Map(),
+        };
+        entry.client = new LiveDanmakuClient(room, {
+            onMessage: (message) => broadcast(room, 'message', { message }),
+            onStatus: (status) => {
+                entry.lastStatus = status;
+                broadcast(room, 'status', { status });
+            },
+        });
+        rooms.set(room, entry);
+        fresh = true;
+    }
+    return { room, entry, fresh };
+}
+
+function cleanupRoom(roomId, entry) {
+    if (!entry.subscribers.size && !entry.listeners.size) {
+        entry.client.stop();
+        rooms.delete(roomId);
+    }
 }
 
 function watchContents(id) {
@@ -62,28 +102,8 @@ function watchContents(id) {
 
 // 订阅一个房间；tile 用于区分同一窗口内的多个画面 / 多列
 function subscribe(roomId, webContentsId, tile = 'default', channels = {}) {
-    const room = Number(roomId);
-    if (!Number.isFinite(room) || room <= 0) throw new Error('缺少直播间号');
     const merged = { ...DEFAULT_CHANNELS, ...channels };
-
-    let entry = rooms.get(room);
-    let fresh = false;
-    if (!entry) {
-        entry = {
-            client: null,
-            lastStatus: { state: 'connecting' },
-            subscribers: new Map(),
-        };
-        entry.client = new LiveDanmakuClient(room, {
-            onMessage: (message) => broadcast(room, 'message', { message }),
-            onStatus: (status) => {
-                entry.lastStatus = status;
-                broadcast(room, 'status', { status });
-            },
-        });
-        rooms.set(room, entry);
-        fresh = true;
-    }
+    const { room, entry, fresh } = ensureRoom(roomId);
 
     let tiles = entry.subscribers.get(webContentsId);
     if (!tiles) {
@@ -102,16 +122,44 @@ function subscribe(roomId, webContentsId, tile = 'default', channels = {}) {
 }
 
 function unsubscribe(roomId, webContentsId, tile = 'default') {
-    const entry = rooms.get(Number(roomId));
+    const room = Number(roomId);
+    const entry = rooms.get(room);
     if (!entry) return;
     const tiles = entry.subscribers.get(webContentsId);
     if (tiles) {
         tiles.delete(String(tile));
         if (!tiles.size) entry.subscribers.delete(webContentsId);
     }
-    if (!entry.subscribers.size) {
-        entry.client.stop();
-        rooms.delete(Number(roomId));
+    cleanupRoom(room, entry);
+}
+
+// 注册主进程内监听器（供本地 OBS HTTP/SSE 服务等非渲染进程订阅复用连接）
+function addListener(roomId, listenerId, handlers = {}) {
+    const { room, entry, fresh } = ensureRoom(roomId);
+    entry.listeners.set(String(listenerId), {
+        onMessage: handlers.onMessage,
+        onStatus: handlers.onStatus,
+    });
+    if (fresh) entry.client.start();
+    try {
+        handlers.onStatus?.({ roomId: room, status: entry.lastStatus });
+    } catch { }
+    return entry.lastStatus;
+}
+
+function removeListener(roomId, listenerId) {
+    const room = Number(roomId);
+    const entry = rooms.get(room);
+    if (!entry) return;
+    entry.listeners.delete(String(listenerId));
+    cleanupRoom(room, entry);
+}
+
+function releaseListener(listenerId) {
+    const key = String(listenerId);
+    for (const [roomId, entry] of [...rooms]) {
+        if (!entry.listeners.delete(key)) continue;
+        cleanupRoom(roomId, entry);
     }
 }
 
@@ -120,10 +168,7 @@ function releaseContents(webContentsId) {
     watchedContents.delete(webContentsId);
     for (const [roomId, entry] of [...rooms]) {
         if (!entry.subscribers.delete(webContentsId)) continue;
-        if (!entry.subscribers.size) {
-            entry.client.stop();
-            rooms.delete(roomId);
-        }
+        cleanupRoom(roomId, entry);
     }
 }
 
@@ -147,6 +192,9 @@ module.exports = {
     DEFAULT_CHANNELS,
     subscribe,
     unsubscribe,
+    addListener,
+    removeListener,
+    releaseListener,
     releaseContents,
     statusOf,
     activeRoomCount,

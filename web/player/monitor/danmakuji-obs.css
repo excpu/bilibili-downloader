@@ -1,0 +1,48 @@
+/* ==========================================================================
+   弹幕姬 · OBS 透明背景覆层
+   复用 danmakuji.css 的全部弹幕条目、徽章、大航海与 SC 样式，只覆盖透明底色、
+   隐藏滚动条与可读性所需的轻量阴影。
+   ========================================================================== */
+
+html[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+}
+
+html,
+body,
+.obs-viewport {
+    background: transparent !important;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+}
+
+.obs-viewport {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.obs-viewport::-webkit-scrollbar {
+    display: none;
+}
+
+/* 透明背景叠加在深色或高动态画面上时，给正文补充轻量描边感阴影保持清晰 */
+html[data-theme="dark"] .hj-row {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78), 0 0 1px rgba(0, 0, 0, 0.9);
+}
+
+html[data-theme="dark"] .hj-rank,
+html[data-theme="dark"] .hj-admin,
+html[data-theme="dark"] .hj-wealth,
+html[data-theme="dark"] .hj-medal,
+html[data-theme="dark"] .hj-tag,
+html[data-theme="dark"] .hj-room-tag,
+html[data-theme="dark"] .hj-sc {
+    text-shadow: none;
+}

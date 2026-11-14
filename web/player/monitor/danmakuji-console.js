@@ -45,6 +45,23 @@ const els = {
     statSc: $('statSc'),
     toasts: $('toasts'),
     contextMenu: $('contextMenu'),
+    obsTrigger: $('obsTrigger'),
+    obsClientBadge: $('obsClientBadge'),
+    obsModal: $('obsModal'),
+    obsModalCard: $('obsModalCard'),
+    obsStatusBadge: $('obsStatusBadge'),
+    obsClientCount: $('obsClientCount'),
+    obsModalClose: $('obsModalClose'),
+    obsError: $('obsError'),
+    obsEnabled: $('obsEnabled'),
+    obsPort: $('obsPort'),
+    obsApplyPort: $('obsApplyPort'),
+    obsAutoStart: $('obsAutoStart'),
+    obsThemeGroup: $('obsThemeGroup'),
+    obsFollowUrl: $('obsFollowUrl'),
+    obsCopyFollow: $('obsCopyFollow'),
+    obsPreviewFollow: $('obsPreviewFollow'),
+    obsRoomUrls: $('obsRoomUrls'),
 };
 
 const state = {
@@ -57,6 +74,15 @@ const state = {
     railOpen: true,
 };
 
+const obsState = {
+    running: false,
+    port: 18390,
+    baseUrl: 'http://127.0.0.1:18390',
+    autoStart: false,
+    themeMode: 'dark',
+    clientCount: 0,
+};
+
 // roomId -> { room, el, list, chip, status, counts, refs }
 const columns = new Map();
 let mergedList = null;
@@ -64,6 +90,7 @@ let dragRoomId = null;
 let adding = false;
 let statsTimer = null;
 let errorTimer = null;
+let obsReady = false;
 
 // ---------------- 本地状态 ----------------
 function loadState() {
@@ -193,6 +220,9 @@ function buildColumn(room) {
                 </button>
                 <button type="button" class="dc-room-btn" data-action="popout" title="弹出为独立窗口" aria-label="弹出为独立窗口" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <button type="button" class="dc-room-btn" data-action="obs" title="复制 OBS 透明弹幕地址" aria-label="复制 OBS 透明弹幕地址">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2M7 9h10M7 13h6"/></svg>
                 </button>
                 <button type="button" class="dc-room-btn" data-action="open" title="在浏览器中打开直播间" aria-label="在浏览器中打开直播间">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9Z"/></svg>
@@ -368,6 +398,9 @@ function handleColumnAction(column, action) {
         case 'popout':
             togglePopout(column);
             break;
+        case 'obs':
+            copyRoomObsUrl(column);
+            break;
         case 'open':
             invoke('danmakuji:openRoomPage', column.roomId);
             break;
@@ -416,6 +449,7 @@ function reorderColumns() {
         anchor = column.el;
     }
     renderChips();
+    syncObsState({ rooms: state.rooms });
 }
 
 // ---------------- 房间增删 ----------------
@@ -670,6 +704,7 @@ function applySettings(next, { persist = true } = {}) {
     applyColumns();
     SettingsPanel.sync(els.settingsPanel, state.settings);
     if (persist) saveState();
+    syncObsState({ settings: state.settings });
 }
 
 // 自动分栏：按舞台宽度容纳尽可能多的 ≥300px 栏目；固定分栏则直接使用设定值
@@ -908,6 +943,158 @@ function handleRoomMessage(roomId, message) {
     mergedList.push(stamped);
 }
 
+// ---------------- OBS 本地服务 ----------------
+async function copyToClipboard(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch { }
+    }
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.setAttribute('readonly', '');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    let ok = false;
+    try {
+        ok = document.execCommand('copy');
+    } catch { }
+    input.remove();
+    return ok;
+}
+
+function syncObsState(payload) {
+    if (!obsReady || typeof invoke !== 'function') return;
+    invoke('danmakuji:obsSyncState', payload).catch(() => { });
+}
+
+function showObsError(message) {
+    if (!els.obsError) return;
+    els.obsError.textContent = message || '';
+    els.obsError.classList.toggle('hidden', !message);
+}
+
+function renderObsRoomUrls() {
+    if (!els.obsRoomUrls) return;
+    els.obsRoomUrls.textContent = '';
+    if (!state.rooms.length) {
+        const empty = document.createElement('div');
+        empty.className = 'dc-obs-empty';
+        empty.textContent = `暂未接入直播间，接入后会在此列出单房间地址；也可直接拼接 ${obsState.baseUrl}/?room=房间号`;
+        els.obsRoomUrls.appendChild(empty);
+        return;
+    }
+    for (const room of state.rooms) {
+        const item = document.createElement('div');
+        item.className = 'dc-obs-room-item';
+
+        const name = document.createElement('div');
+        name.className = 'dc-obs-room-name';
+        name.textContent = `${labelFor(room)} · #${room.roomId}`;
+        item.appendChild(name);
+
+        const row = document.createElement('div');
+        row.className = 'dc-obs-url-row';
+
+        const url = `${obsState.baseUrl}/?room=${room.roomId}`;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.readOnly = true;
+        input.className = 'dms-input dc-obs-url';
+        input.value = url;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'dc-btn';
+        copyBtn.textContent = '复制';
+        copyBtn.addEventListener('click', async () => {
+            if (!await ensureObsRunning()) return;
+            await copyToClipboard(`${obsState.baseUrl}/?room=${room.roomId}`);
+            toast(`已复制「${labelFor(room)}」OBS 透明地址`, { kind: 'ok' });
+        });
+
+        row.appendChild(input);
+        row.appendChild(copyBtn);
+        item.appendChild(row);
+        els.obsRoomUrls.appendChild(item);
+    }
+}
+
+function applyObsStatus(next) {
+    if (!next || typeof next !== 'object') return;
+    Object.assign(obsState, next);
+    if (!els.obsTrigger) return;
+
+    const running = !!obsState.running;
+    const count = Number(obsState.clientCount) || 0;
+    els.obsTrigger.classList.toggle('is-running', running);
+    els.obsClientBadge.textContent = String(count);
+    els.obsClientBadge.classList.toggle('hidden', !running || count <= 0);
+    els.obsStatusBadge.textContent = running ? '运行中' : '已停止';
+    els.obsStatusBadge.classList.toggle('is-running', running);
+    els.obsClientCount.textContent = `已连接 ${count} 个源`;
+    els.obsEnabled.checked = running;
+    els.obsAutoStart.checked = !!obsState.autoStart;
+    if (document.activeElement !== els.obsPort) {
+        els.obsPort.value = String(obsState.port);
+    }
+    els.obsFollowUrl.value = `${obsState.baseUrl}/`;
+    els.obsPreviewFollow.disabled = !running;
+    els.obsThemeGroup.querySelectorAll('[data-obs-theme]').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.obsTheme === obsState.themeMode);
+    });
+    renderObsRoomUrls();
+}
+
+async function ensureObsRunning() {
+    if (obsState.running) return true;
+    const res = await invoke('danmakuji:obsStart', {});
+    if (res?.data) applyObsStatus(res.data);
+    if (res?.success === false) {
+        const msg = res.message || '启动 OBS 服务失败';
+        showObsError(msg);
+        toast(msg, { kind: 'error' });
+        return false;
+    }
+    showObsError('');
+    syncObsState({ settings: state.settings, rooms: state.rooms });
+    return true;
+}
+
+async function copyRoomObsUrl(column) {
+    const wasRunning = obsState.running;
+    if (!await ensureObsRunning()) return;
+    const url = `${obsState.baseUrl}/?room=${column.roomId}`;
+    await copyToClipboard(url);
+    toast(
+        wasRunning
+            ? `已复制「${labelFor(column.room)}」OBS 透明弹幕地址`
+            : `已启动 OBS 服务并复制「${labelFor(column.room)}」透明地址`,
+        { kind: 'ok' }
+    );
+}
+
+function openObsModal() {
+    if (!els.obsModal) return;
+    showObsError('');
+    els.obsModal.classList.remove('hidden');
+    els.obsTrigger.setAttribute('aria-expanded', 'true');
+    syncObsState({ settings: state.settings, rooms: state.rooms });
+    invoke('danmakuji:obsStatus').then((res) => {
+        if (res?.success && res.data) applyObsStatus(res.data);
+    }).catch(() => { });
+    renderObsRoomUrls();
+}
+
+function closeObsModal() {
+    if (!els.obsModal || els.obsModal.classList.contains('hidden')) return;
+    els.obsModal.classList.add('hidden');
+    els.obsTrigger.setAttribute('aria-expanded', 'false');
+}
+
 function bindIpc() {
     on('danmakuji:room-message', (payload) => {
         const roomId = Number(payload?.roomId);
@@ -931,6 +1118,7 @@ function bindIpc() {
 
     on('danmakuji:window-opened', (payload) => setPopoutState(Number(payload?.roomId), true));
     on('danmakuji:window-closed', (payload) => setPopoutState(Number(payload?.roomId), false));
+    on('danmakuji:obs-status', (status) => applyObsStatus(status));
 }
 
 // ---------------- UI 事件 ----------------
@@ -946,6 +1134,62 @@ function bindUi() {
     });
     els.togglePause.addEventListener('click', () => applyPaused(!state.paused));
     els.exportAll.addEventListener('click', exportAll);
+    els.obsTrigger.addEventListener('click', () => {
+        if (els.obsModal.classList.contains('hidden')) openObsModal();
+        else closeObsModal();
+    });
+    els.obsModalClose.addEventListener('click', closeObsModal);
+    els.obsModal.addEventListener('click', (event) => {
+        if (event.target === els.obsModal) closeObsModal();
+    });
+    els.obsEnabled.addEventListener('change', async () => {
+        showObsError('');
+        if (els.obsEnabled.checked) {
+            const res = await invoke('danmakuji:obsStart', { port: Number(els.obsPort.value) || obsState.port });
+            if (res?.data) applyObsStatus(res.data);
+            if (res?.success === false) {
+                showObsError(res.message || '启动 OBS 服务失败');
+                els.obsEnabled.checked = false;
+            } else {
+                syncObsState({ settings: state.settings, rooms: state.rooms });
+                toast('OBS 透明弹幕服务已开启', { kind: 'ok' });
+            }
+        } else {
+            const res = await invoke('danmakuji:obsStop');
+            if (res?.data) applyObsStatus(res.data);
+            toast('OBS 透明弹幕服务已停止', { kind: 'ok' });
+        }
+    });
+    els.obsApplyPort.addEventListener('click', async () => {
+        showObsError('');
+        const res = await invoke('danmakuji:obsConfig', { port: Number(els.obsPort.value) });
+        if (res?.data) applyObsStatus(res.data);
+        if (res?.success === false) {
+            showObsError(res.message || '修改端口失败');
+        } else {
+            toast(`OBS 服务端口已更新为 ${res.data?.port || els.obsPort.value}`, { kind: 'ok' });
+        }
+    });
+    els.obsAutoStart.addEventListener('change', async () => {
+        const res = await invoke('danmakuji:obsConfig', { autoStart: els.obsAutoStart.checked });
+        if (res?.data) applyObsStatus(res.data);
+        if (res?.success === false) showObsError(res.message || '保存自动启动设置失败');
+    });
+    els.obsThemeGroup.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-obs-theme]');
+        if (!button) return;
+        const res = await invoke('danmakuji:obsConfig', { themeMode: button.dataset.obsTheme });
+        if (res?.data) applyObsStatus(res.data);
+    });
+    els.obsCopyFollow.addEventListener('click', async () => {
+        if (!await ensureObsRunning()) return;
+        await copyToClipboard(els.obsFollowUrl.value);
+        toast('已复制全部房间 OBS 透明地址', { kind: 'ok' });
+    });
+    els.obsPreviewFollow.addEventListener('click', async () => {
+        const res = await invoke('danmakuji:openObsPreview', els.obsFollowUrl.value);
+        if (res?.success === false) toast(res.message || '打开预览失败', { kind: 'error' });
+    });
     els.toggleRail.addEventListener('click', () => applyRail(!state.railOpen));
     els.mergedClear.addEventListener('click', () => {
         mergedList.clear();
@@ -976,6 +1220,10 @@ function bindUi() {
     document.addEventListener('keydown', (event) => {
         const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '');
         if (event.key === 'Escape') {
+            if (els.obsModal && !els.obsModal.classList.contains('hidden')) {
+                closeObsModal();
+                return;
+            }
             if (!els.contextMenu.classList.contains('hidden')) {
                 closeContextMenu();
                 return;
@@ -1041,6 +1289,12 @@ function init() {
 
     invoke('danmakuji:roomWindowState').then((res) => {
         for (const roomId of res?.rooms || []) setPopoutState(Number(roomId), true);
+    }).catch(() => { });
+
+    obsReady = true;
+    syncObsState({ settings: state.settings, rooms: state.rooms });
+    invoke('danmakuji:obsStatus').then((res) => {
+        if (res?.success && res.data) applyObsStatus(res.data);
     }).catch(() => { });
 }
 

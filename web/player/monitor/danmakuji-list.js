@@ -6,6 +6,8 @@
 
     const OVERSCAN = 6;
     const MAX_HISTORY = 10000;
+    const HISTORY_TRIM_BATCH = 500;
+    const HISTORY_TRIM_LIMIT = MAX_HISTORY + HISTORY_TRIM_BATCH;
     const AUTO_SCROLL_GAP = 28;
     const LIST_VERTICAL_PADDING = 16;
     const BASE_FONT_SIZE = 13;
@@ -147,6 +149,12 @@
             el.appendChild(lv);
         }
         return el;
+    }
+
+    function countExcessBefore(list, firstId) {
+        let excess = 0;
+        while (excess < list.length && list[excess]._id < firstId) excess++;
+        return excess;
     }
 
     class DanmakujiList {
@@ -685,17 +693,19 @@
             const visible = Shared.shouldShowMessage(entry, this.settings);
             if (visible) {
                 this.timestamps.push(entry._at);
-                if (this.timestamps.length > 4000) this.timestamps.splice(0, this.timestamps.length - 4000);
+                if (this.timestamps.length >= 4000 + HISTORY_TRIM_BATCH) {
+                    this.timestamps.splice(0, this.timestamps.length - 4000);
+                }
             }
 
             if (this.paused) {
                 this.sourcePending.push(entry);
-                if (this.sourcePending.length > MAX_HISTORY) this.sourcePending.splice(0, this.sourcePending.length - MAX_HISTORY);
+                if (this.sourcePending.length >= HISTORY_TRIM_LIMIT) {
+                    this.sourcePending.splice(0, this.sourcePending.length - MAX_HISTORY);
+                    const excess = countExcessBefore(this.pending, this.sourcePending[0]._id);
+                    if (excess) this.pending.splice(0, excess);
+                }
                 if (visible) this.pending.push(entry);
-                const firstId = this.sourcePending[0]._id;
-                let excess = 0;
-                while (excess < this.pending.length && this.pending[excess]._id < firstId) excess++;
-                if (excess) this.pending.splice(0, excess);
                 this.onPendingChange(this.pending.length);
                 return visible;
             }
@@ -705,17 +715,23 @@
 
         append(entry) {
             this.sourceHistory.push(entry);
-            if (this.sourceHistory.length > MAX_HISTORY) {
+            // 满 MAX_HISTORY + HISTORY_TRIM_BATCH (10500) 再批量裁剪 500 条，避免每次入列触发头部 splice 与全量前缀和重算
+            if (this.sourceHistory.length >= HISTORY_TRIM_LIMIT) {
                 this.sourceHistory.splice(0, this.sourceHistory.length - MAX_HISTORY);
-                const firstId = this.sourceHistory[0]._id;
-                let excess = 0;
-                while (excess < this.history.length && this.history[excess]._id < firstId) excess++;
+                const excess = countExcessBefore(this.history, this.sourceHistory[0]._id);
                 if (excess) {
                     this.ensureOffsets();
                     const removedHeight = this.offsets[excess];
                     this.history.splice(0, excess);
                     this.heights.splice(0, excess);
                     this.dirtyFrom = 0;
+                    if (this.currentStart >= excess) {
+                        this.currentStart -= excess;
+                        this.currentEnd -= excess;
+                    } else {
+                        this.currentStart = 0;
+                        this.currentEnd = 0;
+                    }
                     if (!this.autoScroll) {
                         this.setScrollTop(Math.max(0, this.viewportEl.scrollTop - removedHeight));
                     }
@@ -856,6 +872,7 @@
     }
 
     DanmakujiList.MAX_HISTORY = MAX_HISTORY;
+    DanmakujiList.HISTORY_TRIM_BATCH = HISTORY_TRIM_BATCH;
     global.DanmakujiList = DanmakujiList;
     if (typeof module !== 'undefined' && module.exports) module.exports = DanmakujiList;
 })(typeof window !== 'undefined' ? window : globalThis);

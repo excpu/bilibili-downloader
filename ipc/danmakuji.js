@@ -1,13 +1,15 @@
-// 弹幕姬：多房间控制台窗口 + 单房间独立窗口。
-// 弹幕连接统一交给 live_room_hub 按房间复用，这里只负责窗口生命周期与 IPC。
-const { ipcMain, BrowserWindow, dialog, shell } = require('electron');
+// 弹幕姬：多房间控制台窗口 + 单房间独立窗口 + OBS 本地透明弹幕服务。
+// 弹幕连接统一交给 live_room_hub 按房间复用，这里只负责窗口生命周期、OBS 服务与 IPC。
+const { ipcMain, BrowserWindow, dialog, shell, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const theme = require('../modules/theme');
 const hub = require('../modules/live_room_hub');
+const Setting = require('../modules/config_setting');
 const { resolveRoom } = require('../modules/bilibili_live');
 const { sanitizePath } = require('../modules/sanitize_path');
+const { DanmakujiObsServer, validatePort } = require('../modules/danmakuji_obs_server');
 
 // 与 danmakuji-console.css 中的顶栏高度、页面底色保持一致
 const CONSOLE_THEME = {
@@ -34,6 +36,65 @@ let consoleWindow = null;
 const roomWindows = new Map();
 // 房间独立窗口开关的观察者（DD 监控室据此恢复内嵌弹幕）
 const roomWindowObservers = new Set();
+
+let settingStore = null;
+let obsServer = null;
+let themeWatcherBound = false;
+
+function getSettingStore() {
+    if (!settingStore) settingStore = new Setting();
+    return settingStore;
+}
+
+function notifyObsStatus(status) {
+    if (consoleWindow && !consoleWindow.isDestroyed()) {
+        try { consoleWindow.webContents.send('danmakuji:obs-status', status); } catch { }
+    }
+}
+
+function getObsServer() {
+    if (!obsServer) {
+        const saved = getSettingStore().getDanmakujiObsSettings();
+        obsServer = new DanmakujiObsServer({
+            hub,
+            resolveRoom,
+            port: saved.port,
+            autoStart: saved.autoStart,
+            themeMode: saved.themeMode,
+            systemDark: theme.isDark?.() ?? true,
+            displaySettings: saved.displaySettings,
+            onStatusChange: notifyObsStatus,
+        });
+    }
+    if (!themeWatcherBound && nativeTheme && typeof nativeTheme.on === 'function') {
+        themeWatcherBound = true;
+        nativeTheme.on('updated', () => {
+            obsServer?.updateTheme({ systemDark: theme.isDark?.() ?? true });
+        });
+    }
+    return obsServer;
+}
+
+async function initObsServer() {
+    const server = getObsServer();
+    const saved = getSettingStore().getDanmakujiObsSettings();
+    if (!saved.autoStart || server.running) return server.getStatus();
+    try {
+        return await server.start(saved.port);
+    } catch (error) {
+        console.warn('自动启动 OBS 透明弹幕服务失败:', error.message);
+        return server.getStatus();
+    }
+}
+
+async function stopObsServer() {
+    if (!obsServer) return;
+    try {
+        await obsServer.stop();
+    } catch (error) {
+        console.warn('停止 OBS 透明弹幕服务失败:', error.message);
+    }
+}
 
 function notifyRoomWindow(roomId, opened) {
     const channel = opened ? 'danmakuji:window-opened' : 'danmakuji:window-closed';
@@ -247,6 +308,103 @@ module.exports = function registerDanmakujiIpc() {
         if (Number.isFinite(room) && room > 0) shell.openExternal(`https://live.bilibili.com/${room}`);
         return { success: true };
     });
+
+    // ---------------- OBS 本地透明弹幕服务 ----------------
+    ipcMain.handle('danmakuji:obsStatus', () => ({
+        success: true,
+        data: getObsServer().getStatus(),
+    }));
+
+    ipcMain.handle('danmakuji:obsStart', async (event, payload = {}) => {
+        try {
+            const server = getObsServer();
+            const patch = {};
+            if (payload.port !== undefined) patch.port = validatePort(payload.port);
+            if (payload.themeMode !== undefined) patch.themeMode = payload.themeMode;
+            if (typeof payload.autoStart === 'boolean') patch.autoStart = payload.autoStart;
+            const saved = Object.keys(patch).length
+                ? getSettingStore().updateDanmakujiObsSettings(patch)
+                : getSettingStore().getDanmakujiObsSettings();
+            server.configure({ ...saved, systemDark: theme.isDark?.() ?? true });
+            const status = await server.start(saved.port);
+            return { success: true, data: status };
+        } catch (error) {
+            return {
+                success: false,
+                message: error.message || '启动 OBS 服务失败',
+                data: getObsServer().getStatus(),
+            };
+        }
+    });
+
+    ipcMain.handle('danmakuji:obsStop', async () => {
+        try {
+            const status = await getObsServer().stop();
+            return { success: true, data: status };
+        } catch (error) {
+            return { success: false, message: error.message || '停止 OBS 服务失败' };
+        }
+    });
+
+    ipcMain.handle('danmakuji:obsConfig', async (event, payload = {}) => {
+        const server = getObsServer();
+        const prev = getSettingStore().getDanmakujiObsSettings();
+        try {
+            const patch = {};
+            if (payload.port !== undefined) patch.port = validatePort(payload.port);
+            if (payload.themeMode !== undefined) patch.themeMode = payload.themeMode;
+            if (typeof payload.autoStart === 'boolean') patch.autoStart = payload.autoStart;
+            const next = getSettingStore().updateDanmakujiObsSettings(patch);
+            const portChanged = next.port !== prev.port;
+
+            server.configure({ autoStart: next.autoStart, systemDark: theme.isDark?.() ?? true });
+            if (payload.themeMode !== undefined) {
+                server.updateTheme({ themeMode: next.themeMode, systemDark: theme.isDark?.() ?? true });
+            }
+            if (server.running && portChanged) {
+                await server.start(next.port);
+            } else {
+                server.configure({ port: next.port });
+                notifyObsStatus(server.getStatus());
+            }
+            return { success: true, data: server.getStatus() };
+        } catch (error) {
+            // 切换端口失败时回滚端口配置，保持服务与持久化一致
+            if (server.running) {
+                getSettingStore().updateDanmakujiObsSettings({ port: server.port });
+            } else {
+                getSettingStore().updateDanmakujiObsSettings({ port: prev.port });
+            }
+            return {
+                success: false,
+                message: error.message || '更新 OBS 配置失败',
+                data: server.getStatus(),
+            };
+        }
+    });
+
+    ipcMain.handle('danmakuji:obsSyncState', (event, payload = {}) => {
+        const server = getObsServer();
+        if (payload.settings && typeof payload.settings === 'object') {
+            const normalized = server.updateSettings(payload.settings);
+            getSettingStore().updateDanmakujiObsSettings({ displaySettings: normalized });
+        }
+        if (Array.isArray(payload.rooms)) {
+            server.updateConsoleRooms(payload.rooms);
+        }
+        return { success: true };
+    });
+
+    ipcMain.handle('danmakuji:openObsPreview', (event, rawUrl) => {
+        const status = getObsServer().getStatus();
+        if (!status.running) return { success: false, message: '请先启动 OBS 本地服务' };
+        const url = String(rawUrl || '').trim();
+        if (!url.startsWith(`${status.baseUrl}/`)) {
+            return { success: false, message: '无效的 OBS 预览地址' };
+        }
+        shell.openExternal(url);
+        return { success: true };
+    });
 };
 
 module.exports.openRoomWindow = openRoomWindow;
@@ -254,4 +412,6 @@ module.exports.closeRoomWindow = closeRoomWindow;
 module.exports.closeAllRoomWindows = closeAllRoomWindows;
 module.exports.isRoomWindowOpen = isRoomWindowOpen;
 module.exports.onRoomWindowChanged = onRoomWindowChanged;
+module.exports.initObsServer = initObsServer;
+module.exports.stopObsServer = stopObsServer;
 module.exports.MAX_BATCH_ROOMS = MAX_BATCH_ROOMS;

@@ -19,7 +19,13 @@
         <button type="button" class="hj-close" id="hjClose" title="关闭">✕</button>
     </header>
     <div class="hj-error hidden" id="hjError" role="status"></div>
-    <section class="hj-settings hidden" id="hjSettingsPanel" aria-label="显示设置"></section>
+    <section class="hj-settings hidden" id="hjSettingsPanel" aria-label="显示设置">
+        <div id="hjSettingsMount"></div>
+        <div class="hj-obs-box">
+            <button type="button" class="hj-obs-btn" id="hjObsCopy">复制 OBS 透明弹幕地址</button>
+            <span class="hj-obs-hint" id="hjObsHint"></span>
+        </div>
+    </section>
     <main class="hj-viewport" id="hjViewport"></main>
     <script src="./danmakuji-shared.js"></script>
     <script src="./danmakuji-list.js"></script>

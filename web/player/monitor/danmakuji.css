@@ -255,6 +255,39 @@ button {
     padding: 10px 12px;
 }
 
+.hj-obs-box {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--stroke);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.hj-obs-btn {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--blue) 10%, var(--surface));
+    color: var(--blue);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+.hj-obs-btn:hover {
+    background: var(--glow-blue);
+    border-color: var(--blue);
+}
+
+.hj-obs-hint {
+    font-size: 11px;
+    color: var(--muted);
+}
+
 /* ---------------- 弹幕列表（动态行高虚拟滚动） ---------------- */
 .hj-viewport {
     flex: 1;

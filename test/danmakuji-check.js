@@ -289,19 +289,59 @@ test('暂停期间切换只看 SC 不丢失待显示消息，恢复和清空正�
 
 test('SC 隐藏缓存遵守历史上限，关键词过滤仍剔除不匹配消息', () => {
     const list = createMessageList();
+    const trimLimit = DanmakujiList.MAX_HISTORY + DanmakujiList.HISTORY_TRIM_BATCH;
     list.push({ type: 'superchat', text: 'old', user: 'A' });
     list.setSettings({ ...list.settings, superchatOnly: true });
-    for (let i = 0; i < DanmakujiList.MAX_HISTORY + 2; i++) {
+    for (let i = 0; i < trimLimit - 1; i++) {
         list.push({ type: 'danmaku', text: `message-${i}`, user: 'A' });
     }
     assert.equal(list.count, 0);
     assert.equal(list.sourceHistory.length, DanmakujiList.MAX_HISTORY);
     list.setSettings({ ...list.settings, superchatOnly: false });
     assert.equal(list.count, DanmakujiList.MAX_HISTORY);
-    assert.equal(list.history[0].text, 'message-2');
-    list.setSettings({ ...list.settings, superchatOnly: true, keyword: 'message-10001' });
+    assert.equal(list.history[0].text, `message-${DanmakujiList.HISTORY_TRIM_BATCH - 1}`);
+    const lastText = `message-${trimLimit - 2}`;
+    list.setSettings({ ...list.settings, superchatOnly: true, keyword: lastText });
     list.setSettings({ ...list.settings, superchatOnly: false });
-    assert.deepEqual(plain(list.history.map(message => message.text)), ['message-10001']);
+    assert.deepEqual(plain(list.history.map(message => message.text)), [lastText]);
+});
+
+test('历史缓存满 10500 时批量裁剪 500 条，维持均摊 O(1) 追加与视口索引对齐', () => {
+    const list = createMessageList();
+    list.currentStart = 800;
+    list.currentEnd = 820;
+    const trimLimit = DanmakujiList.MAX_HISTORY + DanmakujiList.HISTORY_TRIM_BATCH;
+
+    for (let i = 0; i < trimLimit - 1; i++) {
+        list.push({ type: 'danmaku', text: `m-${i}`, user: 'A' });
+    }
+    assert.equal(list.history.length, trimLimit - 1);
+    assert.equal(list.dirtyFrom, trimLimit - 1);
+
+    list.ensureOffsets();
+    const removedHeight = list.offsets[DanmakujiList.HISTORY_TRIM_BATCH];
+    list.viewportEl.scrollTop = removedHeight + 120;
+
+    list.push({ type: 'danmaku', text: `m-${trimLimit - 1}`, user: 'A' });
+    assert.equal(list.sourceHistory.length, DanmakujiList.MAX_HISTORY);
+    assert.equal(list.history.length, DanmakujiList.MAX_HISTORY);
+    assert.equal(list.history[0].text, `m-${DanmakujiList.HISTORY_TRIM_BATCH}`);
+    assert.equal(list.currentStart, 800 - DanmakujiList.HISTORY_TRIM_BATCH);
+    assert.equal(list.currentEnd, 820 - DanmakujiList.HISTORY_TRIM_BATCH);
+    assert.equal(list.viewportEl.scrollTop, 120);
+
+    list.ensureOffsets();
+    assert.equal(list.dirtyFrom, DanmakujiList.MAX_HISTORY);
+    list.push({ type: 'danmaku', text: 'after-trim', user: 'A' });
+    assert.equal(list.dirtyFrom, DanmakujiList.MAX_HISTORY + 1);
+
+    list.setPaused(true);
+    for (let i = 0; i < trimLimit; i++) {
+        list.push({ type: 'danmaku', text: `p-${i}`, user: 'A' });
+    }
+    assert.equal(list.sourcePending.length, DanmakujiList.MAX_HISTORY);
+    assert.equal(list.pending.length, DanmakujiList.MAX_HISTORY);
+    assert.equal(list.pending[0].text, `p-${DanmakujiList.HISTORY_TRIM_BATCH}`);
 });
 
 function loadConsoleState(saved, invoke) {
@@ -670,6 +710,20 @@ function loadDanmakujiIpc() {
         }
     }
 
+    const obsCalls = [];
+    const obsState = {
+        running: false,
+        host: '127.0.0.1',
+        port: 18390,
+        baseUrl: 'http://127.0.0.1:18390',
+        autoStart: false,
+        themeMode: 'dark',
+        effectiveTheme: 'dark',
+        clientCount: 0,
+    };
+    let storedObs = { port: 18390, autoStart: false, themeMode: 'dark', displaySettings: null };
+    const themeHandlers = [];
+
     const requireStub = (name) => {
         if (name === 'electron') {
             return {
@@ -677,16 +731,86 @@ function loadDanmakujiIpc() {
                 BrowserWindow: Object.assign(FakeWindow, { fromWebContents: (sender) => windows.find(w => w.webContents === sender) || null }),
                 dialog: { showSaveDialog: async (win, options) => { dialogs.push(options); return { canceled: false, filePath: 'C:\\tmp\\out.txt' }; } },
                 shell: { openExternal: (url) => opened.push(url) },
+                nativeTheme: { on: (event, fn) => { if (event === 'updated') themeHandlers.push(fn); } },
             };
         }
         if (name === 'path') return path;
         if (name === 'fs') return { writeFileSync: (file, text, enc) => written.push({ file, text, enc }) };
-        if (name === '../modules/theme') return { windowChromeOptions: () => ({}), registerThemeAwareWindow: () => { } };
+        if (name === '../modules/theme') return { windowChromeOptions: () => ({}), registerThemeAwareWindow: () => { }, isDark: () => true };
         if (name === '../modules/live_room_hub') {
             return {
                 subscribe: (...args) => { hubCalls.push(['subscribe', ...args]); return { state: 'connecting' }; },
                 unsubscribe: (...args) => hubCalls.push(['unsubscribe', ...args]),
                 releaseContents: (...args) => hubCalls.push(['release', ...args]),
+                addListener: (...args) => { hubCalls.push(['addListener', ...args]); return { state: 'connecting' }; },
+                removeListener: (...args) => hubCalls.push(['removeListener', ...args]),
+                releaseListener: (...args) => hubCalls.push(['releaseListener', ...args]),
+            };
+        }
+        if (name === '../modules/config_setting') {
+            return class FakeSetting {
+                getDanmakujiObsSettings() { return { ...storedObs }; }
+                updateDanmakujiObsSettings(patch = {}) {
+                    storedObs = { ...storedObs, ...patch };
+                    return { ...storedObs };
+                }
+            };
+        }
+        if (name === '../modules/danmakuji_obs_server') {
+            return {
+                validatePort: (v) => {
+                    const p = Number(v);
+                    if (!Number.isInteger(p) || p < 1024 || p > 65535) throw new Error('端口号无效');
+                    return p;
+                },
+                DanmakujiObsServer: class FakeObsServer {
+                    constructor(opts) {
+                        this.opts = opts;
+                        obsState.port = opts.port ?? 18390;
+                        obsState.baseUrl = `http://127.0.0.1:${obsState.port}`;
+                    }
+                    get running() { return obsState.running; }
+                    get port() { return obsState.port; }
+                    configure(cfg) {
+                        obsCalls.push(['configure', cfg]);
+                        if (cfg.port !== undefined) {
+                            obsState.port = cfg.port;
+                            obsState.baseUrl = `http://127.0.0.1:${cfg.port}`;
+                        }
+                        if (typeof cfg.autoStart === 'boolean') obsState.autoStart = cfg.autoStart;
+                        if (cfg.themeMode !== undefined) obsState.themeMode = cfg.themeMode;
+                    }
+                    getStatus() { return { ...obsState }; }
+                    async start(port = obsState.port) {
+                        obsCalls.push(['start', port]);
+                        if (port === 19999) throw new Error('端口 19999 已被占用');
+                        obsState.port = port;
+                        obsState.baseUrl = `http://127.0.0.1:${port}`;
+                        obsState.running = true;
+                        this.opts.onStatusChange?.(this.getStatus());
+                        return this.getStatus();
+                    }
+                    async stop() {
+                        obsCalls.push(['stop']);
+                        obsState.running = false;
+                        this.opts.onStatusChange?.(this.getStatus());
+                        return this.getStatus();
+                    }
+                    updateTheme(patch) {
+                        obsCalls.push(['updateTheme', patch]);
+                        if (patch.themeMode !== undefined) obsState.themeMode = patch.themeMode;
+                        this.opts.onStatusChange?.(this.getStatus());
+                        return this.getStatus();
+                    }
+                    updateSettings(settings) {
+                        obsCalls.push(['updateSettings', settings]);
+                        return settings;
+                    }
+                    updateConsoleRooms(rooms) {
+                        obsCalls.push(['updateConsoleRooms', rooms]);
+                        return rooms;
+                    }
+                },
             };
         }
         if (name === '../modules/bilibili_live') return { resolveRoom: async (input) => ({ roomId: Number(input), title: `房间 ${input}` }) };
@@ -703,7 +827,7 @@ function loadDanmakujiIpc() {
     });
     vm.runInContext(fs.readFileSync(path.join(root, 'ipc', 'danmakuji.js'), 'utf8'), context);
     context.module.exports();
-    return { api: context.module.exports, handlers, windows, hubCalls, events, dialogs, written, opened };
+    return { api: context.module.exports, handlers, windows, hubCalls, events, dialogs, written, opened, obsCalls, obsState, getStoredObs: () => storedObs };
 }
 
 test('控制台与独立窗口 IPC：复用窗口、订阅频道、关闭释放、开关通知', async () => {
@@ -801,8 +925,15 @@ test('工具箱包含弹幕姬入口，页面脚本与 IPC 频道一一对应', 
         assert.ok(hjIds.has(match[1]), `独立窗口缺少元素 #${match[1]}`);
     }
 
+    const obsHtml = fs.readFileSync(path.join(monitorDir, 'danmakuji-obs.html'), 'utf8');
+    const obsJs = fs.readFileSync(path.join(monitorDir, 'danmakuji-obs.js'), 'utf8');
+    const obsIds = new Set([...obsHtml.matchAll(/id="([^"]+)"/g)].map(m => m[1]));
+    for (const match of obsJs.matchAll(/getElementById\('([^']+)'\)/g)) {
+        assert.ok(obsIds.has(match[1]), `OBS 页面缺少元素 #${match[1]}`);
+    }
+
     // 所有页面引用的脚本与样式都存在
-    for (const html of [consoleHtml, hjHtml]) {
+    for (const html of [consoleHtml, hjHtml, obsHtml]) {
         for (const match of html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)) {
             assert.ok(fs.existsSync(path.join(monitorDir, match[1])), `缺少资源 ${match[1]}`);
         }
@@ -1054,4 +1185,203 @@ test('控制台前端在连接失败与重连中保留并展示错误横幅，�
     assert.equal(afterOpen.error.classes.has('hidden'), true);
     assert.equal(afterOpen.foot.classes.has('is-error'), false);
     assert.equal(afterOpen.foot.textContent, '开播中 · A');
+});
+
+// ---------------- OBS 本地透明弹幕服务 ----------------
+test('订阅中心支持主进程监听器并与渲染进程订阅共享长连接', () => {
+    const { hub, clients, addContents } = loadHub();
+    const wc = addContents(1);
+    const received = [];
+    const statuses = [];
+
+    hub.subscribe(200, wc.id, 200);
+    hub.addListener(200, 'obs-1', {
+        onMessage: (evt) => received.push(evt),
+        onStatus: (evt) => statuses.push(evt),
+    });
+    assert.equal(clients.length, 1);
+    assert.equal(statuses.at(-1).status.state, 'connecting');
+
+    clients[0].handlers.onStatus({ state: 'open' });
+    clients[0].handlers.onMessage({ type: 'danmaku', text: 'hello obs', user: '测试' });
+    assert.equal(received.length, 1);
+    assert.equal(received[0].roomId, 200);
+    assert.equal(received[0].message.text, 'hello obs');
+
+    // 窗口退订后仍有监听器，长连接不中断
+    hub.unsubscribe(200, wc.id, 200);
+    assert.equal(clients[0].stopped, false);
+    assert.equal(hub.activeRoomCount(), 1);
+
+    // 释放监听器后长连接才停止
+    hub.releaseListener('obs-1');
+    assert.equal(clients[0].stopped, true);
+    assert.equal(hub.activeRoomCount(), 0);
+});
+
+test('OBS 本地服务：静态资源、透明样式、SSE 单房间/跟随同步与端口占用处理', async () => {
+    const http = require('http');
+    const net = require('net');
+    const { hub, clients } = loadHub();
+    const { DanmakujiObsServer, validatePort } = require(path.join(root, 'modules', 'danmakuji_obs_server.js'));
+
+    assert.throws(() => validatePort(80), /1024/);
+    assert.throws(() => validatePort(70000), /1024/);
+    assert.equal(validatePort('18390'), 18390);
+
+    // 找一个可用随机端口来避免测试与本机冲突
+    const probe = net.createServer();
+    await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
+    const port = probe.address().port;
+    await new Promise(resolve => probe.close(resolve));
+
+    const server = new DanmakujiObsServer({
+        hub,
+        resolveRoom: async (id) => ({ roomId: Number(id), title: `房间${id}`, anchorName: `主播${id}` }),
+        themeMode: 'dark',
+    });
+
+    const status = await server.start(port);
+    assert.equal(status.running, true);
+    assert.equal(status.port, port);
+
+    try {
+        // 静态页面与样式存在且不包含路径穿越
+        const fetchText = (pathname) => new Promise((resolve, reject) => {
+            http.get(`http://127.0.0.1:${port}${pathname}`, (res) => {
+                let body = '';
+                res.setEncoding('utf8');
+                res.on('data', chunk => { body += chunk; });
+                res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body }));
+            }).on('error', reject);
+        });
+
+        const htmlRes = await fetchText('/');
+        assert.equal(htmlRes.statusCode, 200);
+        assert.match(htmlRes.headers['content-type'], /text\/html/);
+        assert.match(htmlRes.body, /danmakuji-obs\.css/);
+        assert.match(htmlRes.body, /no-referrer/);
+
+        const cssRes = await fetchText('/danmakuji-obs.css');
+        assert.equal(cssRes.statusCode, 200);
+        assert.match(cssRes.body, /background:\s*transparent\s*!important/);
+
+        const missingRes = await fetchText('/../package.json');
+        assert.equal(missingRes.statusCode, 404);
+
+        // 打开 SSE 单房间流
+        const openSse = (pathname) => new Promise((resolve, reject) => {
+            const events = [];
+            let buf = '';
+            const req = http.get(`http://127.0.0.1:${port}${pathname}`, (res) => {
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    buf += chunk;
+                    let idx;
+                    while ((idx = buf.indexOf('\n\n')) !== -1) {
+                        const frame = buf.slice(0, idx);
+                        buf = buf.slice(idx + 2);
+                        if (!frame || frame.startsWith(':')) continue;
+                        let event = 'message';
+                        let data = '';
+                        for (const line of frame.split('\n')) {
+                            if (line.startsWith('event:')) event = line.slice(6).trim();
+                            else if (line.startsWith('data:')) data += line.slice(5).trim();
+                        }
+                        if (data) events.push({ event, data: JSON.parse(data) });
+                    }
+                });
+                resolve({ req, res, events, close: () => req.destroy() });
+            });
+            req.on('error', reject);
+        });
+
+        const waitFor = async (predicate, timeoutMs = 1500) => {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+                if (predicate()) return;
+                await new Promise(r => setTimeout(r, 15));
+            }
+            throw new Error('等待 SSE 事件超时');
+        };
+
+        const single = await openSse('/events?room=301');
+        await waitFor(() => single.events.some(e => e.event === 'init'));
+        const initEvt = single.events.find(e => e.event === 'init');
+        assert.equal(initEvt.data.mode, 'single');
+        assert.equal(initEvt.data.theme, 'dark');
+        assert.equal(hub.activeRoomCount(), 1);
+
+        // 推送弹幕与状态；live_status 应被过滤不转发
+        clients[0].handlers.onMessage({ type: 'live_status', value: 1 });
+        clients[0].handlers.onMessage({ type: 'danmaku', user: '观众A', text: '透明弹幕测试' });
+        await waitFor(() => single.events.some(e => e.event === 'message'));
+        const msgs = single.events.filter(e => e.event === 'message');
+        assert.equal(msgs.length, 1);
+        assert.equal(msgs[0].data.message.text, '透明弹幕测试');
+
+        // 实时同步设置与配色
+        server.updateSettings({ fontSize: 18, showTimestamp: true });
+        server.updateTheme({ themeMode: 'light' });
+        await waitFor(() => single.events.some(e => e.event === 'settings') && single.events.some(e => e.event === 'theme'));
+        assert.equal(single.events.find(e => e.event === 'settings').data.settings.fontSize, 18);
+        assert.equal(single.events.find(e => e.event === 'theme').data.theme, 'light');
+
+        // 跟随模式自动随控制台房间增删订阅/退订
+        const follow = await openSse('/events');
+        await waitFor(() => follow.events.some(e => e.event === 'init'));
+        server.updateConsoleRooms([{ roomId: 301, title: '主舞台', anchorName: '甲' }, { roomId: 302, title: '副舞台', anchorName: '乙' }]);
+        await waitFor(() => hub.activeRoomCount() === 2 && follow.events.some(e => e.event === 'rooms'));
+        assert.equal(follow.events.filter(e => e.event === 'rooms').at(-1).data.rooms.length, 2);
+
+        single.close();
+        follow.close();
+        await waitFor(() => hub.activeRoomCount() === 0);
+
+        // 端口冲突提示明确错误
+        const conflict = new DanmakujiObsServer({ hub });
+        await assert.rejects(() => conflict.start(port), /已被其他程序占用/);
+    } finally {
+        await server.stop();
+    }
+});
+
+test('OBS IPC 接口：启停、改端口失败回滚、同步设置与预览校验', async () => {
+    const { handlers, opened, obsCalls, getStoredObs } = loadDanmakujiIpc();
+
+    const initial = handlers['danmakuji:obsStatus']();
+    assert.equal(initial.success, true);
+    assert.equal(initial.data.running, false);
+
+    const started = await handlers['danmakuji:obsStart'](null, { port: 18400 });
+    assert.equal(started.success, true);
+    assert.equal(started.data.running, true);
+    assert.equal(started.data.port, 18400);
+
+    // 切到占用端口失败时回滚保存的端口
+    const badPort = await handlers['danmakuji:obsConfig'](null, { port: 19999 });
+    assert.equal(badPort.success, false);
+    assert.equal(getStoredObs().port, 18400);
+
+    const themed = await handlers['danmakuji:obsConfig'](null, { themeMode: 'system', autoStart: true });
+    assert.equal(themed.success, true);
+    assert.equal(getStoredObs().themeMode, 'system');
+    assert.equal(getStoredObs().autoStart, true);
+
+    const synced = handlers['danmakuji:obsSyncState'](null, {
+        settings: { fontSize: 16 },
+        rooms: [{ roomId: 101, title: 'Test' }],
+    });
+    assert.equal(synced.success, true);
+    assert.equal(getStoredObs().displaySettings.fontSize, 16);
+    assert.ok(obsCalls.some(c => c[0] === 'updateConsoleRooms'));
+
+    // 预览只允许当前本地服务地址
+    assert.equal(handlers['danmakuji:openObsPreview'](null, 'https://evil.example/').success, false);
+    assert.equal(handlers['danmakuji:openObsPreview'](null, 'http://127.0.0.1:18400/').success, true);
+    assert.deepEqual(plain(opened), ['http://127.0.0.1:18400/']);
+
+    const stopped = await handlers['danmakuji:obsStop']();
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.data.running, false);
 });

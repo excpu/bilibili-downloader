@@ -45,6 +45,12 @@
             </div>
             <button type="button" class="dc-btn" id="togglePause" title="暂停全部弹幕滚动（空格）">暂停</button>
             <button type="button" class="dc-btn" id="exportAll" title="导出全部弹幕记录">导出</button>
+            <button type="button" class="dc-btn dc-obs-trigger" id="obsTrigger" title="OBS 本地透明弹幕服务"
+                aria-haspopup="dialog" aria-expanded="false">
+                <span class="dc-obs-dot" aria-hidden="true"></span>
+                <span>OBS</span>
+                <span class="dc-obs-clients hidden" id="obsClientBadge">0</span>
+            </button>
             <button type="button" class="dc-btn dc-btn-icon" id="toggleRail" title="显示 / 隐藏调节面板"
                 aria-label="显示 / 隐藏调节面板" aria-expanded="true">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -123,6 +129,75 @@
 
     <div class="dc-toasts" id="toasts" aria-live="polite"></div>
     <div class="dc-context-menu hidden" id="contextMenu" role="menu"></div>
+
+    <div class="dc-modal-backdrop hidden" id="obsModal" role="dialog" aria-modal="true" aria-labelledby="obsModalTitle">
+        <div class="dc-modal" id="obsModalCard">
+            <header class="dc-modal-head">
+                <div class="dc-modal-title-wrap">
+                    <h2 id="obsModalTitle">OBS 本地透明弹幕服务</h2>
+                    <span class="dc-obs-pill" id="obsStatusBadge">已停止</span>
+                    <span class="dc-obs-meta" id="obsClientCount">已连接 0 个源</span>
+                </div>
+                <button type="button" class="dc-modal-close" id="obsModalClose" title="关闭" aria-label="关闭">✕</button>
+            </header>
+
+            <div class="dc-modal-body">
+                <div class="dc-obs-error hidden" id="obsError" role="alert"></div>
+
+                <section class="dc-obs-section">
+                    <div class="dc-obs-row">
+                        <span class="dc-obs-label">本地服务</span>
+                        <label class="dms-switch">
+                            <input type="checkbox" id="obsEnabled">
+                            <span class="dms-switch-track"><span class="dms-switch-thumb"></span></span>
+                            <span class="dms-switch-label">开启 HTTP 透明弹幕服务</span>
+                        </label>
+                    </div>
+
+                    <div class="dc-obs-row">
+                        <label class="dc-obs-label" for="obsPort">监听端口</label>
+                        <div class="dc-obs-port-wrap">
+                            <input type="number" class="dms-input dc-obs-port" id="obsPort" min="1024" max="65535"
+                                value="18390">
+                            <button type="button" class="dc-btn" id="obsApplyPort">应用</button>
+                            <label class="dc-obs-check">
+                                <input type="checkbox" id="obsAutoStart">
+                                <span>随软件自动开启</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="dc-obs-row">
+                        <span class="dc-obs-label">OBS 配色</span>
+                        <div class="dms-segment" id="obsThemeGroup" role="group" aria-label="OBS 配色">
+                            <button type="button" class="dms-segment-btn is-active" data-obs-theme="dark">深色（推荐）</button>
+                            <button type="button" class="dms-segment-btn" data-obs-theme="light">浅色</button>
+                            <button type="button" class="dms-segment-btn" data-obs-theme="system">跟随软件</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="dc-obs-section">
+                    <div class="dc-obs-section-title">全部已接入房间（合并时间线）</div>
+                    <div class="dc-obs-url-row">
+                        <input type="text" class="dms-input dc-obs-url" id="obsFollowUrl" readonly
+                            value="http://127.0.0.1:18390/">
+                        <button type="button" class="dc-btn" id="obsCopyFollow">复制</button>
+                        <button type="button" class="dc-btn" id="obsPreviewFollow">预览</button>
+                    </div>
+                </section>
+
+                <section class="dc-obs-section">
+                    <div class="dc-obs-section-title">指定单房间透明地址</div>
+                    <div class="dc-obs-rooms" id="obsRoomUrls"></div>
+                </section>
+
+                <p class="dc-obs-tips">
+                    在 OBS 中添加「浏览器」源并粘贴上方地址即可透明叠加；右侧「实时调节」中的字号、行距、过滤条件与房间列表会实时同步到 OBS，无需手动刷新。
+                </p>
+            </div>
+        </div>
+    </div>
 
     <script src="./danmakuji-shared.js"></script>
     <script src="./danmakuji-list.js"></script>

@@ -53,6 +53,14 @@ const DEFAULT_DANMAKU_SETTINGS = {
     assOptions: { ...DEFAULT_DANMAKU_ASS_OPTIONS },
 };
 
+const DANMAKUJI_OBS_THEME_MODES = ['dark', 'light', 'system'];
+const DEFAULT_DANMAKUJI_OBS_SETTINGS = {
+    port: 18390,
+    autoStart: false,
+    themeMode: 'dark',
+    displaySettings: null,
+};
+
 // 配置文件保存在appData目录中的 config.json 不加密，和认证文件分开
 class Setting {
     constructor() {
@@ -74,6 +82,7 @@ class Setting {
             concurrency: DEFAULT_CONCURRENCY, // 多线程下载的并发连接数
             subtitleSettings: DEFAULT_SUBTITLE_SETTINGS,
             danmakuSettings: DEFAULT_DANMAKU_SETTINGS,
+            danmakujiObsSettings: DEFAULT_DANMAKUJI_OBS_SETTINGS,
         };
     }
 
@@ -500,6 +509,38 @@ class Setting {
                 ...(stored.assOptions || {}),
             },
         };
+    }
+
+    normalizeDanmakujiObsSettings(raw = {}, base = DEFAULT_DANMAKUJI_OBS_SETTINGS) {
+        const source = raw && typeof raw === 'object' ? raw : {};
+        const rawPort = Number(source.port ?? base.port);
+        const port = Number.isInteger(rawPort) && rawPort >= 1024 && rawPort <= 65535
+            ? rawPort
+            : DEFAULT_DANMAKUJI_OBS_SETTINGS.port;
+        const autoStart = typeof source.autoStart === 'boolean'
+            ? source.autoStart
+            : base.autoStart === true;
+        const themeMode = DANMAKUJI_OBS_THEME_MODES.includes(source.themeMode)
+            ? source.themeMode
+            : (DANMAKUJI_OBS_THEME_MODES.includes(base.themeMode) ? base.themeMode : DEFAULT_DANMAKUJI_OBS_SETTINGS.themeMode);
+        const displaySettings = source.displaySettings && typeof source.displaySettings === 'object'
+            ? { ...source.displaySettings }
+            : (base.displaySettings && typeof base.displaySettings === 'object' ? { ...base.displaySettings } : null);
+        return { port, autoStart, themeMode, displaySettings };
+    }
+
+    getDanmakujiObsSettings() {
+        const data = this.load() || {};
+        return this.normalizeDanmakujiObsSettings(data.danmakujiObsSettings);
+    }
+
+    updateDanmakujiObsSettings(patch = {}) {
+        const data = this.load() || {};
+        const current = this.normalizeDanmakujiObsSettings(data.danmakujiObsSettings);
+        const next = this.normalizeDanmakujiObsSettings(patch, current);
+        data.danmakujiObsSettings = next;
+        this.save(data);
+        return next;
     }
 }
 

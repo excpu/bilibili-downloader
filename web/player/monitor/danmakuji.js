@@ -9,6 +9,9 @@ const closeBtn = document.getElementById('hjClose');
 const viewportEl = document.getElementById('hjViewport');
 const settingsBtn = document.getElementById('hjSettings');
 const settingsPanel = document.getElementById('hjSettingsPanel');
+const settingsMount = document.getElementById('hjSettingsMount');
+const obsCopyBtn = document.getElementById('hjObsCopy');
+const obsHintEl = document.getElementById('hjObsHint');
 const countEl = document.getElementById('hjCount');
 
 const SETTINGS_KEY = 'danmakuji-settings-v1';
@@ -41,12 +44,59 @@ function applySettings(next) {
     const settings = Shared.normalizeSettings(next);
     list.setSettings(settings);
     saveSettings(settings);
-    window.DanmakujiSettingsPanel.sync(settingsPanel, settings);
+    window.DanmakujiSettingsPanel.sync(settingsMount, settings);
+    invoke('danmakuji:obsSyncState', { settings }).catch(() => { });
 }
 
-window.DanmakujiSettingsPanel.mount(settingsPanel, list.settings, {
+window.DanmakujiSettingsPanel.mount(settingsMount, list.settings, {
     onChange: applySettings,
     showColumns: false,
+});
+
+async function copyText(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch { }
+    }
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.setAttribute('readonly', '');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    let ok = false;
+    try {
+        ok = document.execCommand('copy');
+    } catch { }
+    input.remove();
+    return ok;
+}
+
+let obsHintTimer = null;
+function setObsHint(text) {
+    if (!obsHintEl) return;
+    clearTimeout(obsHintTimer);
+    obsHintEl.textContent = text || '';
+    if (text) obsHintTimer = setTimeout(() => { obsHintEl.textContent = ''; }, 3200);
+}
+
+obsCopyBtn?.addEventListener('click', async () => {
+    if (!roomId) {
+        setObsHint('缺少直播间号');
+        return;
+    }
+    const res = await invoke('danmakuji:obsStart', {});
+    if (!res?.success || !res.data?.baseUrl) {
+        setObsHint(res?.message || '启动服务失败');
+        return;
+    }
+    await invoke('danmakuji:obsSyncState', { settings: list.settings }).catch(() => { });
+    const url = `${res.data.baseUrl}/?room=${roomId}`;
+    await copyText(url);
+    setObsHint(`已复制 ${url}`);
 });
 
 function toggleSettings(force) {

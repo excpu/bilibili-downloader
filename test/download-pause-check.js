@@ -52,7 +52,11 @@ function backendHarness(dir, engine, fetch, send, media = {}, download) {
     };
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), sandbox, { filename });
     sandbox.module.exports({ isDestroyed: () => false, webContents: { send } });
-    return { invoke: (ch, ...args) => handlers[ch]({}, ...args), hasActive: sandbox.module.exports.hasActiveDownloads };
+    return {
+        invoke: (ch, ...args) => handlers[ch]({}, ...args),
+        hasActive: sandbox.module.exports.hasActiveDownloads,
+        pauseAll: sandbox.module.exports.pauseAllDownloads,
+    };
 }
 
 for (const engine of ['node', 'node-multi']) {
@@ -578,4 +582,74 @@ test('真实 AAC/AVC 样本可通过 UID 临时文件合并和纯音频转封装
         await backend.invoke('completeDownload', task);
     }
     assert.deepEqual(fs.readdirSync(dir).sort(), ['original-title.m4a', 'original-title.mp4']);
+});
+
+test('关闭界面触发 pauseAllDownloads 后保存断点，重启后可从断点继续并阻止关闭期间新任务启动', { timeout: 20000 }, async t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bili-close-resume-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const audio = Buffer.alloc(8 * 1024 * 1024, 0x42);
+    const video = Buffer.alloc(4 * 1024 * 1024, 0x24);
+    const requests = [];
+    const server = http.createServer((req, res) => {
+        const url = new URL(req.url, 'http://localhost');
+        const data = url.pathname === '/audio' ? audio : video;
+        const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+        let offset = range ? Number(range[1]) : 0;
+        const end = range && range[2] ? Number(range[2]) : data.length - 1;
+        requests.push({ stream: url.pathname, start: offset, probe: end === 0 });
+        res.writeHead(range ? 206 : 200, {
+            'Content-Length': end - offset + 1,
+            'Accept-Ranges': 'bytes',
+            ...(range ? { 'Content-Range': `bytes ${offset}-${end}/${data.length}` } : {}),
+        });
+        const timer = setInterval(() => {
+            const next = Math.min(end + 1, offset + 32768);
+            res.write(data.subarray(offset, next));
+            offset = next;
+            if (offset > end) {
+                clearInterval(timer);
+                res.end();
+            }
+        }, end === 0 ? 1 : 5);
+        res.on('close', () => clearInterval(timer));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(async () => {
+        server.closeAllConnections();
+        await new Promise(resolve => server.close(resolve));
+    });
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const progressHit = deferred();
+    let seenProgress = false;
+    const makeBackend = (onProgress = () => {}) => backendHarness(dir, 'node-multi', async () => ({
+        ok: true, json: async () => ({ code: 0, data: { dash: {
+            audio: [{ id: 30280, codecs: 'mp4a.40.2', baseUrl: `${baseUrl}/audio` }],
+            video: [{ id: 80, codecs: 'avc1.640028', baseUrl: `${baseUrl}/video` }],
+        } } })
+    }), onProgress);
+
+    let backend = makeBackend((ch, data) => {
+        if (!seenProgress && ch === 'download-progress' && data.avId === 'audio' && data.progress > 0 && data.progress < 100) {
+            seenProgress = true;
+            progressHit.resolve();
+        }
+    });
+    const payload = { uid: 'close1', title: 'close-sample', cid: 1, bvid: 'BVclose', videoIndex: 0, audioIndex: 30280 };
+    const running = backend.invoke('downloadTarget', payload);
+    await progressHit.promise;
+    await backend.pauseAll();
+    assert.equal((await running).paused, true);
+    assert.equal(backend.hasActive(), false);
+    assert.equal((await backend.invoke('downloadTarget', { uid: 'queued2', title: 'other', cid: 2, videoIndex: 0 })).paused, true);
+    const state = JSON.parse(fs.readFileSync(path.join(dir, 'close-sample_audio_close1.m4s.dstate.json'), 'utf8'));
+    assert.ok(state.chunks.some(chunk => chunk.downloaded > 0));
+
+    requests.length = 0;
+    backend = makeBackend();
+    payload.resume = true;
+    const result = await backend.invoke('downloadTarget', payload);
+    assert.equal(result.success, true, result.message);
+    assert.ok(requests.some(req => req.stream === '/audio' && !req.probe && req.start > 0));
+    assert.deepEqual(fs.readFileSync(result.filePath), Buffer.concat([audio, video]));
 });

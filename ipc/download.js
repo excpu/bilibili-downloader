@@ -16,6 +16,8 @@ setting.load(); // 加载设置数据
 
 let activeDownloadCount = 0;
 const downloadControllers = new Map(); // uid -> AbortController
+const activeDownloadPromises = new Set();
+let shuttingDown = false;
 const MAX_URL_REFRESHES = 2;
 
 function getTaskPaths(payload) {
@@ -167,7 +169,11 @@ module.exports = function registerDownloadIpc(mainWindow) {
     });
 
     // 添加下载任务 (新增支持多视频并发)
-    ipcMain.handle('downloadTarget', async (event, payload) => {
+    ipcMain.handle('downloadTarget', (event, payload) => {
+        if (shuttingDown) {
+            return Promise.resolve({ success: false, paused: true, message: '应用正在关闭' });
+        }
+        const taskPromise = (async () => {
         let {
             uid,
             bvid,
@@ -417,6 +423,10 @@ module.exports = function registerDownloadIpc(mainWindow) {
         }
 
         return { success: true, filePath: finalOutputPath };
+        })();
+        activeDownloadPromises.add(taskPromise);
+        taskPromise.finally(() => activeDownloadPromises.delete(taskPromise));
+        return taskPromise;
     });
 
     function getCodecPrefix(codecs) {
@@ -608,4 +618,17 @@ module.exports = function registerDownloadIpc(mainWindow) {
     }
 }
 
+async function pauseAllDownloads(timeoutMs = 5000) {
+    shuttingDown = true;
+    for (const controller of downloadControllers.values()) {
+        controller.abort('pause');
+    }
+    if (activeDownloadPromises.size === 0) return;
+    await Promise.race([
+        Promise.allSettled([...activeDownloadPromises]),
+        new Promise(resolve => setTimeout(resolve, timeoutMs))
+    ]);
+}
+
 module.exports.hasActiveDownloads = () => activeDownloadCount > 0;
+module.exports.pauseAllDownloads = pauseAllDownloads;

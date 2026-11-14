@@ -5,7 +5,7 @@ if (!process.env.UV_THREADPOOL_SIZE) process.env.UV_THREADPOOL_SIZE = '64';
 const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const registerIpc = require('./ipc');
-const { hasActiveDownloads } = require('./ipc/download');
+const { hasActiveDownloads, pauseAllDownloads } = require('./ipc/download');
 const theme = require('./modules/theme');
 const Setting = require('./modules/config_setting');
 
@@ -22,6 +22,7 @@ theme.watchThemeChange();
 
 function createWindow() {
     let allowClose = false;
+    let isClosing = false;
     // 先按已保存的偏好确定主题，窗口才能用正确的底色和标题栏符号色创建
     theme.applyThemePreference(new Setting().getTheme());
     const themeOptions = { height: 52 };
@@ -59,6 +60,10 @@ function createWindow() {
         }
 
         event.preventDefault();
+        if (isClosing) {
+            return;
+        }
+
         const response = dialog.showMessageBoxSync(win, {
             type: 'warning',
             buttons: ['取消', '仍然关闭'],
@@ -70,8 +75,14 @@ function createWindow() {
         });
 
         if (response === 1) {
-            allowClose = true;
-            win.close();
+            isClosing = true;
+            pauseAllDownloads().finally(() => {
+                allowClose = true;
+                isClosing = false;
+                if (!win.isDestroyed()) {
+                    win.close();
+                }
+            });
         }
     });
 

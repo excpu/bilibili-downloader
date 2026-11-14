@@ -759,6 +759,9 @@ class StreamDownload {
                     : 0;
 
                 onProgress(percent, validSpeed, currentDownloaded, totalLength);
+                if (currentDownloaded > lastReportedBytes) {
+                    triggerSaveState(false);
+                }
 
                 lastReportedBytes = currentDownloaded;
                 lastNetBytes = netStats.bytes;

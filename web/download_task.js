@@ -861,4 +861,5 @@ async function taskManager() {
     }
 }
 
+window.addEventListener('beforeunload', saveDownloadTasks);
 restoreDownloadTasks();
